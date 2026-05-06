@@ -19,7 +19,7 @@
   </div>
 </div>
 
-<div class="run-detail-layout">
+<div class="run-detail-layout" style="display:block">
   <!-- Issue list -->
   <div class="run-issues">
     <h2 class="section-title">Reading Order <span class="count-badge">{{ items|length }}</span></h2>
@@ -78,7 +78,7 @@
             data-title="{{ (comic.series if comic.series != 'General' else comic.title)|lower }} {{ comic.title|lower }}">
         <input type="hidden" name="comic_id" value="{{ comic.id }}">
         <div class="picker-cover-wrap">
-          <img src="/cover/{{ comic.id }}" alt="" class="picker-cover" loading="lazy">
+          <img src="/cover/{{ comic.id }}" alt="" class="picker-cover">
           <button type="submit" class="picker-add-overlay">+ Add</button>
         </div>
         <div class="picker-info">
