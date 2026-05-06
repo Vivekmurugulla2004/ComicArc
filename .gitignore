@@ -1,0 +1,18 @@
+# Database (your personal comic data — don't share this)
+comics.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS junk
+.DS_Store
+
+# Virtual environments
+venv/
+.env/
+
+# Editor files
+.vscode/
+*.swp

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ run.title }} — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/runs" class="back-crumb">← Runs</a>
+    <h1>{{ run.title }}</h1>
+    {% if run.description %}<p class="page-subtitle">{{ run.description }}</p>{% endif %}
+  </div>
+  <div class="header-actions">
+    {% if items %}
+    <a href="/reader/{{ items[0].comic_id }}?run_id={{ run.id }}" class="btn-primary">▶ Start Reading</a>
+    {% endif %}
+    <form method="post" action="/runs/{{ run.id }}/delete"
+          onsubmit="return confirm('Delete this run?')">
+      <button type="submit" class="btn-danger">Delete Run</button>
+    </form>
+  </div>
+</div>
+
+<div class="run-detail-layout">
+  <!-- Issue list -->
+  <div class="run-issues">
+    <h2 class="section-title">Reading Order <span class="count-badge">{{ items|length }}</span></h2>
+
+    {% if items|length == 0 %}
+    <div class="empty-state small">
+      <p>No comics in this run yet. Add some from the panel on the right.</p>
+    </div>
+    {% else %}
+    <div class="issue-list">
+      {% for item in items %}
+      <div class="issue-row">
+        <div class="issue-num">{{ loop.index }}</div>
+        <img class="issue-thumb" src="/cover/{{ item.comic_id }}" alt="">
+        <div class="issue-info">
+          <div class="issue-title">{{ item.title }}</div>
+          <div class="issue-meta">
+            <span class="publisher-badge pub-{{ item.publisher|lower }}">{{ item.publisher }}</span>
+            {% if item.series and item.series != 'General' %}{{ item.series }}{% endif %}
+          </div>
+          {% if item.page_count > 0 %}
+          <div class="mini-progress">
+            <div class="mini-progress-fill" style="width: {{ (item.progress / item.page_count * 100)|int }}%"></div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="issue-actions">
+          <a href="/reader/{{ item.comic_id }}?run_id={{ run.id }}" class="icon-btn" title="Read">▶</a>
+          <form method="post" action="/runs/{{ run.id }}/move/{{ item.id }}/up" style="display:inline">
+            <button type="submit" class="icon-btn" title="Move up">↑</button>
+          </form>
+          <form method="post" action="/runs/{{ run.id }}/move/{{ item.id }}/down" style="display:inline">
+            <button type="submit" class="icon-btn" title="Move down">↓</button>
+          </form>
+          <form method="post" action="/runs/{{ run.id }}/remove/{{ item.id }}"
+                onsubmit="return confirm('Remove from run?')" style="display:inline">
+            <button type="submit" class="icon-btn danger" title="Remove">✕</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Add comics panel -->
+  <div class="add-panel">
+    <h2 class="section-title">Add Comics</h2>
+    <form method="post" action="/runs/{{ run.id }}/add">
+      <select name="comic_id" class="add-select">
+        <option value="">— choose a comic —</option>
+        {% set ns = namespace(cur_pub='', cur_series='') %}
+        {% for comic in all_comics %}
+          {% if comic.publisher != ns.cur_pub %}
+            {% if ns.cur_pub != '' %}</optgroup>{% endif %}
+            <optgroup label="{{ comic.publisher }}">
+            {% set ns.cur_pub = comic.publisher %}
+            {% set ns.cur_series = '' %}
+          {% endif %}
+          <option value="{{ comic.id }}">{{ comic.title }}</option>
+        {% endfor %}
+        {% if all_comics %}</optgroup>{% endif %}
+      </select>
+      <button type="submit" class="btn-primary full-width">Add to Run</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

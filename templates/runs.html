@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Narrative Runs — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Narrative Runs</h1>
+    <p class="page-subtitle">Custom reading paths that follow a story, not a publication.</p>
+  </div>
+  <a href="/runs/new" class="btn-primary">+ New Run</a>
+</div>
+
+{% if runs|length == 0 %}
+<div class="empty-state">
+  <div class="empty-icon">▶</div>
+  <h2>No runs yet</h2>
+  <p>Create a run to organize comics into a story arc — like <em>"Miles Morales: From Brooklyn to the Multiverse"</em>.</p>
+  <a href="/runs/new" class="btn-primary">Create Your First Run</a>
+</div>
+{% else %}
+<div class="runs-list">
+  {% for run in runs %}
+  <a href="/runs/{{ run.id }}" class="run-card">
+    <div class="run-card-body">
+      <h3 class="run-title">{{ run.title }}</h3>
+      {% if run.description %}
+      <p class="run-desc">{{ run.description }}</p>
+      {% endif %}
+    </div>
+    <div class="run-card-meta">
+      <span class="run-count">{{ run.comic_count }} comic{% if run.comic_count != 1 %}s{% endif %}</span>
+      <span class="run-date">{{ run.created_at[:10] }}</span>
+      <span class="run-arrow">→</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

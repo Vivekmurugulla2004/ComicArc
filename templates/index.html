@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Library — ComicArc{% endblock %}
+
+{% block content %}
+<div class="library-header">
+  <div class="library-title">
+    <h1>Your Library</h1>
+    <span class="comic-count">{{ total }} comics</span>
+  </div>
+  <form class="search-form" method="get" action="/">
+    <input type="hidden" name="publisher" value="{{ current_publisher }}">
+    <input class="search-input" type="text" name="q" value="{{ search }}" placeholder="Search titles, series…">
+    <button type="submit" class="search-btn">Search</button>
+    {% if search %}<a href="/?publisher={{ current_publisher }}" class="clear-btn">✕</a>{% endif %}
+  </form>
+</div>
+
+<div class="publisher-tabs">
+  <a href="/?publisher=All{% if search %}&q={{ search }}{% endif %}"
+     class="tab {% if current_publisher == 'All' %}active{% endif %}">All</a>
+  {% for pub in publishers %}
+  <a href="/?publisher={{ pub }}{% if search %}&q={{ search }}{% endif %}"
+     class="tab {% if current_publisher == pub %}active{% endif %}">{{ pub }}</a>
+  {% endfor %}
+</div>
+
+{% if total == 0 %}
+<div class="empty-state">
+  <div class="empty-icon">◈</div>
+  <h2>No comics yet</h2>
+  <p>Click <strong>Scan Library</strong> in the top right to import your comics from <code>~/Downloads/Comics</code>.</p>
+  <a href="/scan" class="btn-primary">Scan Now</a>
+</div>
+{% elif comics|length == 0 %}
+<div class="empty-state">
+  <h2>No results</h2>
+  <p>Try a different search or publisher filter.</p>
+</div>
+{% else %}
+<div class="comics-grid">
+  {% for comic in comics %}
+  <div class="comic-card" onclick="location.href='/reader/{{ comic.id }}'">
+    <div class="cover-wrap">
+      <img class="cover-img" src="/cover/{{ comic.id }}" alt="{{ comic.title }}" loading="lazy">
+      {% if comic.page_count > 0 %}
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ (comic.progress / comic.page_count * 100)|int }}%"></div>
+      </div>
+      {% endif %}
+      <div class="cover-overlay">
+        <span class="read-btn">Read</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="card-title" title="{{ comic.title }}">{{ comic.title }}</div>
+      <div class="card-meta">
+        <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
+        {% if comic.series and comic.series != 'General' %}
+        <span class="series-name">{{ comic.series }}</span>
+        {% endif %}
+      </div>
+      {% if comic.rating %}
+      <div class="card-rating">
+        {% for i in range(1, 6) %}
+        <span class="star {% if i <= comic.rating %}filled{% endif %}">★</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

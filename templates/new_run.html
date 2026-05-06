@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}New Run — ComicArc{% endblock %}
+
+{% block content %}
+<div class="form-page">
+  <a href="/runs" class="back-crumb">← Runs</a>
+  <h1>Create a Narrative Run</h1>
+  <p class="page-subtitle">A run is an ordered reading path — like a playlist for comics.</p>
+
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/runs/new" class="run-form">
+    <label for="title">Run Title</label>
+    <input id="title" type="text" name="title" placeholder="e.g. Miles Morales: Rise of a Hero"
+           required autofocus>
+
+    <label for="description">Description <span class="optional">(optional)</span></label>
+    <textarea id="description" name="description" rows="3"
+              placeholder="What story does this run tell?"></textarea>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Create Run</button>
+      <a href="/runs" class="btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ comic.title }} — ComicArc</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="reader-body">
+
+  <div id="reader-wrap">
+    <!-- Top bar -->
+    <div id="reader-topbar">
+      <div class="topbar-left">
+        {% if run_context %}
+        <a href="/runs/{{ run_id }}" class="back-link">← {{ run_context.title }}</a>
+        {% else %}
+        <a href="/" class="back-link">← Library</a>
+        {% endif %}
+        <span class="reader-title">{{ comic.title }}</span>
+      </div>
+      <div class="topbar-right">
+        <span id="page-counter">
+          <span id="cur-page">{{ current_page + 1 }}</span> / {{ comic.page_count }}
+        </span>
+        <button id="fullscreen-btn" title="Fullscreen" onclick="toggleFullscreen()">⛶</button>
+        <button id="rate-btn" title="Rate this comic" onclick="openRating()">★</button>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div id="top-progress">
+      <div id="top-progress-fill"></div>
+    </div>
+
+    <!-- Page display -->
+    <div id="page-area">
+      <div id="prev-zone" onclick="prevPage()" title="Previous page"></div>
+      <div id="page-display">
+        <img id="page-img" src="/page/{{ comic.id }}/{{ current_page }}" alt="Page {{ current_page + 1 }}">
+      </div>
+      <div id="next-zone" onclick="nextPage()" title="Next page"></div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div id="reader-bottombar">
+      {% if run_context and prev_comic %}
+      <a href="/reader/{{ prev_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn">← {{ prev_comic.title[:30] }}{% if prev_comic.title|length > 30 %}…{% endif %}</a>
+      {% else %}
+      <div></div>
+      {% endif %}
+
+      <div class="bottom-center">
+        <input type="range" id="page-slider" min="1" max="{{ comic.page_count }}" value="{{ current_page + 1 }}"
+               oninput="jumpToPage(this.value - 1)">
+      </div>
+
+      {% if run_context and next_comic %}
+      <a href="/reader/{{ next_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn">{{ next_comic.title[:30] }}{% if next_comic.title|length > 30 %}…{% endif %} →</a>
+      {% else %}
+      <div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Rating modal -->
+  <div id="rating-modal" class="modal hidden">
+    <div class="modal-box">
+      <h3>Rate: {{ comic.title }}</h3>
+      <div id="star-picker">
+        {% for i in range(1, 6) %}
+        <span class="star-pick" data-val="{{ i }}" onclick="selectStar({{ i }})">★</span>
+        {% endfor %}
+      </div>
+      <textarea id="review-text" placeholder="Write a review (optional)…" rows="3"></textarea>
+      <div class="modal-actions">
+        <button onclick="submitRating({{ comic.id }})">Save</button>
+        <button onclick="closeRating()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard hint -->
+  <div id="kb-hint">← → Arrow keys or click sides to navigate</div>
+
+  <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
+  <script>
+    initReader({{ comic.id }}, {{ current_page }}, {{ comic.page_count }});
+  </script>
+</body>
+</html>

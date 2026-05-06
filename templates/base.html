@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ComicArc{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="nav-brand">
+      <span class="brand-icon">◈</span>
+      ComicArc
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Library</a>
+      <a href="/runs" class="nav-link {% if request.endpoint in ['runs','run_detail','new_run'] %}active{% endif %}">Runs</a>
+    </div>
+    <a href="/scan" class="btn-scan">Scan Library</a>
+  </nav>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
