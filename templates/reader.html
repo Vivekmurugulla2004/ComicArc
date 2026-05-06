@@ -47,7 +47,13 @@
     <!-- Bottom bar -->
     <div id="reader-bottombar">
       {% if run_context and prev_comic %}
-      <a href="/reader/{{ prev_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn">← {{ prev_comic.title[:30] }}{% if prev_comic.title|length > 30 %}…{% endif %}</a>
+      <a href="/reader/{{ prev_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn run-nav-prev">
+        <div class="run-nav-preview">
+          <img src="/cover/{{ prev_comic.comic_id }}" alt="{{ prev_comic.title }}">
+          <div class="run-nav-preview-title">{{ prev_comic.title }}</div>
+        </div>
+        ← Previous
+      </a>
       {% else %}
       <div></div>
       {% endif %}
@@ -58,7 +64,13 @@
       </div>
 
       {% if run_context and next_comic %}
-      <a href="/reader/{{ next_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn">{{ next_comic.title[:30] }}{% if next_comic.title|length > 30 %}…{% endif %} →</a>
+      <a href="/reader/{{ next_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn run-nav-next">
+        <div class="run-nav-preview">
+          <img src="/cover/{{ next_comic.comic_id }}" alt="{{ next_comic.title }}">
+          <div class="run-nav-preview-title">{{ next_comic.title }}</div>
+        </div>
+        Next →
+      </a>
       {% else %}
       <div></div>
       {% endif %}
