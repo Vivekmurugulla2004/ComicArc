@@ -68,23 +68,44 @@
   <!-- Add comics panel -->
   <div class="add-panel">
     <h2 class="section-title">Add Comics</h2>
-    <form method="post" action="/runs/{{ run.id }}/add">
-      <select name="comic_id" class="add-select">
-        <option value="">— choose a comic —</option>
-        {% set ns = namespace(cur_pub='', cur_series='') %}
-        {% for comic in all_comics %}
-          {% if comic.publisher != ns.cur_pub %}
-            {% if ns.cur_pub != '' %}</optgroup>{% endif %}
-            <optgroup label="{{ comic.publisher }}">
-            {% set ns.cur_pub = comic.publisher %}
-            {% set ns.cur_series = '' %}
+    <input id="comic-search" type="text" class="add-search" placeholder="Search by title or series…" autocomplete="off">
+    <div id="comic-results" class="comic-results">
+      {% for comic in all_comics %}
+      <form method="post" action="/runs/{{ run.id }}/add" class="result-item"
+            data-title="{{ (comic.series if comic.series != 'General' else comic.title)|lower }} {{ comic.title|lower }}">
+        <input type="hidden" name="comic_id" value="{{ comic.id }}">
+        <img src="/cover/{{ comic.id }}" alt="" class="result-thumb" loading="lazy">
+        <div class="result-info">
+          <div class="result-name">
+            {% if comic.series and comic.series != 'General' %}{{ comic.series }}{% else %}{{ comic.title }}{% endif %}
+          </div>
+          {% if comic.series and comic.series != 'General' %}
+          <div class="result-sub">{{ comic.title }}</div>
           {% endif %}
-          <option value="{{ comic.id }}">{{ comic.title }}</option>
-        {% endfor %}
-        {% if all_comics %}</optgroup>{% endif %}
-      </select>
-      <button type="submit" class="btn-primary full-width">Add to Run</button>
-    </form>
+          <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
+        </div>
+        <button type="submit" class="result-add-btn" title="Add to run">+</button>
+      </form>
+      {% endfor %}
+      {% if not all_comics %}
+      <div class="results-empty">All comics are already in this run.</div>
+      {% endif %}
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const searchInput = document.getElementById('comic-search');
+const items = document.querySelectorAll('.result-item');
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase();
+    items.forEach(item => {
+      item.style.display = item.dataset.title.includes(q) ? '' : 'none';
+    });
+  });
+}
+</script>
 {% endblock %}

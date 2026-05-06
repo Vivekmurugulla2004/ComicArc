@@ -60,12 +60,14 @@
       </div>
     </div>
     <div class="card-info">
-      <div class="card-title" title="{{ comic.title }}">{{ comic.title }}</div>
+      <div class="card-title" title="{{ comic.title }}">
+        {% if comic.series and comic.series != 'General' %}{{ comic.series }}{% else %}{{ comic.title }}{% endif %}
+      </div>
+      <div class="card-subtitle" title="{{ comic.title }}">
+        {% if comic.series and comic.series != 'General' %}{{ comic.title }}{% endif %}
+      </div>
       <div class="card-meta">
         <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
-        {% if comic.series and comic.series != 'General' %}
-        <span class="series-name">{{ comic.series }}</span>
-        {% endif %}
       </div>
       {% if comic.rating %}
       <div class="card-rating">
