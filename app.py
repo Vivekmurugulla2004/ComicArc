@@ -77,6 +77,15 @@ def index():
         "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
     ).fetchall()]
     total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    continuing = db.execute("""
+        SELECT c.id, c.title, c.series, c.publisher, c.page_count,
+               rp.current_page as progress
+        FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id
+        WHERE rp.current_page > 0
+          AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+        ORDER BY rp.last_read DESC LIMIT 5
+    """).fetchall()
     db.close()
 
     return render_template('index.html',
@@ -85,6 +94,7 @@ def index():
                            current_publisher=publisher_filter,
                            search=search,
                            total=total,
+                           continuing=continuing,
                            unrar_missing=not cbr_tool_available())
 
 
@@ -229,10 +239,16 @@ def comic_detail(comic_id):
         LEFT JOIN favorites f ON c.id = f.comic_id
         WHERE c.id = ?
     """, (comic_id,)).fetchone()
+    runs_featuring = db.execute("""
+        SELECT r.id, r.title FROM runs r
+        JOIN run_items ri ON r.id = ri.run_id
+        WHERE ri.comic_id = ?
+        ORDER BY r.title
+    """, (comic_id,)).fetchall()
     db.close()
     if not comic:
         abort(404)
-    return render_template('comic_detail.html', comic=comic)
+    return render_template('comic_detail.html', comic=comic, runs_featuring=runs_featuring)
 
 
 # ── Reader ───────────────────────────────────────────────────────────────────
@@ -313,6 +329,51 @@ def rate_comic(comic_id):
 
 # ── Runs ─────────────────────────────────────────────────────────────────────
 
+@app.route('/stats')
+def stats():
+    db = get_db()
+    total_comics   = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    read_count     = db.execute("""
+        SELECT COUNT(*) FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id
+        WHERE rp.current_page >= c.page_count - 2 AND c.page_count > 1
+    """).fetchone()[0]
+    pages_read     = db.execute(
+        "SELECT COALESCE(SUM(current_page), 0) FROM reading_progress"
+    ).fetchone()[0]
+    in_progress    = db.execute("""
+        SELECT COUNT(*) FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id
+        WHERE rp.current_page > 0
+          AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+    """).fetchone()[0]
+    fav_count      = db.execute("SELECT COUNT(*) FROM favorites").fetchone()[0]
+    runs_count     = db.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+    by_publisher   = db.execute("""
+        SELECT publisher, COUNT(*) as count FROM comics
+        GROUP BY publisher ORDER BY count DESC
+    """).fetchall()
+    top_series     = db.execute("""
+        SELECT series, publisher, COUNT(*) as count FROM comics
+        WHERE series != 'General'
+        GROUP BY series ORDER BY count DESC LIMIT 8
+    """).fetchall()
+    recent_reads   = db.execute("""
+        SELECT c.id, c.title, c.publisher, rp.last_read, rp.current_page, c.page_count
+        FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id
+        WHERE rp.current_page > 0
+        ORDER BY rp.last_read DESC LIMIT 6
+    """).fetchall()
+    db.close()
+    return render_template('stats.html',
+        total_comics=total_comics, read_count=read_count,
+        pages_read=pages_read, in_progress=in_progress,
+        fav_count=fav_count, runs_count=runs_count,
+        by_publisher=by_publisher, top_series=top_series,
+        recent_reads=recent_reads)
+
+
 @app.route('/runs')
 def runs():
     db = get_db()
@@ -378,6 +439,30 @@ def run_detail(run_id):
 
     db.close()
     return render_template('run_detail.html', run=run, items=items, all_comics=all_comics)
+
+
+@app.route('/runs/<int:run_id>/edit', methods=['GET', 'POST'])
+def edit_run(run_id):
+    db = get_db()
+    run = db.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if not run:
+        abort(404)
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        buy_link = request.form.get('buy_link', '').strip()
+        if not title:
+            db.close()
+            return render_template('edit_run.html', run=run, error='A title is required.')
+        db.execute(
+            "UPDATE runs SET title = ?, description = ?, buy_link = ? WHERE id = ?",
+            (title, description or None, buy_link or None, run_id)
+        )
+        db.commit()
+        db.close()
+        return redirect(url_for('run_detail', run_id=run_id))
+    db.close()
+    return render_template('edit_run.html', run=run)
 
 
 @app.route('/runs/<int:run_id>/add', methods=['POST'])

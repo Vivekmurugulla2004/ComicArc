@@ -854,7 +854,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 .reader-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 #page-counter { font-size: 13px; color: var(--muted); }
-#fullscreen-btn, #rate-btn {
+#fullscreen-btn, #rate-btn, #spread-btn {
   background: none;
   border: 1px solid #2a2a3a;
   color: var(--muted);
@@ -865,6 +865,23 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 }
 #fullscreen-btn:hover { color: var(--text); border-color: #555; }
 #rate-btn:hover { color: var(--gold); border-color: var(--gold); }
+#spread-btn:hover { color: var(--text); border-color: #555; }
+#spread-btn.active { color: var(--gold); border-color: var(--gold); background: rgba(247,201,72,0.1); }
+
+/* Spread mode layout */
+#page-display.spread {
+  display: flex !important;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: center;
+}
+#page-display.spread #page-img,
+#page-display.spread #page-img-b {
+  max-height: calc(100vh - 110px);
+  max-width: 49.5%;
+  width: auto;
+  object-fit: contain;
+}
 
 #top-progress { height: 2px; background: #1a1a2a; flex-shrink: 0; }
 #top-progress-fill {
@@ -1007,3 +1024,108 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   color: #0b0c18;
 }
 .modal-actions button:first-child:hover { background: var(--gold2); }
+
+/* ── Continue Reading ──────────────────────────────────────────────────────── */
+.continue-section { margin-bottom: 40px; }
+.continue-heading {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.continue-row { display: flex; gap: 14px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+.continue-card {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 110px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition: border-color 0.15s, transform 0.15s;
+  text-decoration: none;
+}
+.continue-card:hover { border-color: var(--gold); transform: translateY(-4px); }
+.continue-cover-wrap { position: relative; aspect-ratio: 2/3; }
+.continue-cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+.continue-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.1); }
+.continue-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2)); }
+.continue-info { padding: 7px 8px 9px; }
+.continue-title {
+  font-size: 10px; font-weight: 600; line-height: 1.3;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.continue-pg { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+/* ── Stats Page ────────────────────────────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 48px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  text-align: center;
+}
+.stat-card.accent { border-color: rgba(247,201,72,0.4); background: rgba(247,201,72,0.06); }
+.stat-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px;
+  line-height: 1;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.stat-card.accent .stat-num { color: var(--gold2); }
+.stat-label { font-size: 12px; color: var(--muted); margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+
+.stats-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+@media (max-width: 720px) { .stats-two-col { grid-template-columns: 1fr; } }
+
+.stat-section { }
+.pub-stat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.pub-stat-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.pub-stat-bar { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2)); border-radius: 4px; transition: width 0.4s; }
+.pub-stat-count { font-size: 12px; color: var(--muted); min-width: 28px; text-align: right; }
+
+.series-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.series-stat-name { font-size: 13px; font-weight: 600; }
+.series-stat-count { font-size: 12px; color: var(--muted); }
+.stat-empty { color: var(--muted); font-size: 13px; }
+
+.recent-read-list { display: flex; flex-direction: column; gap: 2px; }
+.recent-read-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
+.recent-read-row:hover { border-color: var(--gold); }
+.recent-read-thumb { width: 32px; height: 48px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.recent-read-info { flex: 1; min-width: 0; }
+.recent-read-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-read-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.recent-read-prog { font-size: 11px; color: var(--muted); }
+.recent-read-date { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+
+/* ── Comic Detail — appears in runs ───────────────────────────────────────── */
+.cd-runs-section { margin-top: 28px; }
+.cd-runs-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.cd-runs-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.cd-run-chip {
+  padding: 6px 14px;
+  background: rgba(247,201,72,0.08);
+  border: 1px solid rgba(247,201,72,0.25);
+  color: var(--gold);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.cd-run-chip:hover { background: rgba(247,201,72,0.18); border-color: var(--gold); }

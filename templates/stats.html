@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Stats — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Your Stats</h1>
+    <p class="page-subtitle">Everything you've read, rated, and collected.</p>
+  </div>
+</div>
+
+<!-- Top stat cards -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-num">{{ total_comics }}</div>
+    <div class="stat-label">Comics in Library</div>
+  </div>
+  <div class="stat-card accent">
+    <div class="stat-num">{{ read_count }}</div>
+    <div class="stat-label">Completed</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ in_progress }}</div>
+    <div class="stat-label">In Progress</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ "{:,}".format(pages_read) }}</div>
+    <div class="stat-label">Pages Read</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ fav_count }}</div>
+    <div class="stat-label">Favorites</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ runs_count }}</div>
+    <div class="stat-label">Narrative Runs</div>
+  </div>
+</div>
+
+<div class="stats-two-col">
+
+  <!-- By publisher -->
+  <div class="stat-section">
+    <h2 class="section-title">By Publisher</h2>
+    {% for row in by_publisher %}
+    {% set pct = ((row.count / total_comics) * 100)|int if total_comics > 0 else 0 %}
+    <div class="pub-stat-row">
+      <span class="publisher-badge pub-{{ row.publisher|lower }}">{{ row.publisher }}</span>
+      <div class="pub-stat-bar-wrap">
+        <div class="pub-stat-bar" style="width: {{ pct }}%"></div>
+      </div>
+      <span class="pub-stat-count">{{ row.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Top series -->
+  <div class="stat-section">
+    <h2 class="section-title">Top Series</h2>
+    {% if top_series %}
+    {% for row in top_series %}
+    <div class="series-stat-row">
+      <span class="series-stat-name">{{ row.series }}</span>
+      <span class="series-stat-count">{{ row.count }} issue{{ 's' if row.count != 1 }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="stat-empty">No series data yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Recently read -->
+{% if recent_reads %}
+<div class="stat-section" style="margin-top: 40px;">
+  <h2 class="section-title">Recently Read</h2>
+  <div class="recent-read-list">
+    {% for c in recent_reads %}
+    <a href="/comic/{{ c.id }}" class="recent-read-row">
+      <img src="/cover/{{ c.id }}" class="recent-read-thumb" alt="">
+      <div class="recent-read-info">
+        <div class="recent-read-title">{{ c.title }}</div>
+        <div class="recent-read-meta">
+          <span class="publisher-badge pub-{{ c.publisher|lower }}">{{ c.publisher }}</span>
+          {% if c.page_count > 0 %}
+          <span class="recent-read-prog">
+            {% if c.current_page >= c.page_count - 2 %}Read{% else %}Page {{ c.current_page }}/{{ c.page_count }}{% endif %}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="recent-read-date">{{ c.last_read[:10] if c.last_read }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

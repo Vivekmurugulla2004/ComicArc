@@ -25,6 +25,7 @@
     {% if items %}
     <a href="/reader/{{ items[0].comic_id }}?run_id={{ run.id }}" class="btn-primary">▶ Start Reading</a>
     {% endif %}
+    <a href="/runs/{{ run.id }}/edit" class="btn-ghost">Edit</a>
     <form method="post" action="/runs/{{ run.id }}/delete"
           onsubmit="return confirm('Delete this run?')">
       <button type="submit" class="btn-danger">Delete Run</button>

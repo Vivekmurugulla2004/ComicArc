@@ -32,6 +32,32 @@
   {% endfor %}
 </div>
 
+{% if continuing %}
+<div class="continue-section">
+  <h2 class="continue-heading">Continue Reading</h2>
+  <div class="continue-row">
+    {% for comic in continuing %}
+    <a href="/reader/{{ comic.id }}" class="continue-card">
+      <div class="continue-cover-wrap">
+        <img src="/cover/{{ comic.id }}" class="continue-cover" alt="">
+        {% if comic.page_count > 0 %}
+        <div class="continue-bar">
+          <div class="continue-fill" style="width: {{ (comic.progress / comic.page_count * 100)|int }}%"></div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="continue-info">
+        <div class="continue-title">{{ comic.title }}</div>
+        {% if comic.page_count > 0 %}
+        <div class="continue-pg">p. {{ comic.progress }}/{{ comic.page_count }}</div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% if total == 0 %}
 <div class="empty-state">
   <div class="empty-icon">◈</div>

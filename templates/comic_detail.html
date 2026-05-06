@@ -76,6 +76,18 @@
     <div class="cd-actions">
       <a href="/reader/{{ comic.id }}" class="btn-primary cd-read-btn">▶ Read</a>
     </div>
+
+    <!-- Appears in runs -->
+    {% if runs_featuring %}
+    <div class="cd-runs-section">
+      <div class="cd-runs-label">Appears in</div>
+      <div class="cd-runs-list">
+        {% for r in runs_featuring %}
+        <a href="/runs/{{ r.id }}" class="cd-run-chip">{{ r.title }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </div>
 
 </div>

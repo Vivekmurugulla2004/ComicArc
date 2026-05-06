@@ -1,4 +1,4 @@
-let comicId, currentPage, totalPages;
+let comicId, currentPage, totalPages, spreadMode = false;
 
 function initReader(id, page, total) {
   comicId = id;
@@ -16,6 +16,7 @@ function initReader(id, page, total) {
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextPage(); }
     if (e.key === 'ArrowLeft')                   { e.preventDefault(); prevPage(); }
     if (e.key === 'f' || e.key === 'F')          toggleFullscreen();
+    if (e.key === 'd' || e.key === 'D')          toggleSpread();
     if (e.key === 'Escape')                       closeRating();
   });
 }
@@ -25,6 +26,14 @@ function updateUI() {
   img.classList.add('loading');
   img.onload = () => img.classList.remove('loading');
   img.src = `/page/${comicId}/${currentPage}`;
+
+  const imgB = document.getElementById('page-img-b');
+  if (spreadMode && currentPage + 1 < totalPages) {
+    imgB.src = `/page/${comicId}/${currentPage + 1}`;
+    imgB.style.display = '';
+  } else {
+    imgB.style.display = 'none';
+  }
 
   document.getElementById('cur-page').textContent = currentPage + 1;
   document.getElementById('page-slider').value = currentPage + 1;
@@ -36,18 +45,27 @@ function updateUI() {
 }
 
 function nextPage() {
+  const step = spreadMode ? 2 : 1;
   if (currentPage < totalPages - 1) {
-    currentPage++;
+    currentPage = Math.min(currentPage + step, totalPages - 1);
     updateUI();
-    preloadPage(currentPage + 1);
+    preloadPage(currentPage + step);
   }
 }
 
 function prevPage() {
+  const step = spreadMode ? 2 : 1;
   if (currentPage > 0) {
-    currentPage--;
+    currentPage = Math.max(currentPage - step, 0);
     updateUI();
   }
+}
+
+function toggleSpread() {
+  spreadMode = !spreadMode;
+  document.getElementById('page-display').classList.toggle('spread', spreadMode);
+  document.getElementById('spread-btn').classList.toggle('active', spreadMode);
+  updateUI();
 }
 
 function jumpToPage(page) {

@@ -17,7 +17,8 @@
     </a>
     <div class="nav-links">
       <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Library</a>
-      <a href="/runs" class="nav-link {% if request.endpoint in ['runs','run_detail','new_run'] %}active{% endif %}">Runs</a>
+      <a href="/runs" class="nav-link {% if request.endpoint in ['runs','run_detail','new_run','edit_run'] %}active{% endif %}">Runs</a>
+      <a href="/stats" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
     </div>
     <a href="/precache-covers" class="btn-scan btn-scan-secondary">Cache Covers</a>
     <a href="/scan" class="btn-scan">Scan Library</a>

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Edit Run — ComicArc{% endblock %}
+
+{% block content %}
+<div class="form-page">
+  <a href="/runs/{{ run.id }}" class="back-crumb">← {{ run.title }}</a>
+  <h1>Edit Run</h1>
+
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/runs/{{ run.id }}/edit" class="run-form">
+    <label for="title">Run Title</label>
+    <input id="title" type="text" name="title" value="{{ run.title }}" required autofocus>
+
+    <label for="description">Description <span class="optional">(optional)</span></label>
+    <textarea id="description" name="description" rows="3">{{ run.description or '' }}</textarea>
+
+    <label for="buy_link">Buy / Find Link <span class="optional">(optional)</span></label>
+    <input id="buy_link" type="url" name="buy_link" value="{{ run.buy_link or '' }}"
+           placeholder="https://amazon.com/…">
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Save Changes</button>
+      <a href="/runs/{{ run.id }}" class="btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

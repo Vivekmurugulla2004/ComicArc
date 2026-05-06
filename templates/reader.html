@@ -23,7 +23,8 @@
         <span id="page-counter">
           <span id="cur-page">{{ current_page + 1 }}</span> / {{ comic.page_count }}
         </span>
-        <button id="fullscreen-btn" title="Fullscreen" onclick="toggleFullscreen()">⛶</button>
+        <button id="spread-btn" title="Double-page spread (D)" onclick="toggleSpread()">▭</button>
+        <button id="fullscreen-btn" title="Fullscreen (F)" onclick="toggleFullscreen()">⛶</button>
         <button id="rate-btn" title="Rate this comic" onclick="openRating()">★</button>
       </div>
     </div>
@@ -38,6 +39,7 @@
       <div id="prev-zone" onclick="prevPage()" title="Previous page"></div>
       <div id="page-display">
         <img id="page-img" src="/page/{{ comic.id }}/{{ current_page }}" alt="Page {{ current_page + 1 }}">
+        <img id="page-img-b" style="display:none" alt="">
       </div>
       <div id="next-zone" onclick="nextPage()" title="Next page"></div>
     </div>
