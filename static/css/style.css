@@ -616,8 +616,39 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 }
 .buy-link-btn:hover { background: rgba(247,201,72,0.2); border-color: var(--gold); }
 
+/* ── Issue Row — rating + fav ──────────────────────────────────────────────── */
+.issue-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.issue-rating-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.inline-stars { display: flex; gap: 2px; }
+.istar {
+  font-size: 14px;
+  color: var(--border);
+  cursor: pointer;
+  transition: color 0.1s, transform 0.1s;
+  line-height: 1;
+}
+.istar:hover, .istar.lit { color: var(--gold); transform: scale(1.1); }
+
+.fav-btn {
+  background: transparent;
+  border: none;
+  color: var(--border);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.15s;
+}
+.fav-btn:hover { color: var(--red2); transform: scale(1.15); }
+.fav-btn.active { color: var(--red); }
+
 /* ── Issue Notes ───────────────────────────────────────────────────────────── */
-.issue-note {
+.issue-note-area {
   width: 100%;
   background: transparent;
   border: none;
@@ -625,13 +656,119 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   color: var(--muted);
   font-size: 11px;
   font-family: inherit;
-  padding: 3px 0;
-  margin-top: 5px;
+  padding: 4px 0;
+  margin-top: 6px;
   outline: none;
+  resize: none;
   transition: border-color 0.15s, color 0.15s;
+  line-height: 1.5;
 }
-.issue-note:focus { border-bottom-color: var(--gold); color: var(--text); }
-.issue-note::placeholder { color: var(--border); }
+.issue-note-area:focus { border-bottom-color: var(--gold); color: var(--text); }
+.issue-note-area::placeholder { color: var(--border); }
+
+/* ── Favorite badge on library covers ──────────────────────────────────────── */
+.fav-badge {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--red);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+  pointer-events: none;
+}
+
+/* ── Comic Detail Page ─────────────────────────────────────────────────────── */
+.comic-detail-page {
+  display: flex;
+  gap: 56px;
+  align-items: flex-start;
+  max-width: 960px;
+}
+
+.cd-cover-col { flex-shrink: 0; width: 260px; }
+.cd-cover-wrap {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px var(--border);
+}
+.cd-cover-img { width: 100%; display: block; }
+
+.cd-info-col { flex: 1; padding-top: 4px; }
+
+.cd-series {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+  margin-top: 28px;
+}
+.cd-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px;
+  line-height: 1;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, var(--gold), #fff 70%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 18px;
+}
+
+.cd-meta-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.cd-issue-num { font-size: 12px; color: var(--muted); }
+.cd-pages { font-size: 12px; color: var(--muted); }
+
+.cd-progress-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.cd-progress-bar {
+  width: 140px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cd-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--gold2));
+  border-radius: 4px;
+}
+.cd-progress-label { font-size: 12px; color: var(--muted); }
+
+.cd-rating-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.cd-stars { display: flex; gap: 5px; }
+.cd-star {
+  font-size: 26px;
+  color: var(--border);
+  cursor: pointer;
+  transition: color 0.1s, transform 0.1s;
+}
+.cd-star:hover, .cd-star.active { color: var(--gold); transform: scale(1.1); }
+.cd-rating-label { font-size: 13px; color: var(--muted); }
+
+.cd-fav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 9px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 28px;
+}
+.cd-fav-btn .cd-fav-icon { font-size: 16px; transition: color 0.15s; }
+.cd-fav-btn:hover { border-color: var(--red2); color: var(--red2); }
+.cd-fav-btn.active { border-color: var(--red); color: var(--red); }
+
+.cd-actions { display: flex; gap: 12px; align-items: center; }
+.cd-read-btn { font-size: 16px; padding: 13px 36px; }
 
 /* ── Form Page ─────────────────────────────────────────────────────────────── */
 .form-page { max-width: 560px; }

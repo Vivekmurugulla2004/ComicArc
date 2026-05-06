@@ -47,13 +47,16 @@
 {% else %}
 <div class="comics-grid">
   {% for comic in comics %}
-  <div class="comic-card" onclick="location.href='/reader/{{ comic.id }}'">
+  <div class="comic-card" onclick="location.href='/comic/{{ comic.id }}'">
     <div class="cover-wrap">
       <img class="cover-img" src="/cover/{{ comic.id }}" alt="{{ comic.title }}" loading="lazy">
       {% if comic.page_count > 0 %}
       <div class="progress-bar">
         <div class="progress-fill" style="width: {{ (comic.progress / comic.page_count * 100)|int }}%"></div>
       </div>
+      {% endif %}
+      {% if comic.is_favorite %}
+      <div class="fav-badge">♥</div>
       {% endif %}
       <div class="cover-overlay">
         <span class="read-btn">Read</span>

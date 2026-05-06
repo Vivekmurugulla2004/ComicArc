@@ -12,17 +12,20 @@ def get_db():
 
 
 def migrate_db():
-    """Add new columns to existing databases without losing data."""
+    """Add new columns and tables to existing databases without losing data."""
     conn = get_db()
     for sql in [
         "ALTER TABLE runs ADD COLUMN rating INTEGER",
         "ALTER TABLE runs ADD COLUMN review TEXT",
         "ALTER TABLE runs ADD COLUMN buy_link TEXT",
+        """CREATE TABLE IF NOT EXISTS favorites (
+               comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE
+           )""",
     ]:
         try:
             conn.execute(sql)
         except Exception:
-            pass  # column already exists
+            pass
     conn.commit()
     conn.close()
 

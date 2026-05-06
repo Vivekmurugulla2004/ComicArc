@@ -49,10 +49,12 @@ def index():
 
     query = """
         SELECT c.*, COALESCE(rp.current_page, 0) as progress,
-               COALESCE(r.rating, 0) as rating
+               COALESCE(r.rating, 0) as rating,
+               CASE WHEN f.comic_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
         FROM comics c
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
         LEFT JOIN ratings r ON c.id = r.comic_id
+        LEFT JOIN favorites f ON c.id = f.comic_id
     """
     params = []
     conditions = []
@@ -159,6 +161,28 @@ def serve_page(comic_id, page_num):
     resp = Response(img_data, mimetype=mime)
     resp.headers['Cache-Control'] = 'public, max-age=3600'
     return resp
+
+
+# ── Comic Detail ─────────────────────────────────────────────────────────────
+
+@app.route('/comic/<int:comic_id>')
+def comic_detail(comic_id):
+    db = get_db()
+    comic = db.execute("""
+        SELECT c.*,
+               COALESCE(rp.current_page, 0) as progress,
+               COALESCE(r.rating, 0) as rating,
+               CASE WHEN f.comic_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+        FROM comics c
+        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        LEFT JOIN ratings r ON c.id = r.comic_id
+        LEFT JOIN favorites f ON c.id = f.comic_id
+        WHERE c.id = ?
+    """, (comic_id,)).fetchone()
+    db.close()
+    if not comic:
+        abort(404)
+    return render_template('comic_detail.html', comic=comic)
 
 
 # ── Reader ───────────────────────────────────────────────────────────────────
@@ -284,10 +308,14 @@ def run_detail(run_id):
     items = db.execute("""
         SELECT ri.id, ri.position, ri.notes,
                c.id as comic_id, c.title, c.series, c.publisher, c.issue_number, c.page_count,
-               COALESCE(rp.current_page, 0) as progress
+               COALESCE(rp.current_page, 0) as progress,
+               COALESCE(r.rating, 0) as rating,
+               CASE WHEN f.comic_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
         FROM run_items ri
         JOIN comics c ON ri.comic_id = c.id
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        LEFT JOIN ratings r ON c.id = r.comic_id
+        LEFT JOIN favorites f ON c.id = f.comic_id
         WHERE ri.run_id = ?
         ORDER BY ri.position
     """, (run_id,)).fetchall()
@@ -360,6 +388,21 @@ def rate_run(run_id):
     db.commit()
     db.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/favorite/<int:comic_id>', methods=['POST'])
+def toggle_favorite(comic_id):
+    db = get_db()
+    existing = db.execute("SELECT 1 FROM favorites WHERE comic_id = ?", (comic_id,)).fetchone()
+    if existing:
+        db.execute("DELETE FROM favorites WHERE comic_id = ?", (comic_id,))
+        is_fav = False
+    else:
+        db.execute("INSERT INTO favorites (comic_id) VALUES (?)", (comic_id,))
+        is_fav = True
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'favorite': is_fav})
 
 
 @app.route('/api/note/<int:item_id>', methods=['POST'])

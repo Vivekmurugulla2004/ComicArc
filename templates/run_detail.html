@@ -48,7 +48,20 @@
         <div class="issue-num">{{ loop.index }}</div>
         <img class="issue-thumb" src="/cover/{{ item.comic_id }}" alt="">
         <div class="issue-info">
-          <div class="issue-title">{{ item.title }}</div>
+          <div class="issue-top-row">
+            <div class="issue-title">{{ item.title }}</div>
+            <div class="issue-rating-row">
+              <div class="inline-stars">
+                {% for i in range(1, 6) %}
+                <span class="istar {% if item.rating and i <= item.rating %}lit{% endif %}"
+                      data-val="{{ i }}"
+                      onclick="rateIssue({{ item.comic_id }}, {{ i }}, this.parentElement)">★</span>
+                {% endfor %}
+              </div>
+              <button class="fav-btn {% if item.is_favorite %}active{% endif %}"
+                      onclick="toggleFav({{ item.comic_id }}, this)" title="Favorite">♥</button>
+            </div>
+          </div>
           <div class="issue-meta">
             <span class="publisher-badge pub-{{ item.publisher|lower }}">{{ item.publisher }}</span>
             {% if item.series and item.series != 'General' %}{{ item.series }}{% endif %}
@@ -58,10 +71,9 @@
             <div class="mini-progress-fill" style="width: {{ (item.progress / item.page_count * 100)|int }}%"></div>
           </div>
           {% endif %}
-          <input class="issue-note" type="text" placeholder="Add a note for this issue…"
-                 value="{{ item.notes or '' }}"
-                 data-item-id="{{ item.id }}"
-                 onblur="saveNote(this)">
+          <textarea class="issue-note-area" placeholder="Add a note about why this issue matters to the arc…"
+                    data-item-id="{{ item.id }}"
+                    onblur="saveNote(this)" rows="2">{{ item.notes or '' }}</textarea>
         </div>
         <div class="issue-actions">
           <a href="/reader/{{ item.comic_id }}?run_id={{ run.id }}" class="icon-btn" title="Read">▶</a>
@@ -122,6 +134,25 @@ function rateRun(runId, val) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rating: val, review: '' })
   });
+}
+
+// Issue star rating
+function rateIssue(comicId, val, container) {
+  container.querySelectorAll('.istar').forEach((s, i) => {
+    s.classList.toggle('lit', i < val);
+  });
+  fetch(`/api/rate/${comicId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating: val, review: '' })
+  });
+}
+
+// Favorite toggle
+function toggleFav(comicId, btn) {
+  fetch(`/api/favorite/${comicId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => btn.classList.toggle('active', data.favorite));
 }
 
 // Issue notes
