@@ -69,28 +69,26 @@
   <div class="add-panel">
     <h2 class="section-title">Add Comics</h2>
     <input id="comic-search" type="text" class="add-search" placeholder="Search by title or series…" autocomplete="off">
-    <div id="comic-results" class="comic-results">
+    {% if not all_comics %}
+    <div class="results-empty">All comics are already in this run.</div>
+    {% else %}
+    <div id="comic-results" class="picker-grid">
       {% for comic in all_comics %}
-      <form method="post" action="/runs/{{ run.id }}/add" class="result-item"
+      <form method="post" action="/runs/{{ run.id }}/add" class="picker-card"
             data-title="{{ (comic.series if comic.series != 'General' else comic.title)|lower }} {{ comic.title|lower }}">
         <input type="hidden" name="comic_id" value="{{ comic.id }}">
-        <img src="/cover/{{ comic.id }}" alt="" class="result-thumb" loading="lazy">
-        <div class="result-info">
-          <div class="result-name">
-            {% if comic.series and comic.series != 'General' %}{{ comic.series }}{% else %}{{ comic.title }}{% endif %}
-          </div>
-          {% if comic.series and comic.series != 'General' %}
-          <div class="result-sub">{{ comic.title }}</div>
-          {% endif %}
-          <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
+        <div class="picker-cover-wrap">
+          <img src="/cover/{{ comic.id }}" alt="" class="picker-cover" loading="lazy">
+          <button type="submit" class="picker-add-overlay">+ Add</button>
         </div>
-        <button type="submit" class="result-add-btn" title="Add to run">+</button>
+        <div class="picker-info">
+          <div class="picker-title">{{ comic.title }}</div>
+          <div class="picker-series">{% if comic.series and comic.series != 'General' %}{{ comic.series }}{% endif %}</div>
+        </div>
       </form>
       {% endfor %}
-      {% if not all_comics %}
-      <div class="results-empty">All comics are already in this run.</div>
-      {% endif %}
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
