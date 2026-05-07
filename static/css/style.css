@@ -1272,6 +1272,13 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 .import-item-status { flex-shrink: 0; color: var(--muted); }
 .import-item-status.ok  { color: #4caf50; }
 .import-item-status.err { color: var(--red2); }
+.import-legal-note {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 6px;
+  opacity: 0.7;
+}
 
 /* ── Accessibility — visible focus ────────────────────────────────────────── */
 :focus-visible {
@@ -1538,6 +1545,19 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   from { width: 0; }
   to   { width: 100%; }
 }
+
+/* ── App Footer ────────────────────────────────────────────────────────────── */
+.app-footer {
+  text-align: center;
+  padding: 28px 20px 40px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: 60px;
+  opacity: 0.7;
+}
+.app-footer a { color: var(--muted); text-decoration: underline; margin-left: 8px; }
+.app-footer a:hover { color: var(--gold); }
 
 /* ── Horizontal scroll containers — momentum on iOS ───────────────────────── */
 .continue-row, .publisher-tabs, .tag-filter-row {

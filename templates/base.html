@@ -32,6 +32,11 @@
     {% block content %}{% endblock %}
   </main>
 
+  <footer class="app-footer">
+    ComicArc — personal use only. Only import files you have the legal right to possess.
+    <a href="https://github.com/Vivekmurugulla2004/Comic-Book-App/blob/main/LEGAL.md" target="_blank" rel="noopener">Legal &amp; Content Policy</a>
+  </footer>
+
   {% block scripts %}{% endblock %}
   <script>
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
