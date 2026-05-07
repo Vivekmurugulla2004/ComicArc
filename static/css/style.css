@@ -883,7 +883,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 #fullscreen-btn:hover { color: var(--text); border-color: #555; }
 #rate-btn:hover { color: var(--gold); border-color: var(--gold); }
 #spread-btn:hover { color: var(--text); border-color: #555; }
-#spread-btn.active, #vertical-btn.active, #zoom-btn.active {
+#spread-btn.active, #vertical-btn.active, #zoom-btn.active, #autoplay-btn.active {
   color: var(--gold); border-color: var(--gold); background: rgba(247,201,72,0.1);
 }
 #fullscreen-btn:hover, #spread-btn:hover, #vertical-btn:hover, #zoom-btn:hover { color: var(--text); border-color: #555; }
@@ -1319,10 +1319,14 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   .cd-cover-col { width: 160px; align-self: center; }
   .cd-series { margin-top: 0; }
   .cd-title  { font-size: 38px; }
+  .cd-actions { flex-wrap: wrap; gap: 8px; }
+  .cd-tag-input { flex: 1; width: auto; min-width: 0; }
+  .cd-tag-input-row { width: 100%; }
 
   /* Runs list */
   .run-card { padding: 16px 18px; flex-wrap: wrap; gap: 12px; }
   .run-card-meta { flex-wrap: wrap; gap: 10px; }
+  .run-rate-wrap { align-items: flex-start; }
 
   /* Stats */
   .stat-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -1330,10 +1334,27 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   .stat-card { padding: 16px 12px; }
   .stats-two-col { grid-template-columns: 1fr; }
 
+  /* Run detail — issue rows */
+  .drag-handle { display: none; }
+  .issue-row { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
+  .issue-info { min-width: 0; flex: 1 1 150px; }
+  .issue-actions { display: flex; gap: 8px; margin-left: auto; }
+  .icon-btn { padding: 10px 16px; font-size: 14px; }
+  .inline-stars { gap: 4px; }
+  .istar { font-size: 18px; padding: 4px 3px; }
+  .fav-btn { font-size: 18px; padding: 4px 6px; }
+
+  /* Add panel picker — show add button on touch */
+  .picker-add-overlay { opacity: 0.9; font-size: 13px; }
+
   /* Reader topbar */
   #spread-btn { display: none; }
-  .reader-title { max-width: 130px; font-size: 12px; }
+  #reader-topbar { padding: 0 14px; }
+  .reader-title { max-width: 120px; font-size: 12px; }
   .run-nav-preview { display: none; }
+
+  /* Header actions on run/runs pages */
+  .header-actions { flex-wrap: wrap; gap: 8px; }
 }
 
 @media (max-width: 480px) {
@@ -1348,18 +1369,48 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   .publisher-tabs { gap: 6px; }
   .tab { padding: 5px 14px; font-size: 12px; }
 
+  /* Reader top bar — hide less-used buttons to prevent overflow */
+  #fullscreen-btn { display: none; }
+  #reader-topbar button { padding: 7px 9px; font-size: 14px; }
+  .topbar-right { gap: 6px; }
+  .reader-title { max-width: 90px; }
+  .back-link { font-size: 12px; }
+
   /* Reader bottom bar */
   #reader-bottombar { padding: 0 10px; gap: 6px; }
-  .run-nav-btn { font-size: 11px; padding: 5px 8px; }
+  .run-nav-btn { font-size: 11px; padding: 8px 10px; min-height: 40px; }
+  .bottom-center { padding: 0 10px; }
 
   /* Form page */
   .form-page { max-width: 100%; }
+
+  /* Search form — stack sort below search */
+  .search-form { flex-wrap: wrap; }
+  .sort-select { order: 3; width: 100%; }
 }
 
-/* Reader touch improvements */
+/* Touch-device improvements */
 @media (hover: none) {
   #prev-zone, #next-zone { opacity: 0.01; }
   .cover-overlay { opacity: 0; }
+
+  /* Minimum 44 × 44 px touch targets */
+  .nav-link { min-height: 44px; display: inline-flex; align-items: center; }
+  .tab      { min-height: 40px; display: inline-flex; align-items: center; }
+  .tag-remove { padding: 5px 7px; font-size: 12px; }
+  .tag-chip-filter { min-height: 36px; display: inline-flex; align-items: center; }
+  .istar    { padding: 6px 4px; }
+  .fav-btn  { padding: 6px 8px; }
+  .icon-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .run-nav-btn { min-height: 44px; display: inline-flex; align-items: center; }
+  .cd-star  { padding: 6px 4px; }
+  .run-star { padding: 4px 3px; }
+
+  /* Reader topbar buttons need bigger tap area */
+  #reader-topbar button { min-height: 44px; padding: 0 12px; }
+
+  /* Picker add-button always visible on touch */
+  .picker-add-overlay { opacity: 0.9; }
 }
 
 /* ── Cover fade-in ─────────────────────────────────────────────────────────── */
@@ -1456,6 +1507,35 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 @media (max-width: 768px) {
   .tag-filter-row { gap: 6px; }
   #spread-btn, #vertical-btn { display: none; }
-  .reader-title { max-width: 130px; font-size: 12px; }
-  .run-nav-preview { display: none; }
+}
+
+/* ── Autoplay countdown bar ────────────────────────────────────────────────── */
+#autoplay-bar {
+  height: 2px;
+  background: transparent;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+#autoplay-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #00b4d8, #48cae4);
+}
+#autoplay-fill.ticking {
+  animation: autoplay-countdown 10s linear forwards;
+}
+@keyframes autoplay-countdown {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+/* ── Horizontal scroll containers — momentum on iOS ───────────────────────── */
+.continue-row, .publisher-tabs, .tag-filter-row {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Navbar mobile touch targets ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .nav-link { padding: 10px 14px; }
+  .nav-links { gap: 2px; }
 }

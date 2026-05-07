@@ -4,6 +4,8 @@ let verticalMode = false;
 let zoomLevel    = 1;
 let panX = 0, panY = 0;
 let isPanning = false, panStartX, panStartY;
+let autoplayMode  = false;
+let autoplayTimer = null;
 
 function initReader(id, page, total) {
   comicId     = id;
@@ -25,8 +27,13 @@ function initReader(id, page, total) {
     if (e.key === 'f' || e.key === 'F')          toggleFullscreen();
     if (e.key === 'd' || e.key === 'D')          toggleSpread();
     if (e.key === 'v' || e.key === 'V')          toggleVertical();
-    if (e.key === 'z' || e.key === 'Z')          { setZoom(zoomLevel > 1 ? 1 : 2.5); }
-    if (e.key === 'Escape')                       { if (zoomLevel > 1) setZoom(1); else closeRating(); }
+    if (e.key === 'z' || e.key === 'Z')          setZoom(zoomLevel > 1 ? 1 : 2.5);
+    if (e.key === 'a' || e.key === 'A')          toggleAutoplay();
+    if (e.key === 'Escape') {
+      if (zoomLevel > 1) setZoom(1);
+      else if (autoplayMode) toggleAutoplay();
+      else closeRating();
+    }
   });
 
   // Touch swipe
@@ -90,7 +97,8 @@ function updateUI() {
   }
 
   document.getElementById('cur-page').textContent = currentPage + 1;
-  document.getElementById('page-slider').value = currentPage + 1;
+  const slider = document.getElementById('page-slider');
+  if (slider) slider.value = currentPage + 1;
   const pct = totalPages > 1 ? (currentPage / (totalPages - 1) * 100) : 100;
   document.getElementById('top-progress-fill').style.width = pct + '%';
   saveProgress();
@@ -103,8 +111,18 @@ function nextPage() {
     currentPage = Math.min(currentPage + step, totalPages - 1);
     updateUI();
     preloadPage(currentPage + step);
+    resetAutoplayTimer();
   } else if (nextComicUrl) {
+    stopAutoplayTimer();
     location.href = nextComicUrl;
+  } else {
+    // End of last comic — stop autoplay
+    if (autoplayMode) {
+      autoplayMode = false;
+      stopAutoplayTimer();
+      const btn = document.getElementById('autoplay-btn');
+      if (btn) btn.classList.remove('active');
+    }
   }
 }
 
@@ -114,7 +132,9 @@ function prevPage() {
   if (currentPage > 0) {
     currentPage = Math.max(currentPage - step, 0);
     updateUI();
+    resetAutoplayTimer();
   } else if (prevComicUrl) {
+    stopAutoplayTimer();
     location.href = prevComicUrl;
   }
 }
@@ -127,6 +147,7 @@ function jumpToPage(page) {
   } else if (page !== currentPage) {
     currentPage = page;
     updateUI();
+    resetAutoplayTimer();
   }
 }
 
@@ -140,6 +161,43 @@ function saveProgress() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ page: currentPage })
   });
+}
+
+// ── Autoplay ──────────────────────────────────────────────────────────────────
+
+function toggleAutoplay() {
+  autoplayMode = !autoplayMode;
+  const btn = document.getElementById('autoplay-btn');
+  if (btn) btn.classList.toggle('active', autoplayMode);
+  if (autoplayMode) {
+    startAutoplayTimer();
+  } else {
+    stopAutoplayTimer();
+  }
+}
+
+function startAutoplayTimer() {
+  clearTimeout(autoplayTimer);
+  const fill = document.getElementById('autoplay-fill');
+  if (fill) {
+    fill.classList.remove('ticking');
+    void fill.offsetWidth; // force reflow so animation restarts
+    fill.classList.add('ticking');
+  }
+  autoplayTimer = setTimeout(() => {
+    if (autoplayMode) nextPage();
+  }, 10000);
+}
+
+function stopAutoplayTimer() {
+  clearTimeout(autoplayTimer);
+  autoplayTimer = null;
+  const fill = document.getElementById('autoplay-fill');
+  if (fill) fill.classList.remove('ticking');
+}
+
+function resetAutoplayTimer() {
+  if (autoplayMode) startAutoplayTimer();
 }
 
 // ── Spread mode ───────────────────────────────────────────────────────────────
@@ -171,6 +229,7 @@ function toggleVertical() {
     nextZone.style.display  = 'none';
     scrollEl.style.display  = 'block';
     bottomBar.style.display = 'none';
+    stopAutoplayTimer(); // autoplay not supported in vertical mode
     setZoom(1);
     buildScrollView();
   } else {
@@ -200,14 +259,12 @@ function buildScrollView() {
     container.appendChild(wrap);
   }
 
-  // Scroll to current position
   const current = container.querySelectorAll('.scroll-page')[currentPage];
   if (current) current.scrollIntoView();
 
-  // Lazy-load + progress tracking via IntersectionObserver
   const io = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-      const img  = entry.target.querySelector('img');
+      const img = entry.target.querySelector('img');
       if (entry.isIntersecting) {
         if (img && img.dataset.src) {
           img.src = img.dataset.src;
@@ -217,7 +274,8 @@ function buildScrollView() {
         if (p !== currentPage) {
           currentPage = p;
           document.getElementById('cur-page').textContent = p + 1;
-          document.getElementById('page-slider').value   = p + 1;
+          const slider = document.getElementById('page-slider');
+          if (slider) slider.value = p + 1;
           const pct = totalPages > 1 ? (p / (totalPages - 1) * 100) : 100;
           document.getElementById('top-progress-fill').style.width = pct + '%';
           saveProgress();
