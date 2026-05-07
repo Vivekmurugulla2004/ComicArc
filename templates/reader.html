@@ -23,11 +23,12 @@
         <span id="page-counter">
           <span id="cur-page">{{ current_page + 1 }}</span> / {% if comic.page_count > 0 %}{{ comic.page_count }}{% else %}?{% endif %}
         </span>
-        <button id="vertical-btn" title="Vertical scroll mode (V)" onclick="toggleVertical()">☰</button>
-        <button id="spread-btn"   title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
-        <button id="zoom-btn"     title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
-        <button id="fullscreen-btn" title="Fullscreen (F)"        onclick="toggleFullscreen()">⛶</button>
-        <button id="rate-btn"     title="Rate this comic"         onclick="openRating()">★</button>
+        <button id="vertical-btn"  title="Vertical scroll mode (V)" onclick="toggleVertical()">☰</button>
+        <button id="spread-btn"    title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
+        <button id="zoom-btn"      title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
+        <button id="autoplay-btn"  title="Autoplay — advance page every 10 s (A)" onclick="toggleAutoplay()">⏵</button>
+        <button id="fullscreen-btn" title="Fullscreen (F)"         onclick="toggleFullscreen()">⛶</button>
+        <button id="rate-btn"      title="Rate this comic"         onclick="openRating()">★</button>
       </div>
     </div>
 
@@ -35,6 +36,8 @@
     <div id="top-progress">
       <div id="top-progress-fill"></div>
     </div>
+    <!-- Autoplay countdown bar (visible only when autoplay is active) -->
+    <div id="autoplay-bar"><div id="autoplay-fill"></div></div>
 
     <!-- Page display -->
     <div id="page-area">
@@ -100,7 +103,7 @@
   </div>
 
   <!-- Keyboard hint -->
-  <div id="kb-hint">← → Arrow keys or click sides to navigate</div>
+  <div id="kb-hint">← → navigate · A = autoplay · Z = zoom · F = fullscreen</div>
 
   <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
   <script>
