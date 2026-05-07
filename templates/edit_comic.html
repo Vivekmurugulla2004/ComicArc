@@ -36,10 +36,10 @@
   <div class="danger-zone">
     <h3>Danger Zone</h3>
     <p>Permanently removes this comic from your library.
-       {% if comic.file_path.startswith('/') %}The source file will also be deleted if it was imported through ComicArc.{% endif %}
+       {% if 'user_comics' in comic.file_path %}The uploaded file will also be deleted from disk.{% endif %}
     </p>
     <form method="post" action="/comic/{{ comic.id }}/delete"
-          onsubmit="return confirm('Delete {{ comic.title }}? This cannot be undone.')">
+          onsubmit="return confirm('Delete this comic? This cannot be undone.')">
       <button type="submit" class="btn-danger">Delete Comic</button>
     </form>
   </div>

@@ -1,4 +1,4 @@
-const CACHE = 'comicarc-v1';
+const CACHE = 'comicarc-v2';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/reader.js',

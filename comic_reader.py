@@ -103,10 +103,14 @@ def _rarfile_count(file_path):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
+
 def get_page_count(file_path):
     ext = os.path.splitext(file_path)[1].lower()
     try:
-        if ext == '.cbz':
+        if ext in _IMAGE_EXTS:
+            return 1
+        elif ext == '.cbz':
             with zipfile.ZipFile(file_path) as z:
                 return len(get_image_files(z.namelist()))
         elif ext == '.cbr':
@@ -128,7 +132,13 @@ def get_page(file_path, page_num):
     """Returns (image_bytes, mime_type) for a given page (0-indexed)."""
     ext = os.path.splitext(file_path)[1].lower()
     try:
-        if ext == '.cbz':
+        if ext in _IMAGE_EXTS:
+            if page_num != 0:
+                return None, None
+            with open(file_path, 'rb') as f:
+                return f.read(), _mime(file_path)
+
+        elif ext == '.cbz':
             with zipfile.ZipFile(file_path) as z:
                 images = get_image_files(z.namelist())
                 if page_num >= len(images):

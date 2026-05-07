@@ -451,6 +451,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   transform: translateX(6px);
   box-shadow: -4px 0 0 var(--gold), 0 8px 32px rgba(0,0,0,0.3);
 }
+.run-card-body { flex: 1; min-width: 0; }
 .run-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
 .run-desc { color: var(--muted); font-size: 13px; }
 .run-card-meta { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 13px; }
@@ -871,7 +872,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 .reader-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 #page-counter { font-size: 13px; color: var(--muted); }
-#fullscreen-btn, #rate-btn, #spread-btn, #vertical-btn, #zoom-btn {
+#fullscreen-btn, #rate-btn, #spread-btn, #vertical-btn, #zoom-btn, #autoplay-btn {
   background: none;
   border: 1px solid #2a2a3a;
   color: var(--muted);
@@ -886,7 +887,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 #spread-btn.active, #vertical-btn.active, #zoom-btn.active, #autoplay-btn.active {
   color: var(--gold); border-color: var(--gold); background: rgba(247,201,72,0.1);
 }
-#fullscreen-btn:hover, #spread-btn:hover, #vertical-btn:hover, #zoom-btn:hover { color: var(--text); border-color: #555; }
+#fullscreen-btn:hover, #spread-btn:hover, #vertical-btn:hover, #zoom-btn:hover, #autoplay-btn:hover { color: var(--text); border-color: #555; }
 
 /* Spread mode layout */
 #page-display.spread {
@@ -1409,8 +1410,17 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   /* Reader topbar buttons need bigger tap area */
   #reader-topbar button { min-height: 44px; padding: 0 12px; }
 
-  /* Picker add-button always visible on touch */
-  .picker-add-overlay { opacity: 0.9; }
+  /* Picker: show a tap-friendly "+ Add" strip below the cover, not overlaid on it */
+  .picker-add-overlay {
+    position: static;
+    opacity: 1;
+    inset: auto;
+    width: 100%;
+    padding: 8px 0;
+    font-size: 12px;
+    border-radius: 0;
+  }
+  .picker-cover-wrap { overflow: visible; }
 }
 
 /* ── Cover fade-in ─────────────────────────────────────────────────────────── */

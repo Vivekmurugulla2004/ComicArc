@@ -365,6 +365,9 @@ def edit_comic(comic_id):
 def delete_comic(comic_id):
     db = get_db()
     row = db.execute("SELECT file_path FROM comics WHERE id = ?", (comic_id,)).fetchone()
+    # Clean up child rows that lack ON DELETE CASCADE before removing the comic
+    db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
+    db.execute("DELETE FROM ratings WHERE comic_id = ?", (comic_id,))
     db.execute("DELETE FROM comics WHERE id = ?", (comic_id,))
     db.commit()
     db.close()

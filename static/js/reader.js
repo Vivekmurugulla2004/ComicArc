@@ -4,8 +4,9 @@ let verticalMode = false;
 let zoomLevel    = 1;
 let panX = 0, panY = 0;
 let isPanning = false, panStartX, panStartY;
-let autoplayMode  = false;
-let autoplayTimer = null;
+let autoplayMode     = false;
+let autoplayTimer    = null;
+let progressDebounce = null;
 
 function initReader(id, page, total) {
   comicId     = id;
@@ -109,15 +110,18 @@ function nextPage() {
   const step = spreadMode ? 2 : 1;
   if (currentPage < totalPages - 1) {
     currentPage = Math.min(currentPage + step, totalPages - 1);
+    if (zoomLevel > 1) setZoom(1); // reset zoom when turning page
     updateUI();
     preloadPage(currentPage + step);
     resetAutoplayTimer();
-  } else if (nextComicUrl) {
-    stopAutoplayTimer();
-    location.href = nextComicUrl;
   } else {
-    // End of last comic — stop autoplay
-    if (autoplayMode) {
+    // Fall back to reading the DOM link href in case the JS variable is stale
+    const url = nextComicUrl || document.querySelector('.run-nav-next')?.href || null;
+    if (url) {
+      stopAutoplayTimer();
+      location.href = url;
+    } else if (autoplayMode) {
+      // End of last comic in run — stop autoplay
       autoplayMode = false;
       stopAutoplayTimer();
       const btn = document.getElementById('autoplay-btn');
@@ -133,9 +137,12 @@ function prevPage() {
     currentPage = Math.max(currentPage - step, 0);
     updateUI();
     resetAutoplayTimer();
-  } else if (prevComicUrl) {
-    stopAutoplayTimer();
-    location.href = prevComicUrl;
+  } else {
+    const url = prevComicUrl || document.querySelector('.run-nav-prev')?.href || null;
+    if (url) {
+      stopAutoplayTimer();
+      location.href = url;
+    }
   }
 }
 
@@ -156,11 +163,14 @@ function preloadPage(page) {
 }
 
 function saveProgress() {
-  fetch(`/api/progress/${comicId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ page: currentPage })
-  });
+  clearTimeout(progressDebounce);
+  progressDebounce = setTimeout(() => {
+    fetch(`/api/progress/${comicId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: currentPage })
+    });
+  }, 1500);
 }
 
 // ── Autoplay ──────────────────────────────────────────────────────────────────
@@ -239,6 +249,7 @@ function toggleVertical() {
     nextZone.style.display  = '';
     bottomBar.style.display = '';
     updateUI();
+    resetAutoplayTimer(); // restart countdown if autoplay was on before vertical mode
   }
 }
 
@@ -324,8 +335,14 @@ function toggleFullscreen() {
 
 let selectedRating = 0;
 
-function openRating()  { document.getElementById('rating-modal').classList.remove('hidden'); }
-function closeRating() { document.getElementById('rating-modal').classList.add('hidden'); }
+function openRating() {
+  document.getElementById('rating-modal').classList.remove('hidden');
+  stopAutoplayTimer();
+}
+function closeRating() {
+  document.getElementById('rating-modal').classList.add('hidden');
+  resetAutoplayTimer();
+}
 
 function selectStar(val) {
   selectedRating = val;
