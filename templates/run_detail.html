@@ -45,7 +45,8 @@
     {% else %}
     <div class="issue-list">
       {% for item in items %}
-      <div class="issue-row">
+      <div class="issue-row" draggable="true" data-item-id="{{ item.id }}">
+        <div class="drag-handle" title="Drag to reorder">⠿</div>
         <div class="issue-num">{{ loop.index }}</div>
         <img class="issue-thumb" src="/cover/{{ item.comic_id }}" alt="">
         <div class="issue-info">
@@ -77,16 +78,10 @@
                     onblur="saveNote(this)" rows="2">{{ item.notes or '' }}</textarea>
         </div>
         <div class="issue-actions">
-          <a href="/reader/{{ item.comic_id }}?run_id={{ run.id }}" class="icon-btn" title="Read">▶</a>
-          <form method="post" action="/runs/{{ run.id }}/move/{{ item.id }}/up" style="display:inline">
-            <button type="submit" class="icon-btn" title="Move up">↑</button>
-          </form>
-          <form method="post" action="/runs/{{ run.id }}/move/{{ item.id }}/down" style="display:inline">
-            <button type="submit" class="icon-btn" title="Move down">↓</button>
-          </form>
+          <a href="/reader/{{ item.comic_id }}?run_id={{ run.id }}" class="icon-btn" title="Read" aria-label="Read">▶</a>
           <form method="post" action="/runs/{{ run.id }}/remove/{{ item.id }}"
                 onsubmit="return confirm('Remove from run?')" style="display:inline">
-            <button type="submit" class="icon-btn danger" title="Remove">✕</button>
+            <button type="submit" class="icon-btn danger" title="Remove" aria-label="Remove from run">✕</button>
           </form>
         </div>
       </div>
@@ -164,6 +159,43 @@ function saveNote(input) {
     body: JSON.stringify({ note: input.value })
   });
 }
+
+// Drag-and-drop reordering
+(function() {
+  let dragged = null;
+  document.querySelectorAll('.issue-row[draggable]').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragged = row;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      dragged = null;
+      row.classList.remove('dragging');
+      document.querySelectorAll('.issue-row').forEach(r => r.classList.remove('drag-over'));
+      saveRunOrder();
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!dragged || dragged === row) return;
+      const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      row.classList.add('drag-over');
+      row.parentNode.insertBefore(dragged, e.clientY < mid ? row : row.nextSibling);
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop',      e => { e.preventDefault(); row.classList.remove('drag-over'); });
+  });
+  function saveRunOrder() {
+    const order = [...document.querySelectorAll('.issue-row[data-item-id]')]
+      .map(r => parseInt(r.dataset.itemId));
+    document.querySelectorAll('.issue-num').forEach((el, i) => el.textContent = i + 1);
+    fetch(`/api/runs/{{ run.id }}/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order })
+    });
+  }
+})();
 
 const searchInput = document.getElementById('comic-search');
 const items = document.querySelectorAll('.picker-card');

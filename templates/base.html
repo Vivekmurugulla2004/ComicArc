@@ -36,9 +36,14 @@
 
   {% block scripts %}{% endblock %}
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js');
-    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
+    // Fade-in all images once loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('img').forEach(img => {
+        if (img.complete) img.classList.add('loaded');
+        else img.addEventListener('load', () => img.classList.add('loaded'));
+      });
+    });
   </script>
 </body>
 </html>

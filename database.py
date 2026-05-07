@@ -25,6 +25,16 @@ def migrate_db():
         "CREATE INDEX IF NOT EXISTS idx_comics_series ON comics(series)",
         "CREATE INDEX IF NOT EXISTS idx_run_items_run_id ON run_items(run_id, position)",
         "CREATE INDEX IF NOT EXISTS idx_reading_progress ON reading_progress(comic_id)",
+        """CREATE TABLE IF NOT EXISTS tags (
+               id   INTEGER PRIMARY KEY AUTOINCREMENT,
+               name TEXT UNIQUE NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS comic_tags (
+               comic_id INTEGER REFERENCES comics(id) ON DELETE CASCADE,
+               tag_id   INTEGER REFERENCES tags(id)   ON DELETE CASCADE,
+               PRIMARY KEY (comic_id, tag_id)
+           )""",
+        "CREATE INDEX IF NOT EXISTS idx_comic_tags_comic ON comic_tags(comic_id)",
     ]:
         try:
             conn.execute(sql)

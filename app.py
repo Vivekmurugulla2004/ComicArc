@@ -92,11 +92,23 @@ def index():
         query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY c.publisher, c.series, c.title"
 
+    tag_filter = request.args.get('tag', '').strip()
+    if tag_filter:
+        conditions.append("""c.id IN (
+            SELECT ct.comic_id FROM comic_tags ct
+            JOIN tags t ON ct.tag_id = t.id WHERE t.name = ?)""")
+        params.append(tag_filter)
+
     comics = db.execute(query, params).fetchall()
     publishers = [r['publisher'] for r in db.execute(
         "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
     ).fetchall()]
     total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    all_tags = db.execute("""
+        SELECT t.name, COUNT(ct.comic_id) as count
+        FROM tags t JOIN comic_tags ct ON t.id = ct.tag_id
+        GROUP BY t.name ORDER BY count DESC, t.name
+    """).fetchall()
     continuing = db.execute("""
         SELECT c.id, c.title, c.series, c.publisher, c.page_count,
                rp.current_page as progress
@@ -115,6 +127,8 @@ def index():
                            search=search,
                            total=total,
                            continuing=continuing,
+                           all_tags=all_tags,
+                           tag_filter=tag_filter,
                            unrar_missing=not cbr_tool_available())
 
 
@@ -300,10 +314,18 @@ def comic_detail(comic_id):
         WHERE ri.comic_id = ?
         ORDER BY r.title
     """, (comic_id,)).fetchall()
+    comic_tags = db.execute("""
+        SELECT t.id, t.name FROM tags t
+        JOIN comic_tags ct ON t.id = ct.tag_id
+        WHERE ct.comic_id = ? ORDER BY t.name
+    """, (comic_id,)).fetchall()
+    all_tags = db.execute("SELECT id, name FROM tags ORDER BY name").fetchall()
     db.close()
     if not comic:
         abort(404)
-    return render_template('comic_detail.html', comic=comic, runs_featuring=runs_featuring)
+    return render_template('comic_detail.html', comic=comic,
+                           runs_featuring=runs_featuring,
+                           comic_tags=comic_tags, all_tags=all_tags)
 
 
 @app.route('/comic/<int:comic_id>/edit', methods=['GET', 'POST'])
@@ -645,6 +667,47 @@ def save_note(item_id):
     note = request.get_json().get('note', '')
     db = get_db()
     db.execute("UPDATE run_items SET notes = ? WHERE id = ?", (note or None, item_id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/runs/<int:run_id>/reorder', methods=['POST'])
+def reorder_run(run_id):
+    order = request.get_json().get('order', [])
+    db = get_db()
+    for pos, item_id in enumerate(order, 1):
+        db.execute("UPDATE run_items SET position = ? WHERE id = ? AND run_id = ?",
+                   (pos, item_id, run_id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/comic/<int:comic_id>/tags', methods=['POST'])
+def add_comic_tag(comic_id):
+    name = request.get_json().get('name', '').strip().lower()
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    db = get_db()
+    tag = db.execute("SELECT id FROM tags WHERE name = ?", (name,)).fetchone()
+    if tag:
+        tag_id = tag['id']
+    else:
+        cur = db.execute("INSERT INTO tags (name) VALUES (?)", (name,))
+        tag_id = cur.lastrowid
+    db.execute("INSERT OR IGNORE INTO comic_tags (comic_id, tag_id) VALUES (?, ?)",
+               (comic_id, tag_id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'id': tag_id, 'name': name})
+
+
+@app.route('/api/comic/<int:comic_id>/tags/<int:tag_id>', methods=['DELETE'])
+def remove_comic_tag(comic_id, tag_id):
+    db = get_db()
+    db.execute("DELETE FROM comic_tags WHERE comic_id = ? AND tag_id = ?",
+               (comic_id, tag_id))
     db.commit()
     db.close()
     return jsonify({'ok': True})

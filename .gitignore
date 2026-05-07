@@ -1,18 +1,26 @@
-# Database (your personal comic data — don't share this)
+# Database — contains your personal reading data, don't share
 comics.db
+comics.db-shm
+comics.db-wal
 
-# Python cache
+# User-imported comics and generated covers (personal content)
+user_comics/
+static/covers/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-
-# macOS junk
-.DS_Store
-
-# Virtual environments
+.venv/
 venv/
-.env/
+env/
+.env
 
-# Editor files
+# macOS
+.DS_Store
+*.command
+
+# IDE
 .vscode/
+.idea/
 *.swp

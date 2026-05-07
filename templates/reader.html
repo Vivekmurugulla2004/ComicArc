@@ -23,9 +23,11 @@
         <span id="page-counter">
           <span id="cur-page">{{ current_page + 1 }}</span> / {{ comic.page_count }}
         </span>
-        <button id="spread-btn" title="Double-page spread (D)" onclick="toggleSpread()">▭</button>
-        <button id="fullscreen-btn" title="Fullscreen (F)" onclick="toggleFullscreen()">⛶</button>
-        <button id="rate-btn" title="Rate this comic" onclick="openRating()">★</button>
+        <button id="vertical-btn" title="Vertical scroll mode (V)" onclick="toggleVertical()">☰</button>
+        <button id="spread-btn"   title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
+        <button id="zoom-btn"     title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
+        <button id="fullscreen-btn" title="Fullscreen (F)"        onclick="toggleFullscreen()">⛶</button>
+        <button id="rate-btn"     title="Rate this comic"         onclick="openRating()">★</button>
       </div>
     </div>
 
@@ -37,6 +39,7 @@
     <!-- Page display -->
     <div id="page-area">
       <div id="prev-zone" onclick="prevPage()" title="Previous page"></div>
+      <div id="scroll-container" style="display:none" aria-label="Vertical scroll reader"></div>
       <div id="page-display">
         <img id="page-img" src="/page/{{ comic.id }}/{{ current_page }}" alt="Page {{ current_page + 1 }}">
         <img id="page-img-b" style="display:none" alt="">

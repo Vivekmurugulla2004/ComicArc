@@ -23,6 +23,18 @@
   </form>
 </div>
 
+{% if all_tags %}
+<div class="tag-filter-row">
+  <span class="tag-filter-label">Tags:</span>
+  <a href="/?publisher={{ current_publisher }}{% if search %}&q={{ search }}{% endif %}"
+     class="tag-chip-filter {% if not tag_filter %}active{% endif %}">All</a>
+  {% for t in all_tags %}
+  <a href="/?publisher={{ current_publisher }}{% if search %}&q={{ search }}{% endif %}&tag={{ t.name }}"
+     class="tag-chip-filter {% if tag_filter == t.name %}active{% endif %}">{{ t.name }} <span class="tag-count">{{ t.count }}</span></a>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="publisher-tabs">
   <a href="/?publisher=All{% if search %}&q={{ search }}{% endif %}"
      class="tab {% if current_publisher == 'All' %}active{% endif %}">All</a>
@@ -40,6 +52,10 @@
     <label class="btn-ghost import-browse-btn" role="button" tabindex="0">
       Browse Files
       <input type="file" id="file-input" multiple accept=".cbz,.cbr,.pdf,.jpg,.jpeg,.png" hidden aria-label="Browse files to import">
+    </label>
+    <label class="btn-ghost import-browse-btn" role="button" tabindex="0">
+      Import Folder
+      <input type="file" id="folder-input" webkitdirectory multiple hidden aria-label="Import entire folder">
     </label>
   </div>
   <div id="import-queue" class="import-queue" hidden></div>
@@ -137,6 +153,7 @@ const queue    = document.getElementById('import-queue');
 );
 dropArea.addEventListener('drop', e => handleFiles([...e.dataTransfer.files]));
 fileInput.addEventListener('change', e => handleFiles([...e.target.files]));
+document.getElementById('folder-input').addEventListener('change', e => handleFiles([...e.target.files]));
 
 function handleFiles(files) {
   const valid = files.filter(f => /\.(cbz|cbr|pdf|jpg|jpeg|png)$/i.test(f.name));

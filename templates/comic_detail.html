@@ -78,6 +78,29 @@
       <a href="/comic/{{ comic.id }}/edit" class="btn-ghost" aria-label="Edit comic metadata">Edit</a>
     </div>
 
+    <!-- Tags -->
+    <div class="cd-tags-section">
+      <div class="cd-runs-label">Tags</div>
+      <div class="cd-tags-list" id="cd-tags-list">
+        {% for tag in comic_tags %}
+        <span class="tag-chip" data-tag-id="{{ tag.id }}">
+          {{ tag.name }}
+          <button class="tag-remove" onclick="removeTag({{ comic.id }}, {{ tag.id }}, this.parentElement)"
+                  aria-label="Remove tag {{ tag.name }}">✕</button>
+        </span>
+        {% endfor %}
+      </div>
+      <div class="cd-tag-input-row">
+        <input type="text" id="tag-input" class="cd-tag-input"
+               placeholder="Add a tag…" autocomplete="off"
+               list="tag-suggestions" aria-label="Add tag">
+        <datalist id="tag-suggestions">
+          {% for tag in all_tags %}<option value="{{ tag.name }}">{% endfor %}
+        </datalist>
+        <button class="btn-ghost cd-tag-add-btn" onclick="addTag({{ comic.id }})">Add</button>
+      </div>
+    </div>
+
     <!-- Appears in runs -->
     {% if runs_featuring %}
     <div class="cd-runs-section">
@@ -96,6 +119,35 @@
 
 {% block scripts %}
 <script>
+function addTag(comicId) {
+  const input = document.getElementById('tag-input');
+  const name  = input.value.trim().toLowerCase();
+  if (!name) return;
+  fetch(`/api/comic/${comicId}/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  }).then(r => r.json()).then(data => {
+    if (!data.ok) return;
+    const list = document.getElementById('cd-tags-list');
+    const chip = document.createElement('span');
+    chip.className    = 'tag-chip';
+    chip.dataset.tagId = data.id;
+    chip.innerHTML    = `${data.name}<button class="tag-remove" onclick="removeTag(${comicId},${data.id},this.parentElement)" aria-label="Remove tag ${data.name}">✕</button>`;
+    list.appendChild(chip);
+    input.value = '';
+  });
+}
+
+function removeTag(comicId, tagId, chip) {
+  fetch(`/api/comic/${comicId}/tags/${tagId}`, { method: 'DELETE' })
+    .then(() => chip.remove());
+}
+
+document.getElementById('tag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addTag({{ comic.id }}); }
+});
+
 function rateComic(comicId, val) {
   document.querySelectorAll('.cd-star').forEach((s, i) => {
     s.classList.toggle('active', i < val);
