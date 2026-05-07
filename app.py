@@ -387,6 +387,10 @@ def reader(comic_id):
     ).fetchone()
     current_page = prog['current_page'] if prog else 0
 
+    # When going back from the next comic, land on the last page
+    if request.args.get('start') == 'last' and comic['page_count'] > 0:
+        current_page = comic['page_count'] - 1
+
     run_id = request.args.get('run_id', type=int)
     run_context = prev_comic = next_comic = None
 

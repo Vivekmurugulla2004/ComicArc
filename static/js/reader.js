@@ -103,6 +103,8 @@ function nextPage() {
     currentPage = Math.min(currentPage + step, totalPages - 1);
     updateUI();
     preloadPage(currentPage + step);
+  } else if (nextComicUrl) {
+    location.href = nextComicUrl;
   }
 }
 
@@ -112,6 +114,8 @@ function prevPage() {
   if (currentPage > 0) {
     currentPage = Math.max(currentPage - step, 0);
     updateUI();
+  } else if (prevComicUrl) {
+    location.href = prevComicUrl;
   }
 }
 

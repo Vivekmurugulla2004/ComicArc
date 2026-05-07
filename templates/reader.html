@@ -102,6 +102,8 @@
 
   <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
   <script>
+    const nextComicUrl = {% if run_context and next_comic %}'{{ "/reader/%d?run_id=%d"|format(next_comic.comic_id, run_id) }}'{% else %}null{% endif %};
+    const prevComicUrl = {% if run_context and prev_comic %}'{{ "/reader/%d?run_id=%d&start=last"|format(prev_comic.comic_id, run_id) }}'{% else %}null{% endif %};
     initReader({{ comic.id }}, {{ current_page }}, {{ comic.page_count }});
   </script>
 </body>
