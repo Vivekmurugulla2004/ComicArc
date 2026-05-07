@@ -1,6 +1,6 @@
 # ComicArc
 
-A local, personal comic book library and reader. Import your own CBZ, CBR, PDF, and image files and read them in your browser — runs entirely on your own machine, no cloud, no accounts, no data ever leaves your device.
+ComicArc is a local comic library and reader built around how people actually read comics — in runs. Import your CBZ, CBR, PDF, and image files, build ordered reading lists spanning series and publishers, and read them in your browser. Runs on your computer, for you only. No accounts, no cloud, no subscriptions, and no one can revoke your library.
 
 > **Important:** ComicArc is a personal reading tool, like Plex for comics. It is intended only for files you legally own or have the legal right to access. See [LEGAL.md](LEGAL.md) before using.
 
@@ -50,6 +50,19 @@ ComicArc does the same thing for comic files.
 **Progressive Web App**
 - Install to your phone or desktop home screen
 - Works offline once loaded (static assets cached)
+
+---
+
+## Why ComicArc Exists
+
+Most tools in this space have a fundamental problem:
+- **Marvel Unlimited / DC Universe Infinite / ComiXology** — DRM-locked, subscription-gated, and your access ends when your payment does. ComiXology post-Amazon acquisition gutted offline reading. None support files you bought elsewhere.
+- **YACReader** — closest local alternative, but dated UI and no reading-order concept.
+- **CDisplayEx** — Windows-only, no web interface, no phone access.
+- **Komga / Kavita** — excellent but designed for multi-user home servers, not single-user simplicity. No run/reading-order feature.
+- **Calibre** — ebook-first and shows it. No double-page mode, no manga scroll, no progress tracking.
+
+ComicArc is the only local reader with built-in Narrative Runs — cross-series ordered reading lists with per-issue notes and auto-advance. Everything else just organizes files.
 
 ---
 
@@ -171,6 +184,8 @@ python app.py  # already defaults to debug=False unless FLASK_DEBUG=true is set
 ```
 
 **Do not expose ComicArc to the public internet.** It has no authentication and is not designed for multi-user or public access. If you want to access it remotely, use a VPN or SSH tunnel to your home machine.
+
+**Home LAN note:** Serving ComicArc to other devices on your home network (e.g. reading on your phone while the server runs on your desktop) is fine for personal use, but be aware that technically this constitutes multi-user distribution. Keep it to your own devices.
 
 ---
 
