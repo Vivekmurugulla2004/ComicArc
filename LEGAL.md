@@ -13,6 +13,14 @@ ComicArc organizes and reads comic files on your device. That is the full extent
 
 ---
 
+## Legal Basis for This Software
+
+ComicArc is a neutral rendering and organization tool with no ability to acquire, transmit, or distribute content. This places it in the same legal category as VLC, Handbrake, and Calibre.
+
+Under the substantial non-infringing uses doctrine (established in *Sony Corp. v. Universal City Studios*, 1984 — the Betamax case), a tool that has clear legitimate uses cannot be held liable simply because some users misuse it. ComicArc's legitimate uses — public domain works, DRM-free purchases, original work, Creative Commons files — are primary and substantial.
+
+---
+
 ## Intended Use — Personal Files You Own
 
 ComicArc is designed for use with comic files that you have a legal right to possess and read. Examples of legitimate use include:
@@ -34,6 +42,8 @@ ComicArc must not be used to access, organize, store, or read:
 - Comics obtained from piracy sites, torrent networks, or unauthorized sources
 - Files that were ripped from subscription services (Marvel Unlimited, DC Universe Infinite, ComiXology Unlimited, etc.) in violation of those services' terms of use
 - Any content you do not have the legal right to possess in the jurisdiction where you live
+
+Note: Using files ripped from subscription services involves two distinct legal issues — breach of contract (violating the service's Terms of Use) and potentially copyright infringement. These are separate legal tracks with different implications. Both apply.
 
 ---
 
@@ -95,6 +105,14 @@ If you have a concern about the software itself (not content), contact the maint
 Some jurisdictions recognize a limited right to make personal copies of media you legally own, commonly called "format-shifting" (e.g., ripping a CD you bought to MP3 for your own listening). Whether this doctrine applies to comic books, and to what extent, varies by country and has not been definitively settled in most jurisdictions.
 
 **This software does not constitute legal advice.** If you are unsure whether a specific use is legal in your jurisdiction, consult a qualified attorney.
+
+Jurisdiction summary (not legal advice): The U.S. has no explicit statutory format-shifting right for comics or video — courts have generally relied on fair use analysis case-by-case. The UK has a limited personal copying exception under the CDPA 2014 (Section 28B), but it excludes content accessed via streaming/subscription. Australia and Canada have similarly narrow or unsettled positions. If you are outside the U.S., research your local law before relying on a format-shifting justification. When in doubt, only import files you have an explicit license to possess digitally.
+
+---
+
+## Home Network Use
+
+Serving ComicArc to other devices on your home network is a gray area. Some rights holders have pursued claims against home LAN sharing on the grounds that it constitutes distribution, even within a household. ComicArc is not designed for, and the developers make no representations about the legality of, serving content to multiple users or devices simultaneously — even in a private home network context.
 
 ---
 
