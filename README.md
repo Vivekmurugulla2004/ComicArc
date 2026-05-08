@@ -116,29 +116,6 @@ ComicArc does the same thing for comic files.
 
 ---
 
-## Building from Source
-
-If you want to run from source or build the app yourself:
-
-```bash
-git clone https://github.com/Vivekmurugulla2004/ComicArc.git
-cd ComicArc
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-
-To build the macOS .app bundle:
-
-```bash
-pyinstaller build/ComicArc.spec
-```
-
-The app will be in `dist/ComicArc.app`.
-
----
-
 ## Links
 
 - **GitHub:** [github.com/Vivekmurugulla2004/ComicArc](https://github.com/Vivekmurugulla2004/ComicArc)
