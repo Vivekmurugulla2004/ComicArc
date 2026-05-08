@@ -35,11 +35,13 @@ def migrate_db():
                PRIMARY KEY (comic_id, tag_id)
            )""",
         "CREATE INDEX IF NOT EXISTS idx_comic_tags_comic ON comic_tags(comic_id)",
+        "ALTER TABLE comics ADD COLUMN position INTEGER",
     ]:
         try:
             conn.execute(sql)
         except Exception:
             pass
+    conn.execute("UPDATE comics SET position = id WHERE position IS NULL")
     conn.commit()
     conn.close()
 

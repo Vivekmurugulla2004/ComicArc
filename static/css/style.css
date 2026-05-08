@@ -292,6 +292,28 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   transition: opacity 0.2s;
 }
 .comic-card:hover .cover-overlay { opacity: 1; }
+
+.card-remove-form { position: absolute; top: 6px; right: 6px; z-index: 10; margin: 0; }
+.card-remove-btn {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.comic-card:hover .card-remove-btn { opacity: 1; }
+.card-remove-btn:hover { background: rgba(220,20,60,0.85); }
+
+.comic-card[draggable="true"] { cursor: grab; }
+.comic-card[draggable="true"]:active { cursor: grabbing; }
+.comic-card.dragging { opacity: 0.35; transform: scale(0.97); }
+.comic-card.drag-over { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); transform: scale(1.02); }
 .read-btn {
   background: var(--gold);
   color: #0b0c18;
@@ -407,6 +429,18 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   transition: all 0.15s;
 }
 .btn-danger:hover { background: rgba(239,35,60,0.1); border-color: var(--red); color: var(--red2); }
+.btn-danger-sm {
+  background: transparent;
+  border: 1px solid rgba(239,35,60,0.25);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-danger-sm:hover { border-color: var(--red); color: #e05; background: rgba(239,35,60,0.07); }
 
 .icon-btn {
   background: var(--surface);
@@ -1221,6 +1255,13 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   border: 1px solid rgba(239,35,60,0.25);
   border-radius: var(--radius);
   background: rgba(239,35,60,0.04);
+}
+.danger-zone.minimal {
+  margin-top: 24px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 .danger-zone h3 {
   font-family: 'Bebas Neue', sans-serif;
