@@ -17,5 +17,5 @@ PyMuPDF==1.26.5
 # CBR support — also requires unar: brew install unar
 rarfile==4.2
 
-# Image handling
-pillow==11.3.0
+# Build-time only (icon generation via build/make_icon.py — not needed at runtime)
+# pillow==11.3.0

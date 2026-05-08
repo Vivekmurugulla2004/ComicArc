@@ -206,14 +206,19 @@ function preloadPage(page) {
 
 function saveProgress() {
   clearTimeout(progressDebounce);
-  progressDebounce = setTimeout(() => {
-    fetch(`/api/progress/${comicId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: currentPage })
-    });
-  }, 1500);
+  progressDebounce = setTimeout(_flushProgress, 1500);
 }
+
+function _flushProgress() {
+  clearTimeout(progressDebounce);
+  fetch(`/api/progress/${comicId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ page: currentPage })
+  });
+}
+
+window.addEventListener('beforeunload', _flushProgress);
 
 // ── Autoplay ──────────────────────────────────────────────────────────────────
 

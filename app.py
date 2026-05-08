@@ -440,11 +440,18 @@ def rate_comic(comic_id):
     if not (1 <= rating <= 5):
         return jsonify({'error': 'Invalid rating'}), 400
     db = get_db()
-    db.execute(
-        """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, ?)
-           ON CONFLICT(comic_id) DO UPDATE SET rating = ?, review = ?""",
-        (comic_id, rating, review, rating, review)
-    )
+    if review:
+        db.execute(
+            """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, ?)
+               ON CONFLICT(comic_id) DO UPDATE SET rating = ?, review = ?""",
+            (comic_id, rating, review, rating, review)
+        )
+    else:
+        db.execute(
+            """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, NULL)
+               ON CONFLICT(comic_id) DO UPDATE SET rating = ?""",
+            (comic_id, rating, rating)
+        )
     db.commit()
     db.close()
     return jsonify({'ok': True})

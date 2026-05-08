@@ -1,5 +1,4 @@
 import os
-block_cipher = None
 root = os.path.abspath(os.path.join(SPECPATH, '..'))
 
 a = Analysis(
@@ -7,20 +6,22 @@ a = Analysis(
     pathex=[root],
     binaries=[],
     datas=[
-        (os.path.join(root, 'templates'), 'templates'),
-        (os.path.join(root, 'static'),    'static'),
+        (os.path.join(root, 'templates'),           'templates'),
+        (os.path.join(root, 'static', 'css'),       'static/css'),
+        (os.path.join(root, 'static', 'js'),        'static/js'),
+        (os.path.join(root, 'static', 'fonts'),     'static/fonts'),
     ],
     hiddenimports=[
         'waitress', 'waitress.runner',
         'webview', 'webview.platforms.cocoa',
         'flask', 'jinja2', 'werkzeug',
-        'sqlite3', 'pymupdf', 'rarfile', 'PIL',
+        'sqlite3', 'pymupdf', 'rarfile',
     ],
     hookspath=[],
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz, a.scripts, [],
