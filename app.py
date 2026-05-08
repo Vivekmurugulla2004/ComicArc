@@ -32,6 +32,10 @@ PLACEHOLDER_SVG = '''<svg xmlns="http://www.w3.org/2000/svg" width="200" height=
 </svg>'''
 
 
+def natural_sort_key(s):
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s or '')]
+
+
 def extract_metadata_upload(filename):
     """Minimal metadata from just a filename (for browser-uploaded files)."""
     title = os.path.splitext(filename)[0]
@@ -99,14 +103,23 @@ def index():
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     order = {
-        'title':   "c.title",
-        'added':   "c.added_at DESC",
-        'rating':  "COALESCE(r.rating, 0) DESC, c.title",
-        'progress':"CASE WHEN c.page_count > 0 THEN CAST(rp.current_page AS FLOAT)/c.page_count ELSE 0 END DESC",
+        'title':    "c.title",
+        'added':    "c.added_at DESC",
+        'rating':   "COALESCE(r.rating, 0) DESC, c.title",
+        'progress': "CASE WHEN c.page_count > 0 THEN CAST(rp.current_page AS FLOAT)/c.page_count ELSE 0 END DESC",
+        'manual':   "COALESCE(c.position, c.id), c.id",
     }.get(sort, "c.publisher, c.series, c.title")
     query += f" ORDER BY {order}"
 
     comics = db.execute(query, params).fetchall()
+    if sort == 'title':
+        comics = sorted(comics, key=lambda c: natural_sort_key(c['title']))
+    elif sort not in ('added', 'rating', 'progress', 'manual'):
+        comics = sorted(comics, key=lambda c: (
+            natural_sort_key(c['publisher']),
+            natural_sort_key(c['series']),
+            natural_sort_key(c['title'])
+        ))
     publishers = [r['publisher'] for r in db.execute(
         "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
     ).fetchall()]
@@ -601,8 +614,12 @@ def run_detail(run_id):
     all_comics = db.execute("""
         SELECT id, title, series, publisher FROM comics
         WHERE id NOT IN (SELECT comic_id FROM run_items WHERE run_id = ?)
-        ORDER BY publisher, series, title
     """, (run_id,)).fetchall()
+    all_comics = sorted(all_comics, key=lambda c: (
+        natural_sort_key(c['publisher']),
+        natural_sort_key(c['series']),
+        natural_sort_key(c['title'])
+    ))
 
     db.close()
     return render_template('run_detail.html', run=run, items=items, all_comics=all_comics)
@@ -768,6 +785,43 @@ def delete_run(run_id):
     db.commit()
     db.close()
     return redirect(url_for('runs'))
+
+
+@app.route('/api/library/reorder', methods=['POST'])
+def reorder_library():
+    order = (request.get_json(silent=True) or {}).get('order', [])
+    db = get_db()
+    for pos, comic_id in enumerate(order, 1):
+        db.execute("UPDATE comics SET position = ? WHERE id = ?", (pos, comic_id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/library/clear', methods=['POST'])
+def clear_library():
+    db = get_db()
+    comics = db.execute("SELECT id, file_path FROM comics").fetchall()
+    db.execute("DELETE FROM reading_progress")
+    db.execute("DELETE FROM ratings")
+    db.execute("DELETE FROM favorites")
+    db.execute("DELETE FROM comic_tags")
+    db.execute("DELETE FROM run_items")
+    db.execute("DELETE FROM comics")
+    db.commit()
+    db.close()
+    for f in os.listdir(COVER_CACHE_DIR):
+        try:
+            os.remove(os.path.join(COVER_CACHE_DIR, f))
+        except OSError:
+            pass
+    for comic in comics:
+        if comic['file_path'].startswith(UPLOAD_DIR):
+            try:
+                os.remove(comic['file_path'])
+            except OSError:
+                pass
+    return redirect(url_for('index'))
 
 
 if __name__ == '__main__':

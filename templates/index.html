@@ -25,6 +25,7 @@
       <option value="added"     {% if sort == 'added'     %}selected{% endif %}>Recently Added</option>
       <option value="rating"    {% if sort == 'rating'    %}selected{% endif %}>Top Rated</option>
       <option value="progress"  {% if sort == 'progress'  %}selected{% endif %}>Most Read</option>
+      <option value="manual"    {% if sort == 'manual'    %}selected{% endif %}>Manual</option>
     </select>
     <button type="submit" class="search-btn">Search</button>
     {% if search %}<a href="/?publisher={{ current_publisher }}" class="clear-btn">✕</a>{% endif %}
@@ -70,6 +71,14 @@
   <div id="import-queue" class="import-queue" hidden></div>
 </div>
 
+{% if total > 0 %}
+<div class="danger-zone minimal">
+  <form method="post" action="/library/clear" onsubmit="return confirm('Clear entire library? This removes all {{ total }} comics, reading progress, ratings, and favorites. This cannot be undone.')">
+    <button type="submit" class="btn-danger-sm">Clear Library</button>
+  </form>
+</div>
+{% endif %}
+
 {% if continuing %}
 <div class="continue-section">
   <h2 class="continue-heading">Continue Reading</h2>
@@ -109,9 +118,11 @@
   <p>Try a different search or publisher filter.</p>
 </div>
 {% else %}
-<div class="comics-grid">
+<div class="comics-grid" id="comics-grid">
   {% for comic in comics %}
-  <a class="comic-card" href="/comic/{{ comic.id }}">
+  <div class="comic-card" data-id="{{ comic.id }}"
+       {% if sort == 'manual' %}draggable="true"{% endif %}
+       onclick="if(!this.dataset.dragging) window.location='/comic/{{ comic.id }}'">
     <div class="cover-wrap">
       <img class="cover-img" src="/cover/{{ comic.id }}" alt="{{ comic.title }}" loading="lazy">
       {% if comic.page_count > 0 %}
@@ -125,6 +136,11 @@
       <div class="cover-overlay">
         <span class="read-btn">Read</span>
       </div>
+      <form class="card-remove-form" method="post" action="/comic/{{ comic.id }}/delete"
+            onclick="event.stopPropagation()"
+            onsubmit="event.stopPropagation(); return confirm('Remove this comic from your library?')">
+        <button type="submit" class="card-remove-btn" title="Remove">×</button>
+      </form>
     </div>
     <div class="card-info">
       <div class="card-title" title="{{ comic.title }}">{{ comic.title }}</div>
@@ -142,7 +158,7 @@
       </div>
       {% endif %}
     </div>
-  </a>
+  </div>
   {% endfor %}
 </div>
 {% endif %}
@@ -163,6 +179,46 @@ const queue    = document.getElementById('import-queue');
 dropArea.addEventListener('drop', e => handleFiles([...e.dataTransfer.files]));
 fileInput.addEventListener('change', e => handleFiles([...e.target.files]));
 document.getElementById('folder-input').addEventListener('change', e => handleFiles([...e.target.files]));
+
+// Manual sort drag-and-drop
+if ('{{ sort }}' === 'manual') {
+  const grid = document.getElementById('comics-grid');
+  let dragSrc = null;
+  document.querySelectorAll('.comic-card[draggable]').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragSrc = card;
+      card.dataset.dragging = '1';
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.comic-card').forEach(c => c.classList.remove('drag-over'));
+      setTimeout(() => delete card.dataset.dragging, 0);
+      const order = [...grid.querySelectorAll('.comic-card')].map(c => +c.dataset.id);
+      fetch('/api/library/reorder', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({order})
+      });
+    });
+    card.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    card.addEventListener('dragenter', e => { e.preventDefault(); if (card !== dragSrc) card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (dragSrc && dragSrc !== card) {
+        const cards = [...grid.querySelectorAll('.comic-card')];
+        if (cards.indexOf(dragSrc) < cards.indexOf(card)) {
+          grid.insertBefore(dragSrc, card.nextSibling);
+        } else {
+          grid.insertBefore(dragSrc, card);
+        }
+      }
+      card.classList.remove('drag-over');
+    });
+  });
+}
 
 function handleFiles(files) {
   const valid = files.filter(f => /\.(cbz|cbr|pdf|jpg|jpeg|png)$/i.test(f.name));
