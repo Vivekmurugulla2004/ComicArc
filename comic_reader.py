@@ -130,9 +130,10 @@ def get_page_count(file_path):
                 return _rarfile_count(file_path)
         elif ext == '.pdf' and PDF_SUPPORT:
             doc = fitz.open(file_path)
-            count = len(doc)
-            doc.close()
-            return count
+            try:
+                return len(doc)
+            finally:
+                doc.close()
     except Exception as e:
         print(f"Error counting pages in {file_path}: {e}")
     return 0
@@ -163,14 +164,13 @@ def get_page(file_path, page_num):
 
         elif ext == '.pdf' and PDF_SUPPORT:
             doc = fitz.open(file_path)
-            if page_num >= len(doc):
+            try:
+                if page_num >= len(doc):
+                    return None, None
+                pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(2, 2))
+                return pix.tobytes('png'), 'image/png'
+            finally:
                 doc.close()
-                return None, None
-            page = doc[page_num]
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_data = pix.tobytes('png')
-            doc.close()
-            return img_data, 'image/png'
 
     except Exception as e:
         print(f"Error reading page {page_num} from {file_path}: {e}")

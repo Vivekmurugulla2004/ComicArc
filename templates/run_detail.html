@@ -22,8 +22,8 @@
       </div>
       {% if run.review %}<div class="run-review-text">"{{ run.review }}"</div>{% endif %}
     </div>
-    {% if items %}
-    <a href="/reader/{{ items[0].comic_id }}?run_id={{ run.id }}" class="btn-primary">▶ Start Reading</a>
+    {% if resume_comic_id %}
+    <a href="/reader/{{ resume_comic_id }}?run_id={{ run.id }}" class="btn-primary">▶ {{ 'Resume' if items|selectattr('progress','gt',0)|list else 'Start Reading' }}</a>
     {% endif %}
     <a href="/runs/{{ run.id }}/edit" class="btn-ghost">Edit</a>
     <form method="post" action="/runs/{{ run.id }}/delete"

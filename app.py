@@ -564,8 +564,18 @@ def run_detail(run_id):
         natural_sort_key(c['title'])
     ))
 
+    # Resume point: first comic that isn't finished (progress < page_count - 2)
+    resume_comic_id = None
+    for item in items:
+        if item['page_count'] == 0 or item['progress'] < item['page_count'] - 2:
+            resume_comic_id = item['comic_id']
+            break
+    if resume_comic_id is None and items:
+        resume_comic_id = items[0]['comic_id']  # all done — start over from top
+
     db.close()
-    return render_template('run_detail.html', run=run, items=items, all_comics=all_comics)
+    return render_template('run_detail.html', run=run, items=items, all_comics=all_comics,
+                           resume_comic_id=resume_comic_id)
 
 
 @app.route('/runs/<int:run_id>/edit', methods=['GET', 'POST'])

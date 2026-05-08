@@ -38,6 +38,7 @@ function initReader(id, page, total) {
       if (zoomLevel > 1) setZoom(1);
       else if (autoplayMode) toggleAutoplay();
       else if (!document.getElementById('help-modal').classList.contains('hidden')) closeHelp();
+      else if (isFullscreen) toggleFullscreen();
       else closeRating();
     }
   });
@@ -331,6 +332,9 @@ function applyZoom() {
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────
 
+let fsHideTimer = null;
+let fsMouseThrottle = null;
+
 function toggleFullscreen() {
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.toggle_fullscreen();
@@ -346,6 +350,37 @@ function toggleFullscreen() {
   }
   const btn = document.getElementById('fullscreen-btn');
   if (btn) btn.classList.toggle('active', isFullscreen);
+  document.getElementById('reader-wrap').classList.toggle('fullscreen-reading', isFullscreen);
+  if (isFullscreen) {
+    _fsHideChrome();
+    document.addEventListener('mousemove', _fsOnMouseMove);
+  } else {
+    clearTimeout(fsHideTimer);
+    document.removeEventListener('mousemove', _fsOnMouseMove);
+    _fsShowChrome();
+  }
+}
+
+function _fsShowChrome() {
+  document.getElementById('reader-topbar').classList.remove('fs-hidden');
+  document.getElementById('reader-bottombar').classList.remove('fs-hidden');
+  document.getElementById('top-progress').classList.remove('fs-hidden');
+}
+
+function _fsHideChrome() {
+  clearTimeout(fsHideTimer);
+  fsHideTimer = setTimeout(() => {
+    document.getElementById('reader-topbar').classList.add('fs-hidden');
+    document.getElementById('reader-bottombar').classList.add('fs-hidden');
+    document.getElementById('top-progress').classList.add('fs-hidden');
+  }, 2000);
+}
+
+function _fsOnMouseMove() {
+  if (fsMouseThrottle) return;
+  fsMouseThrottle = setTimeout(() => { fsMouseThrottle = null; }, 100);
+  _fsShowChrome();
+  _fsHideChrome();
 }
 
 // ── Rating modal ──────────────────────────────────────────────────────────────

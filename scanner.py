@@ -67,11 +67,7 @@ def _run(library_path):
             sig = _file_sig(fp)
             row = db.execute("SELECT id FROM comics WHERE file_path = ?", (fp,)).fetchone()
             if row:
-                m = _meta(fp, library_path)
-                db.execute(
-                    "UPDATE comics SET publisher=?, series=?, issue_number=? WHERE file_path=?",
-                    (m['publisher'], m['series'], m['issue_number'], fp)
-                )
+                pass  # already in library — don't overwrite user-edited metadata
             elif sig and sig in known_sigs:
                 pass  # same name+size already in library under a different path
             else:
