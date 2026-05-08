@@ -23,20 +23,31 @@ ComicArc runs entirely on your computer and serves only you. Import your comic f
 ## Requirements
 
 - Python 3.9 or later
-- For CBR files: `unar` — `brew install unar` on macOS
+- For CBR files: `unar` — `brew install unar` (macOS), `sudo apt install unar` (Linux), 7-Zip in PATH (Windows)
 - For PDF files: PyMuPDF — installed via `pip install -r requirements.txt`
 
 ---
 
 ## Installation
 
+**macOS (one-click):** Clone the repo and double-click `ComicArc.command`.
+
+**Windows (one-click):** Clone the repo and double-click `ComicArc.bat`.
+
+**macOS / Linux:**
 ```bash
 git clone https://github.com/Vivekmurugulla2004/ComicArc.git
 cd ComicArc
-python3 -m venv venv
-source venv/bin/activate    # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
+./setup.sh
+./run.sh
+```
+
+**Windows:**
+```bat
+git clone https://github.com/Vivekmurugulla2004/ComicArc.git
+cd ComicArc
+setup.bat
+run.bat
 ```
 
 Open [http://localhost:5001](http://localhost:5001) in your browser.

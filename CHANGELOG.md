@@ -44,6 +44,12 @@ First public release.
 - Static assets cached for offline access
 - Service worker with cache-first strategy for static files
 
+### Setup
+- `setup.sh` / `setup.bat` — one-command venv creation and dep install
+- `run.sh` / `run.bat` — one-command server start
+- `ComicArc.command` — macOS double-click launcher (auto-setup on first run)
+- `ComicArc.bat` — Windows double-click launcher (auto-setup on first run)
+
 ### Technical
 - Flask + SQLite backend, runs on Python 3.9+
 - Supports CBZ (built-in), CBR (requires unar), PDF (requires PyMuPDF), and single images

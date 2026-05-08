@@ -1,14 +1,52 @@
 # ComicArc
 
-ComicArc is a local comic library and reader built around how people actually read comics — in runs. Import your CBZ, CBR, PDF, and image files, build ordered reading lists spanning series and publishers, and read them in your browser. Runs on your computer, for you only. No accounts, no cloud, no subscriptions, and no one can revoke your library.
+A local comic reader for files you own. No Docker, no accounts, no cloud. Just Python.
 
-> **Important:** ComicArc is a personal reading tool, like Plex for comics. It is intended only for files you legally own or have the legal right to access. See [LEGAL.md](LEGAL.md) before using.
+> Only import files you legally own or have the right to access. See [LEGAL.md](LEGAL.md).
+
+---
+
+## Quick Start
+
+**macOS (one-click):** Clone the repo, then double-click `ComicArc.command`. It sets up the venv on first run.
+
+**Windows (one-click):** Clone the repo, then double-click `ComicArc.bat`. Same idea — auto-setup on first run.
+
+**macOS / Linux:**
+```bash
+git clone https://github.com/Vivekmurugulla2004/ComicArc.git
+cd ComicArc
+./setup.sh
+./run.sh
+```
+
+**Windows:**
+```bat
+git clone https://github.com/Vivekmurugulla2004/ComicArc.git
+cd ComicArc
+setup.bat
+run.bat
+```
+
+Open [http://localhost:5001](http://localhost:5001) in your browser. Press `Ctrl+C` to quit.
+
+---
+
+## vs. the Alternatives
+
+| | ComicArc | Komga / Kavita | Stump | YACReader | Calibre |
+|---|---|---|---|---|---|
+| No Docker required | ✓ | ✗ | ✗ | ✓ | ✓ |
+| Single-user, no accounts | ✓ | ✗ | ✗ | ✓ | ✓ |
+| Narrative Runs | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Browser reader + PWA | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Setup | `./setup.sh` | Docker + YAML | Docker + YAML | Installer | Installer |
 
 ---
 
 ## Screenshots
 
-> Coming soon. Run locally: `python app.py`
+> Coming soon — run locally and take a look.
 
 ---
 
@@ -65,7 +103,7 @@ Most tools in this space have a fundamental problem:
 - **Marvel Unlimited / DC Universe Infinite / ComiXology** — DRM-locked, subscription-gated, and your access ends when your payment does. ComiXology post-Amazon acquisition gutted offline reading. None support files you bought elsewhere.
 - **YACReader** — closest local alternative, but dated UI and no reading-order concept.
 - **CDisplayEx** — Windows-only, no web interface, no phone access.
-- **Komga / Kavita** — excellent but designed for multi-user home servers, not single-user simplicity. No run/reading-order feature.
+- **Komga / Kavita / Stump** — excellent but designed for multi-user home servers with Docker. Not single-user simplicity. No run/reading-order feature.
 - **Calibre** — ebook-first and shows it. No double-page mode, no manga scroll, no progress tracking.
 
 ComicArc is the only local reader with built-in Narrative Runs — cross-series ordered reading lists with per-issue notes and auto-advance. Everything else just organizes files.
@@ -75,32 +113,44 @@ ComicArc is the only local reader with built-in Narrative Runs — cross-series 
 ## Requirements
 
 - Python 3.9+
-- For CBR files: [unar](https://theunarchiver.com/command-line) — `brew install unar` on macOS
-- For PDF files: PyMuPDF — `pip install pymupdf`
+- For CBR files:
+  - **macOS:** `brew install unar`
+  - **Linux (Debian/Ubuntu):** `sudo apt install unar`
+  - **Linux (Fedora/RHEL):** `sudo dnf install unar`
+  - **Windows:** Install [7-Zip](https://www.7-zip.org/) and add it to your PATH — `rarfile` will use it automatically
+- For PDF files: PyMuPDF — installed via `pip install -r requirements.txt`
 
 ---
 
 ## Installation
 
+**macOS (one-click)**
+
+Clone the repo, then double-click `ComicArc.command`. On first run it creates the venv and installs all deps automatically.
+
+**Windows (one-click)**
+
+Clone the repo, then double-click `ComicArc.bat`. On first run it creates the venv and installs all deps automatically.
+
+**macOS / Linux**
+
 ```bash
-# 1. Clone the repo
 git clone https://github.com/Vivekmurugulla2004/ComicArc.git
-cd comicarc
-
-# 2. Create a virtual environment
-python3 -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Run the app
-python app.py
+cd ComicArc
+./setup.sh     # creates venv, installs deps — run once
+./run.sh       # starts the server
 ```
 
-Open [http://localhost:5001](http://localhost:5001) in your browser.
+**Windows**
 
-To quit, press `Ctrl+C` in the terminal.
+```bat
+git clone https://github.com/Vivekmurugulla2004/ComicArc.git
+cd ComicArc
+setup.bat
+run.bat
+```
+
+Open [http://localhost:5001](http://localhost:5001) in your browser. Press `Ctrl+C` to quit.
 
 ---
 
@@ -135,7 +185,7 @@ The folder names become the publisher and series in your library automatically.
 | Format | Support |
 |--------|---------|
 | `.cbz` | Built-in, no extra install needed |
-| `.cbr` | Requires `unar` (`brew install unar`) |
+| `.cbr` | Requires `unar` — see Requirements above |
 | `.pdf` | Requires PyMuPDF (`pip install pymupdf`) |
 | `.jpg` / `.jpeg` / `.png` | Built-in (single-image comics) |
 
@@ -159,11 +209,17 @@ The folder names become the publisher and series in your library automatically.
 ## Project Structure
 
 ```
-comicarc/
+ComicArc/
 ├── app.py              # Flask routes and API
 ├── comic_reader.py     # CBZ/CBR/PDF/image page extraction
 ├── database.py         # SQLite schema and migrations
 ├── requirements.txt    # Python dependencies
+├── setup.sh            # macOS/Linux setup (run once)
+├── run.sh              # macOS/Linux server start
+├── setup.bat           # Windows setup (run once)
+├── run.bat             # Windows server start
+├── ComicArc.command    # macOS double-click launcher
+├── ComicArc.bat        # Windows double-click launcher
 ├── static/
 │   ├── css/style.css   # All styles
 │   ├── js/reader.js    # Reader logic (navigation, autoplay, zoom)
@@ -175,6 +231,8 @@ comicarc/
 ├── user_comics/        # Uploaded comic files (gitignored)
 ├── comics.db           # SQLite database (gitignored)
 ├── LEGAL.md            # Content policy and legal notices
+├── CONTRIBUTING.md     # Contributor guidelines
+├── CHANGELOG.md        # Version history
 └── LICENSE             # MIT License
 ```
 
@@ -232,7 +290,7 @@ Please do not submit pull requests that add functionality for downloading, scrap
 
 ## Links
 
-- **GitHub:** [github.com/Vivekmurugulla2004/Comic-Book-App](https://github.com/Vivekmurugulla2004/Comic-Book-App)
+- **GitHub:** [github.com/Vivekmurugulla2004/ComicArc](https://github.com/Vivekmurugulla2004/ComicArc)
 
 ---
 

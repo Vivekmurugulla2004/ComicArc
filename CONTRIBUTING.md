@@ -16,24 +16,23 @@ Pull requests are welcome. Read this before opening one.
 
 ## Setup
 
+**macOS / Linux:**
 ```bash
-# 1. Fork and clone
 git clone https://github.com/Vivekmurugulla2004/ComicArc.git
 cd ComicArc
-
-# 2. Create a virtual environment
-python3 -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. (Optional) CBR support
-brew install unar              # macOS only
-
-# 5. Run
-python app.py
+./setup.sh     # creates venv, installs deps
+./run.sh       # starts the server
 ```
+
+**Windows:**
+```bat
+git clone https://github.com/Vivekmurugulla2004/ComicArc.git
+cd ComicArc
+setup.bat
+run.bat
+```
+
+**Optional — CBR support:** `brew install unar` (macOS), `sudo apt install unar` (Linux), or [7-Zip](https://www.7-zip.org/) in PATH (Windows).
 
 Open [http://localhost:5001](http://localhost:5001).
 
@@ -44,7 +43,7 @@ Open [http://localhost:5001](http://localhost:5001).
 1. Fork the repo
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make your changes
-4. Test manually — open the app, import a comic, verify nothing is broken
+4. Test manually — open the app, import a comic, read pages, create a run, verify nothing is broken. There is no automated test suite; manual testing is the bar.
 5. Commit with a clear message
 6. Open a pull request against `main`
 
@@ -70,6 +69,12 @@ For major changes, open an issue first to discuss what you'd like to change.
 - Multi-user, server, or cloud features
 - DRM-related functionality of any kind
 - Breaking changes to the database schema without a migration
+
+---
+
+## Roadmap
+
+See the Roadmap section in [README.md](README.md) for planned features. If you want to work on something from there, open an issue first so we can coordinate.
 
 ---
 

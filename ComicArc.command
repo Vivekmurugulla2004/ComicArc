@@ -1,6 +1,9 @@
 #!/bin/bash
-cd ~/Downloads/Comic\ Book\ App
-python3 app.py &
-sleep 2
-open http://localhost:5001
-wait
+cd "$(dirname "$0")"
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+fi
+source venv/bin/activate
+python app.py
