@@ -3,19 +3,27 @@ import re
 import time
 from flask import Flask, render_template, redirect, url_for, request, jsonify, Response, abort
 from werkzeug.utils import secure_filename
-from database import get_db, init_db, migrate_db
+from database import get_db
 from comic_reader import get_page, get_page_count, cbr_tool_available
+from config import get_data_dir, get_resource_dir
 
-app = Flask(__name__)
+_resource = get_resource_dir()
+_data     = get_data_dir()
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_resource, 'templates'),
+    static_folder=os.path.join(_resource, 'static'),
+)
 
 COMICS_DIR = os.path.expanduser('~/Downloads/Comics')
 
 SUPPORTED_EXTENSIONS = {'.cbz', '.cbr', '.pdf', '.jpg', '.jpeg', '.png'}
 
-COVER_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'static', 'covers')
+COVER_CACHE_DIR = os.path.join(_data, 'covers')
 os.makedirs(COVER_CACHE_DIR, exist_ok=True)
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_comics')
+UPLOAD_DIR = os.path.join(_data, 'user_comics')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
@@ -822,9 +830,3 @@ def clear_library():
             except OSError:
                 pass
     return redirect(url_for('index'))
-
-
-if __name__ == '__main__':
-    init_db()
-    migrate_db()
-    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true', port=5001)

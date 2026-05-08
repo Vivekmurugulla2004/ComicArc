@@ -1,7 +1,8 @@
 import sqlite3
 import os
+from config import get_data_dir
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'comics.db')
+DB_PATH = os.path.join(get_data_dir(), 'comics.db')
 
 
 def get_db():

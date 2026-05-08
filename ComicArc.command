@@ -6,4 +6,4 @@ if [ ! -d "venv" ]; then
     pip install -r requirements.txt
 fi
 source venv/bin/activate
-python app.py
+python main.py
