@@ -133,27 +133,7 @@ These shortcuts work anywhere in the reader. Press `?` to see them inside the ap
 | `?` | Open keyboard shortcut cheat sheet |
 | `Escape` | Exit zoom / stop autoplay / close modal |
 
-Touch: swipe left or right to navigate pages, or tap the left / right edge of the screen.
-
----
-
-## Where Your Data Lives
-
-ComicArc stores everything locally on your machine:
-
-| What | Where |
-|------|-------|
-| Library database | `~/Library/Application Support/ComicArc/library.db` |
-| Cover thumbnails | `~/Library/Application Support/ComicArc/covers/` |
-| Config (folder path, reader mode) | `~/Library/Application Support/ComicArc/config.json` |
-
-Your original comic files are never moved or modified — ComicArc only reads them.
-
----
-
-## What ComicArc Is (and Isn't)
-
-ComicArc is a **single-user, local-first** tool that organizes comic files you already have — the same way Calibre organizes ebooks or Infuse organizes video files. It does not download, stream, or distribute content of any kind.
+## Links
 
 This is a personal project. It is not open for contributions — updates will be released here when they're ready.
 
