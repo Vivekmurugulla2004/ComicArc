@@ -17,8 +17,6 @@ class Api:
             return result[0]
         return None
 
-    def toggle_fullscreen(self):
-        webview.windows[0].toggle_fullscreen()
 
 
 def find_free_port():
