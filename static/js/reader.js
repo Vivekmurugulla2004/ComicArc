@@ -7,7 +7,38 @@ let isPanning = false, panStartX, panStartY;
 let autoplayMode     = false;
 let autoplayTimer    = null;
 let progressDebounce = null;
-let isFullscreen     = false;
+
+// ── Auto-hide chrome ─────────────────────────────────────────────────────────
+let chromeHideTimer  = null;
+let chromeVisible    = true;
+let mouseThrottle    = null;
+
+function showChrome() {
+  if (!chromeVisible) {
+    chromeVisible = true;
+    document.getElementById('reader-topbar').classList.remove('chrome-hidden');
+    document.getElementById('reader-bottombar').classList.remove('chrome-hidden');
+    document.getElementById('top-progress').classList.remove('chrome-hidden');
+  }
+  resetChromeTimer();
+}
+
+function hideChrome() {
+  chromeVisible = false;
+  document.getElementById('reader-topbar').classList.add('chrome-hidden');
+  document.getElementById('reader-bottombar').classList.add('chrome-hidden');
+  document.getElementById('top-progress').classList.add('chrome-hidden');
+}
+
+function resetChromeTimer() {
+  clearTimeout(chromeHideTimer);
+  chromeHideTimer = setTimeout(hideChrome, 3000);
+}
+
+function toggleChrome() {
+  if (chromeVisible) { clearTimeout(chromeHideTimer); hideChrome(); }
+  else showChrome();
+}
 
 function initReader(id, page, total) {
   comicId     = id;
@@ -16,21 +47,27 @@ function initReader(id, page, total) {
 
   updateUI();
   preloadPage(currentPage + 1);
+  resetChromeTimer();
 
-  setTimeout(() => document.getElementById('kb-hint').classList.add('hidden'), 4000);
+  document.addEventListener('mousemove', () => {
+    if (mouseThrottle) return;
+    mouseThrottle = setTimeout(() => { mouseThrottle = null; }, 100);
+    showChrome();
+  });
 
   // Keyboard navigation
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    showChrome();
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextPage(); }
     if (e.key === 'ArrowLeft')                   { e.preventDefault(); prevPage(); }
     if (e.key === 'ArrowDown' && verticalMode)   { e.preventDefault(); scrollBy(0, window.innerHeight * 0.8); }
     if (e.key === 'ArrowUp'   && verticalMode)   { e.preventDefault(); scrollBy(0, -window.innerHeight * 0.8); }
-    if (e.key === 'f' || e.key === 'F')          toggleFullscreen();
     if (e.key === 'd' || e.key === 'D')          toggleSpread();
     if (e.key === 'v' || e.key === 'V')          toggleVertical();
     if (e.key === 'z' || e.key === 'Z')          setZoom(zoomLevel > 1 ? 1 : 2.5);
     if (e.key === 'a' || e.key === 'A')          toggleAutoplay();
+    if (e.key === 'm' || e.key === 'M')          toggleChrome();
     if (e.key === 'Home')                        { e.preventDefault(); jumpToPage(0); }
     if (e.key === 'End')                         { e.preventDefault(); jumpToPage(totalPages - 1); }
     if (e.key === '?')                           openHelp();
@@ -38,7 +75,6 @@ function initReader(id, page, total) {
       if (zoomLevel > 1) setZoom(1);
       else if (autoplayMode) toggleAutoplay();
       else if (!document.getElementById('help-modal').classList.contains('hidden')) closeHelp();
-      else if (isFullscreen) toggleFullscreen();
       else closeRating();
     }
   });
@@ -330,58 +366,6 @@ function applyZoom() {
   }
 }
 
-// ── Fullscreen ────────────────────────────────────────────────────────────────
-
-let fsHideTimer = null;
-let fsMouseThrottle = null;
-
-function toggleFullscreen() {
-  if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.toggle_fullscreen();
-    isFullscreen = !isFullscreen;
-  } else {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      isFullscreen = true;
-    } else {
-      document.exitFullscreen();
-      isFullscreen = false;
-    }
-  }
-  const btn = document.getElementById('fullscreen-btn');
-  if (btn) btn.classList.toggle('active', isFullscreen);
-  document.getElementById('reader-wrap').classList.toggle('fullscreen-reading', isFullscreen);
-  if (isFullscreen) {
-    _fsHideChrome();
-    document.addEventListener('mousemove', _fsOnMouseMove);
-  } else {
-    clearTimeout(fsHideTimer);
-    document.removeEventListener('mousemove', _fsOnMouseMove);
-    _fsShowChrome();
-  }
-}
-
-function _fsShowChrome() {
-  document.getElementById('reader-topbar').classList.remove('fs-hidden');
-  document.getElementById('reader-bottombar').classList.remove('fs-hidden');
-  document.getElementById('top-progress').classList.remove('fs-hidden');
-}
-
-function _fsHideChrome() {
-  clearTimeout(fsHideTimer);
-  fsHideTimer = setTimeout(() => {
-    document.getElementById('reader-topbar').classList.add('fs-hidden');
-    document.getElementById('reader-bottombar').classList.add('fs-hidden');
-    document.getElementById('top-progress').classList.add('fs-hidden');
-  }, 2000);
-}
-
-function _fsOnMouseMove() {
-  if (fsMouseThrottle) return;
-  fsMouseThrottle = setTimeout(() => { fsMouseThrottle = null; }, 100);
-  _fsShowChrome();
-  _fsHideChrome();
-}
 
 // ── Rating modal ──────────────────────────────────────────────────────────────
 

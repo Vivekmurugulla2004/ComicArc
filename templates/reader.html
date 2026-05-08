@@ -27,7 +27,6 @@
         <button id="spread-btn"    title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
         <button id="zoom-btn"      title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
         <button id="autoplay-btn"  title="Autoplay — advance page every 10 s (A)" onclick="toggleAutoplay()">▶▶</button>
-        <button id="fullscreen-btn" title="Fullscreen (F)"         onclick="toggleFullscreen()">⛶</button>
         <button id="rate-btn"      title="Rate this comic"         onclick="openRating()">★</button>
         <button id="help-btn"      title="Keyboard shortcuts (?)"  onclick="openHelp()">?</button>
       </div>
@@ -103,12 +102,12 @@
           <div class="help-row"><kbd>V</kbd><span>Vertical scroll mode</span></div>
           <div class="help-row"><kbd>D</kbd><span>Double-page spread</span></div>
           <div class="help-row"><kbd>Z</kbd><span>Toggle zoom</span></div>
-          <div class="help-row"><kbd>F</kbd><span>Fullscreen</span></div>
         </div>
         <div class="help-section">
           <div class="help-section-title">Playback</div>
           <div class="help-row"><kbd>A</kbd><span>Toggle autoplay</span></div>
           <div class="help-row"><kbd>Esc</kbd><span>Exit zoom / close modal</span></div>
+          <div class="help-row"><kbd>M</kbd><span>Show / hide toolbar</span></div>
         </div>
         <div class="help-section">
           <div class="help-section-title">Touch</div>
@@ -138,9 +137,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Keyboard hint -->
-  <div id="kb-hint">← → to navigate · press ? for all shortcuts</div>
 
   <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
   <script>
