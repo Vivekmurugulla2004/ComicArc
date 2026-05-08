@@ -109,8 +109,17 @@
 <div class="empty-state">
   <div class="empty-icon">◈</div>
   <h2>No comics yet</h2>
-  <p>Click <strong>Scan Library</strong> in the top right to import your comics from <code>~/Downloads/Comics</code>.</p>
-  <a href="/scan" class="btn-primary">Scan Now</a>
+  {% if scan_status.running %}
+  <p>Scanning <code>{{ library_path }}</code>…</p>
+  <div class="scan-progress-inline">
+    <div class="scan-progress-bar" id="inline-scan-bar"></div>
+  </div>
+  {% else %}
+  <p>Your library folder is <code>{{ library_path }}</code></p>
+  <form method="post" action="/api/scan/start" onsubmit="this.querySelector('button').textContent='Scanning…'">
+    <button type="submit" class="btn-primary">Scan Library</button>
+  </form>
+  {% endif %}
 </div>
 {% elif comics|length == 0 %}
 <div class="empty-state">

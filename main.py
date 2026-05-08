@@ -8,6 +8,16 @@ from app import app
 from database import init_db, migrate_db
 
 
+class Api:
+    def open_folder(self):
+        result = webview.windows[0].create_file_dialog(
+            webview.FOLDER_DIALOG, allow_multiple=False
+        )
+        if result and len(result) > 0:
+            return result[0]
+        return None
+
+
 def find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('127.0.0.1', 0))
@@ -43,6 +53,15 @@ if __name__ == '__main__':
         print("Server failed to start", file=sys.stderr)
         sys.exit(1)
 
+    # Auto-scan on startup if onboarding is already complete
+    from onboarding import is_onboarding_done, get_library_path
+    from scanner import scan_library
+    if is_onboarding_done():
+        lib = get_library_path()
+        if lib:
+            scan_library(lib)
+
+    api = Api()
     window = webview.create_window(
         title='ComicArc',
         url=f'http://127.0.0.1:{port}/',
@@ -50,5 +69,6 @@ if __name__ == '__main__':
         height=800,
         min_size=(900, 600),
         text_select=False,
+        js_api=api,
     )
     webview.start(debug=False)

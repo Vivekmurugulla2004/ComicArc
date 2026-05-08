@@ -6,6 +6,8 @@ from werkzeug.utils import secure_filename
 from database import get_db
 from comic_reader import get_page, get_page_count, cbr_tool_available
 from config import get_data_dir, get_resource_dir
+from onboarding import is_onboarding_done, get_library_path, save_config
+from scanner import scan_library, get_status as get_scan_status
 
 _resource = get_resource_dir()
 _data     = get_data_dir()
@@ -16,7 +18,8 @@ app = Flask(
     static_folder=os.path.join(_resource, 'static'),
 )
 
-COMICS_DIR = os.path.expanduser('~/Downloads/Comics')
+def _comics_dir():
+    return get_library_path() or os.path.expanduser('~/Downloads/Comics')
 
 SUPPORTED_EXTENSIONS = {'.cbz', '.cbr', '.pdf', '.jpg', '.jpeg', '.png'}
 
@@ -52,32 +55,12 @@ def extract_metadata_upload(filename):
             'issue_number': match.group(1) if match else None}
 
 
-def extract_metadata(file_path):
-    rel = os.path.relpath(file_path, COMICS_DIR)
-    parts = rel.split(os.sep)
-    publisher = parts[0] if len(parts) > 1 else 'Unknown'
-    filename = parts[-1]
-    title = os.path.splitext(filename)[0]
-
-    # Everything between publisher and filename becomes the series.
-    # e.g. Marvel/Spider-Man/Classic/file.cbr → "Spider-Man — Classic"
-    intermediate = parts[1:-1]
-    if not intermediate:
-        series = 'General'
-    elif len(intermediate) == 1:
-        series = intermediate[0]
-    else:
-        series = ' — '.join(intermediate)
-
-    match = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
-    issue_number = match.group(1) if match else None
-    return {'publisher': publisher, 'series': series, 'title': title, 'issue_number': issue_number}
-
-
 # ── Library ──────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
+    if not is_onboarding_done():
+        return redirect(url_for('onboarding'))
     db = get_db()
     publisher_filter = request.args.get('publisher', 'All')
     search   = request.args.get('q', '').strip()
@@ -158,78 +141,9 @@ def index():
                            continuing=continuing,
                            all_tags=all_tags,
                            tag_filter=tag_filter,
-                           unrar_missing=not cbr_tool_available())
-
-
-@app.route('/precache-covers')
-def precache_covers():
-    """Extract and cache every cover that isn't cached yet."""
-    db = get_db()
-    comics = db.execute("SELECT id, file_path FROM comics").fetchall()
-    db.close()
-    done = 0
-    for comic in comics:
-        already = any(
-            os.path.exists(os.path.join(COVER_CACHE_DIR, f"{comic['id']}.{ext}"))
-            for ext in ('jpg', 'png')
-        )
-        if already:
-            continue
-        img_data, mime = get_page(comic['file_path'], 0)
-        if img_data:
-            try:
-                with open(_cover_cache_path(comic['id'], mime), 'wb') as f:
-                    f.write(img_data)
-                done += 1
-            except Exception as e:
-                print(f"Precache failed for {comic['id']}: {e}")
-    return redirect(url_for('index'))
-
-
-@app.route('/scan')
-def scan():
-    if not os.path.exists(COMICS_DIR):
-        return f"Comics directory not found: {COMICS_DIR}", 404
-
-    db = get_db()
-    added = 0
-
-    for root, dirs, files in os.walk(COMICS_DIR):
-        dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
-        for filename in sorted(files):
-            if filename.startswith('.'):
-                continue
-            ext = os.path.splitext(filename)[1].lower()
-            if ext not in SUPPORTED_EXTENSIONS:
-                continue
-            file_path = os.path.join(root, filename)
-            meta = extract_metadata(file_path)
-            try:
-                existing = db.execute(
-                    "SELECT id FROM comics WHERE file_path = ?", (file_path,)
-                ).fetchone()
-                if existing:
-                    db.execute(
-                        """UPDATE comics SET publisher=?, series=?, issue_number=?
-                           WHERE file_path=?""",
-                        (meta['publisher'], meta['series'], meta['issue_number'], file_path)
-                    )
-                else:
-                    page_count = get_page_count(file_path)
-                    db.execute(
-                        """INSERT INTO comics
-                           (title, file_path, publisher, series, issue_number, page_count)
-                           VALUES (?, ?, ?, ?, ?, ?)""",
-                        (meta['title'], file_path, meta['publisher'],
-                         meta['series'], meta['issue_number'], page_count)
-                    )
-                    added += 1
-            except Exception as e:
-                print(f"Error adding {filename}: {e}")
-
-    db.commit()
-    db.close()
-    return redirect(url_for('index'))
+                           unrar_missing=not cbr_tool_available(),
+                           library_path=_comics_dir(),
+                           scan_status=get_scan_status())
 
 
 # ── Images ───────────────────────────────────────────────────────────────────
@@ -830,3 +744,44 @@ def clear_library():
             except OSError:
                 pass
     return redirect(url_for('index'))
+
+
+# ── Onboarding ───────────────────────────────────────────────────────────────
+
+@app.route('/onboarding')
+def onboarding():
+    if is_onboarding_done():
+        return redirect(url_for('index'))
+    return render_template('onboarding.html')
+
+
+@app.route('/api/onboarding/scan-start', methods=['POST'])
+def onboarding_scan_start():
+    data = request.get_json(silent=True) or {}
+    path = data.get('library_path', '').strip()
+    path = os.path.expanduser(path)
+    if not path or not os.path.isdir(path):
+        return jsonify({'ok': False, 'error': 'Folder not found. Please choose a valid folder.'})
+    save_config({'library_path': path})
+    scan_library(path)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/onboarding/complete', methods=['POST'])
+def onboarding_complete():
+    data = request.get_json(silent=True) or {}
+    reader_mode = data.get('reader_mode', 'page')
+    save_config({'reader_mode': reader_mode, 'onboarding_done': True})
+    return jsonify({'ok': True})
+
+
+@app.route('/api/scan/status')
+def scan_status():
+    return jsonify(get_scan_status())
+
+
+@app.route('/api/scan/start', methods=['POST'])
+def scan_start():
+    path = _comics_dir()
+    ok = scan_library(path)
+    return jsonify({'ok': ok, 'path': path})

@@ -77,37 +77,6 @@ h1, h2, h3 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
 .nav-link:hover { color: var(--text); background: var(--card); }
 .nav-link.active { color: var(--gold); background: rgba(247,201,72,0.1); }
 
-.btn-scan {
-  margin-left: auto;
-  padding: 8px 18px;
-  background: var(--gold);
-  color: #0b0c18;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-  box-shadow: 0 0 16px rgba(247,201,72,0.3);
-}
-.btn-scan:hover {
-  background: var(--gold2);
-  transform: translateY(-1px);
-  box-shadow: 0 0 24px rgba(247,201,72,0.5);
-}
-.btn-scan-secondary {
-  background: var(--card);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-.btn-scan-secondary:hover {
-  background: var(--card-hover);
-  color: var(--text);
-  border-color: var(--gold);
-  box-shadow: none;
-  transform: none;
-}
-
 /* ── Main ──────────────────────────────────────────────────────────────────── */
 main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 
@@ -1340,8 +1309,6 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
   }
   .nav-links { order: 3; width: 100%; gap: 4px; }
   .nav-link  { padding: 6px 10px; font-size: 12px; }
-  .btn-scan-secondary { display: none; }
-  .btn-scan  { margin-left: auto; padding: 7px 14px; font-size: 12px; }
 
   main { padding: 24px 16px 80px; }
 
@@ -1609,4 +1576,25 @@ main { max-width: 1320px; margin: 0 auto; padding: 36px 28px 100px; }
 @media (max-width: 768px) {
   .nav-link { padding: 10px 14px; }
   .nav-links { gap: 2px; }
+}
+
+/* ── Inline scan progress (empty library state) ────────────────────────────── */
+.scan-progress-inline {
+  width: 240px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.scan-progress-bar {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 99px;
+  width: 40%;
+  animation: scan-pulse 1.6s ease-in-out infinite;
+}
+@keyframes scan-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
 }
