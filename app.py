@@ -609,26 +609,6 @@ def remove_from_run(run_id, item_id):
     return redirect(url_for('run_detail', run_id=run_id))
 
 
-@app.route('/runs/<int:run_id>/move/<int:item_id>/<direction>', methods=['POST'])
-def move_item(run_id, item_id, direction):
-    db = get_db()
-    items = db.execute(
-        "SELECT * FROM run_items WHERE run_id = ? ORDER BY position", (run_id,)
-    ).fetchall()
-    for i, item in enumerate(items):
-        if item['id'] == item_id:
-            if direction == 'up' and i > 0:
-                db.execute("UPDATE run_items SET position = ? WHERE id = ?", (items[i-1]['position'], item_id))
-                db.execute("UPDATE run_items SET position = ? WHERE id = ?", (item['position'], items[i-1]['id']))
-            elif direction == 'down' and i < len(items) - 1:
-                db.execute("UPDATE run_items SET position = ? WHERE id = ?", (items[i+1]['position'], item_id))
-                db.execute("UPDATE run_items SET position = ? WHERE id = ?", (item['position'], items[i+1]['id']))
-            break
-    db.commit()
-    db.close()
-    return redirect(url_for('run_detail', run_id=run_id))
-
-
 @app.route('/api/rate-run/<int:run_id>', methods=['POST'])
 def rate_run(run_id):
     data = request.get_json(silent=True) or {}
