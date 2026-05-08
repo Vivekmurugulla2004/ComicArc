@@ -63,24 +63,29 @@ def index():
         return redirect(url_for('onboarding'))
     db = get_db()
     publisher_filter = request.args.get('publisher', 'All')
-    search   = request.args.get('q', '').strip()
-    sort     = request.args.get('sort', 'publisher')
+    search     = request.args.get('q', '').strip()
+    sort       = request.args.get('sort', 'publisher')
+    view       = request.args.get('view', '')
 
     query = """
         SELECT c.*, COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
-               CASE WHEN f.comic_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+               CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
+               CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
         FROM comics c
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
-        LEFT JOIN ratings r ON c.id = r.comic_id
-        LEFT JOIN favorites f ON c.id = f.comic_id
+        LEFT JOIN ratings r           ON c.id = r.comic_id
+        LEFT JOIN favorites f         ON c.id = f.comic_id
+        LEFT JOIN reading_list rl     ON c.id = rl.comic_id
     """
     params = []
     conditions = []
 
     tag_filter = request.args.get('tag', '').strip()
 
-    if publisher_filter != 'All':
+    if view == 'reading-list':
+        conditions.append("c.id IN (SELECT comic_id FROM reading_list)")
+    elif publisher_filter != 'All':
         conditions.append("c.publisher = ?")
         params.append(publisher_filter)
     if search:
@@ -115,6 +120,7 @@ def index():
         "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
     ).fetchall()]
     total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    reading_list_count = db.execute("SELECT COUNT(*) FROM reading_list").fetchone()[0]
     all_tags = db.execute("""
         SELECT t.name, COUNT(ct.comic_id) as count
         FROM tags t JOIN comic_tags ct ON t.id = ct.tag_id
@@ -137,7 +143,9 @@ def index():
                            current_publisher=publisher_filter,
                            search=search,
                            sort=sort,
+                           view=view,
                            total=total,
+                           reading_list_count=reading_list_count,
                            continuing=continuing,
                            all_tags=all_tags,
                            tag_filter=tag_filter,
@@ -244,11 +252,13 @@ def comic_detail(comic_id):
         SELECT c.*,
                COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
-               CASE WHEN f.comic_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+               CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
+               CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
         FROM comics c
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
-        LEFT JOIN ratings r ON c.id = r.comic_id
-        LEFT JOIN favorites f ON c.id = f.comic_id
+        LEFT JOIN ratings r           ON c.id = r.comic_id
+        LEFT JOIN favorites f         ON c.id = f.comic_id
+        LEFT JOIN reading_list rl     ON c.id = rl.comic_id
         WHERE c.id = ?
     """, (comic_id,)).fetchone()
     runs_featuring = db.execute("""
@@ -355,13 +365,15 @@ def reader(comic_id):
                 break
 
     db.close()
+    from onboarding import get_reader_mode
     return render_template('reader.html',
                            comic=comic,
                            current_page=current_page,
                            run_context=run_context,
                            prev_comic=prev_comic,
                            next_comic=next_comic,
-                           run_id=run_id)
+                           run_id=run_id,
+                           reader_mode=get_reader_mode())
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
@@ -785,3 +797,206 @@ def scan_start():
     path = _comics_dir()
     ok = scan_library(path)
     return jsonify({'ok': ok, 'path': path})
+
+
+# ── Settings ─────────────────────────────────────────────────────────────────
+
+_cbr_install_state = {'running': False, 'log': '', 'done': False, 'ok': False}
+
+
+@app.route('/settings')
+def settings():
+    from onboarding import load_config
+    from comic_reader import cbr_tool_available, _find_bin
+    import shutil
+    cfg = load_config()
+    return render_template('settings.html',
+                           library_path=cfg.get('library_path', ''),
+                           reader_mode=cfg.get('reader_mode', 'page'),
+                           cbr_ok=cbr_tool_available(),
+                           brew_ok=bool(shutil.which('brew') or _find_bin('brew')),
+                           scan_status=get_scan_status())
+
+
+@app.route('/api/settings/save', methods=['POST'])
+def settings_save():
+    data = request.get_json(silent=True) or {}
+    updates = {}
+    if 'library_path' in data:
+        path = os.path.expanduser(data['library_path'].strip())
+        if not os.path.isdir(path):
+            return jsonify({'ok': False, 'error': 'Folder not found'})
+        updates['library_path'] = path
+        scan_library(path)
+    if 'reader_mode' in data:
+        updates['reader_mode'] = data['reader_mode']
+    if updates:
+        save_config(updates)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/settings/install-cbr', methods=['POST'])
+def install_cbr():
+    import threading, subprocess, shutil
+    from comic_reader import _find_bin
+    if _cbr_install_state['running']:
+        return jsonify({'ok': False, 'error': 'Already running'})
+    brew = shutil.which('brew') or _find_bin('brew')
+    if not brew:
+        return jsonify({'ok': False, 'error': 'Homebrew not found'})
+
+    def _run():
+        _cbr_install_state.update({'running': True, 'log': '', 'done': False, 'ok': False})
+        try:
+            proc = subprocess.Popen(
+                [brew, 'install', 'unar'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for line in proc.stdout:
+                _cbr_install_state['log'] += line
+            proc.wait()
+            _cbr_install_state['ok'] = proc.returncode == 0
+        except Exception as e:
+            _cbr_install_state['log'] += f'\nError: {e}'
+        finally:
+            _cbr_install_state['running'] = False
+            _cbr_install_state['done'] = True
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/settings/cbr-status')
+def cbr_install_status():
+    from comic_reader import cbr_tool_available
+    return jsonify({**_cbr_install_state, 'cbr_ok': cbr_tool_available()})
+
+
+@app.route('/api/settings/reset-setup', methods=['POST'])
+def reset_setup():
+    save_config({'onboarding_done': False})
+    return jsonify({'ok': True})
+
+
+# ── Mark unread ───────────────────────────────────────────────────────────────
+
+@app.route('/api/reset-progress/<int:comic_id>', methods=['POST'])
+def reset_progress(comic_id):
+    db = get_db()
+    db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+# ── Reading list ──────────────────────────────────────────────────────────────
+
+@app.route('/api/reading-list/<int:comic_id>', methods=['POST'])
+def toggle_reading_list(comic_id):
+    db = get_db()
+    existing = db.execute("SELECT 1 FROM reading_list WHERE comic_id = ?", (comic_id,)).fetchone()
+    if existing:
+        db.execute("DELETE FROM reading_list WHERE comic_id = ?", (comic_id,))
+        in_list = False
+    else:
+        db.execute("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", (comic_id,))
+        in_list = True
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'in_list': in_list})
+
+
+# ── Bulk operations ───────────────────────────────────────────────────────────
+
+@app.route('/api/bulk/delete', methods=['POST'])
+def bulk_delete():
+    ids = (request.get_json(silent=True) or {}).get('ids', [])
+    db = get_db()
+    for comic_id in ids:
+        row = db.execute("SELECT file_path FROM comics WHERE id = ?", (comic_id,)).fetchone()
+        db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
+        db.execute("DELETE FROM ratings WHERE comic_id = ?", (comic_id,))
+        db.execute("DELETE FROM comics WHERE id = ?", (comic_id,))
+        if row:
+            for ext in ('jpg', 'png'):
+                cp = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
+                if os.path.exists(cp): os.remove(cp)
+            if row['file_path'].startswith(UPLOAD_DIR):
+                try: os.remove(row['file_path'])
+                except OSError: pass
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/bulk/mark-read', methods=['POST'])
+def bulk_mark_read():
+    ids = (request.get_json(silent=True) or {}).get('ids', [])
+    db = get_db()
+    for comic_id in ids:
+        row = db.execute("SELECT page_count FROM comics WHERE id = ?", (comic_id,)).fetchone()
+        if row:
+            last = max(row['page_count'] - 1, 0)
+            db.execute(
+                """INSERT INTO reading_progress (comic_id, current_page, last_read)
+                   VALUES (?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(comic_id) DO UPDATE SET current_page=?, last_read=CURRENT_TIMESTAMP""",
+                (comic_id, last, last)
+            )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/bulk/mark-unread', methods=['POST'])
+def bulk_mark_unread():
+    ids = (request.get_json(silent=True) or {}).get('ids', [])
+    db = get_db()
+    for comic_id in ids:
+        db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/bulk/reading-list', methods=['POST'])
+def bulk_reading_list():
+    data   = request.get_json(silent=True) or {}
+    ids    = data.get('ids', [])
+    action = data.get('action', 'add')
+    db = get_db()
+    for comic_id in ids:
+        if action == 'add':
+            db.execute("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", (comic_id,))
+        else:
+            db.execute("DELETE FROM reading_list WHERE comic_id = ?", (comic_id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+# ── Export ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/export')
+def export_library():
+    import json as _json
+    db = get_db()
+    data = {
+        'exported_at':    time.strftime('%Y-%m-%dT%H:%M:%S'),
+        'comics':         [dict(r) for r in db.execute("SELECT * FROM comics").fetchall()],
+        'reading_progress': [dict(r) for r in db.execute("SELECT * FROM reading_progress").fetchall()],
+        'ratings':        [dict(r) for r in db.execute("SELECT * FROM ratings").fetchall()],
+        'favorites':      [r['comic_id'] for r in db.execute("SELECT comic_id FROM favorites").fetchall()],
+        'reading_list':   [r['comic_id'] for r in db.execute("SELECT comic_id FROM reading_list").fetchall()],
+        'tags':           [dict(r) for r in db.execute("SELECT * FROM tags").fetchall()],
+        'comic_tags':     [dict(r) for r in db.execute("SELECT * FROM comic_tags").fetchall()],
+        'runs':           [dict(r) for r in db.execute("SELECT * FROM runs").fetchall()],
+        'run_items':      [dict(r) for r in db.execute("SELECT * FROM run_items").fetchall()],
+    }
+    db.close()
+    filename = f'comicarc-export-{time.strftime("%Y%m%d")}.json'
+    return Response(
+        _json.dumps(data, indent=2, default=str),
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )

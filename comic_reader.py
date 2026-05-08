@@ -25,14 +25,24 @@ def get_image_files(file_list):
     return sorted(images, key=natural_sort_key)
 
 
+def _find_bin(name):
+    found = shutil.which(name)
+    if found:
+        return found
+    for prefix in ('/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'):
+        p = os.path.join(prefix, name)
+        if os.path.exists(p):
+            return p
+    return None
+
 def _unar():
-    return shutil.which('unar')
+    return _find_bin('unar')
 
 def _lsar():
-    return shutil.which('lsar')
+    return _find_bin('lsar')
 
 def _unrar():
-    return shutil.which('unrar')
+    return _find_bin('unrar')
 
 def cbr_tool_available():
     return bool(_unar() or _unrar())

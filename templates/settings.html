@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Settings — ComicArc{% endblock %}
+
+{% block content %}
+<div class="settings-wrap">
+  <h1>Settings</h1>
+
+  <!-- Library Folder -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>Library Folder</h2>
+      <p>The folder ComicArc scans for comics. Subfolders are included automatically.</p>
+    </div>
+    <div class="settings-row">
+      <input type="text" id="library-path" class="settings-input" value="{{ library_path }}" placeholder="~/Downloads/Comics">
+      <button class="btn-ghost" onclick="browseFolder()">Browse</button>
+    </div>
+    <p class="settings-hint" id="folder-hint"></p>
+    <div class="settings-actions">
+      <button class="btn-primary" onclick="saveFolder()">Save &amp; Rescan</button>
+      {% if scan_status.running %}
+      <span class="settings-scan-status" id="scan-label">Scanning… <span id="scan-prog"></span></span>
+      {% else %}
+      <span class="settings-scan-status hidden" id="scan-label"></span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Reader Mode -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>Default Reader Mode</h2>
+      <p>How comics open when you start reading. You can always switch mid-read with the toolbar.</p>
+    </div>
+    <div class="mode-toggle">
+      <button class="mode-btn {% if reader_mode == 'page' %}active{% endif %}"
+              id="mode-page" onclick="setMode('page')">
+        <span class="mode-btn-icon">⊡</span>
+        <span>Page by Page</span>
+      </button>
+      <button class="mode-btn {% if reader_mode == 'scroll' %}active{% endif %}"
+              id="mode-scroll" onclick="setMode('scroll')">
+        <span class="mode-btn-icon">☰</span>
+        <span>Scroll View</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CBR Support -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>CBR Support</h2>
+      <p>CBR files (RAR-based comic archives) require the <code>unar</code> tool. CBZ, PDF, and images always work without it.</p>
+    </div>
+
+    {% if cbr_ok %}
+    <div class="settings-status ok">
+      <span class="status-dot ok"></span>
+      CBR files supported — unar is installed
+    </div>
+    {% else %}
+    <div class="settings-status err" id="cbr-status-msg">
+      <span class="status-dot err"></span>
+      CBR files not supported — unar not found
+    </div>
+
+    {% if brew_ok %}
+    <div class="settings-actions" id="cbr-install-area">
+      <button class="btn-primary" id="cbr-install-btn" onclick="installCBR()">Install via Homebrew</button>
+      <span class="settings-hint">Runs <code>brew install unar</code> automatically</span>
+    </div>
+    <div id="cbr-log-wrap" class="cbr-log-wrap hidden">
+      <pre id="cbr-log" class="cbr-log"></pre>
+    </div>
+    {% else %}
+    <div class="settings-actions">
+      <code class="code-block">brew install unar</code>
+      <button class="btn-ghost" onclick="copyCmd()">Copy Command</button>
+      <span class="settings-hint" id="copy-confirm"></span>
+    </div>
+    <p class="settings-hint">Install Homebrew first at <strong>brew.sh</strong>, then run the command above.</p>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Export -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>Backup &amp; Export</h2>
+      <p>Download your full library data — comics, progress, ratings, tags, runs, and reading list — as a JSON file.</p>
+    </div>
+    <div class="settings-actions">
+      <a href="/api/export" class="btn-primary" download>Export Library</a>
+    </div>
+  </div>
+
+  <!-- Reset Setup -->
+  <div class="settings-card danger-card">
+    <div class="settings-card-header">
+      <h2>Reset Setup</h2>
+      <p>Re-run the first-launch wizard to change your library folder or reader defaults. Your library data is kept.</p>
+    </div>
+    <button class="btn-danger" onclick="resetSetup()">Reset Setup</button>
+  </div>
+
+  <!-- Danger Zone -->
+  <div class="settings-card danger-card">
+    <div class="settings-card-header">
+      <h2>Library</h2>
+      <p>Permanently remove all comics, progress, ratings, and favorites from ComicArc. Your actual files are not deleted.</p>
+    </div>
+    <form method="post" action="/library/clear"
+          onsubmit="return confirm('Clear entire library? Reading progress, ratings, and favorites will all be lost. Your files will not be deleted.')">
+      <button type="submit" class="btn-danger">Clear Library</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function browseFolder() {
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.open_folder().then(path => {
+      if (path) document.getElementById('library-path').value = path;
+    });
+  } else {
+    document.getElementById('folder-hint').textContent = 'Type the path manually above.';
+  }
+}
+
+function saveFolder() {
+  const path = document.getElementById('library-path').value.trim();
+  const hint = document.getElementById('folder-hint');
+  if (!path) { hint.textContent = 'Enter a folder path.'; return; }
+  hint.textContent = '';
+  const label = document.getElementById('scan-label');
+  label.textContent = 'Saving…';
+  label.classList.remove('hidden');
+  fetch('/api/settings/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({library_path: path})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.ok) { hint.textContent = d.error; label.classList.add('hidden'); return; }
+    label.textContent = 'Scanning…';
+    pollScan();
+  });
+}
+
+function pollScan() {
+  fetch('/api/scan/status').then(r => r.json()).then(s => {
+    const label = document.getElementById('scan-label');
+    if (s.running) {
+      const pct = s.total > 0 ? ` (${s.done}/${s.total})` : '';
+      label.textContent = 'Scanning…' + pct;
+      setTimeout(pollScan, 600);
+    } else {
+      label.textContent = s.added > 0 ? `Done — ${s.added} new comics added` : 'Done — library up to date';
+      setTimeout(() => label.classList.add('hidden'), 4000);
+    }
+  });
+}
+
+function setMode(mode) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + mode).classList.add('active');
+  fetch('/api/settings/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({reader_mode: mode})
+  });
+}
+
+function installCBR() {
+  const btn = document.getElementById('cbr-install-btn');
+  const logWrap = document.getElementById('cbr-log-wrap');
+  const log = document.getElementById('cbr-log');
+  btn.disabled = true;
+  btn.textContent = 'Installing…';
+  logWrap.classList.remove('hidden');
+  fetch('/api/settings/install-cbr', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { log.textContent = d.error; return; }
+      pollInstall();
+    });
+}
+
+function pollInstall() {
+  fetch('/api/settings/cbr-status').then(r => r.json()).then(s => {
+    document.getElementById('cbr-log').textContent = s.log;
+    if (s.running) {
+      setTimeout(pollInstall, 800);
+    } else if (s.done) {
+      if (s.cbr_ok) {
+        document.getElementById('cbr-status-msg').className = 'settings-status ok';
+        document.getElementById('cbr-status-msg').innerHTML =
+          '<span class="status-dot ok"></span> CBR files supported — unar installed successfully';
+        document.getElementById('cbr-install-area').classList.add('hidden');
+      } else {
+        document.getElementById('cbr-install-btn').textContent = 'Retry';
+        document.getElementById('cbr-install-btn').disabled = false;
+      }
+    }
+  });
+}
+
+function resetSetup() {
+  if (!confirm('Re-run the setup wizard? Your library data will be kept.')) return;
+  fetch('/api/settings/reset-setup', {method: 'POST'})
+    .then(() => window.location.href = '/onboarding');
+}
+
+function copyCmd() {
+  navigator.clipboard.writeText('brew install unar').then(() => {
+    const el = document.getElementById('copy-confirm');
+    el.textContent = 'Copied!';
+    setTimeout(() => el.textContent = '', 2000);
+  });
+}
+</script>
+{% endblock %}

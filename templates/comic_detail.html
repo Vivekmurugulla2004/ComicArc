@@ -80,8 +80,17 @@
               onclick="markRead({{ comic.id }}, this)">
         {% if comic.page_count > 0 and comic.progress >= comic.page_count - 2 %}✓ Read{% else %}Mark as Read{% endif %}
       </button>
+      {% if comic.progress > 0 %}
+      <button class="btn-ghost" id="mark-unread-btn" onclick="markUnread({{ comic.id }}, this)">Mark Unread</button>
+      {% endif %}
       <a href="/comic/{{ comic.id }}/edit" class="btn-ghost" aria-label="Edit comic metadata">Edit</a>
     </div>
+
+    <!-- Reading list -->
+    <button class="cd-rl-btn {% if comic.in_reading_list %}active{% endif %}"
+            id="cd-rl-btn" onclick="toggleReadingList({{ comic.id }})">
+      <span id="cd-rl-label">{% if comic.in_reading_list %}✓ In Reading List{% else %}+ Want to Read{% endif %}</span>
+    </button>
 
     <!-- Tags -->
     <div class="cd-tags-section">
@@ -159,8 +168,45 @@ function markRead(comicId, btn) {
     .then(() => {
       btn.textContent = '✓ Read';
       btn.classList.add('mark-read-done');
-      document.querySelector('.cd-progress-label').textContent = 'Read';
-      document.querySelector('.cd-progress-fill').style.width = '100%';
+      const label = document.querySelector('.cd-progress-label');
+      const fill  = document.querySelector('.cd-progress-fill');
+      if (label) label.textContent = 'Read';
+      if (fill)  fill.style.width  = '100%';
+      const unreadBtn = document.getElementById('mark-unread-btn');
+      if (!unreadBtn) {
+        const newBtn = document.createElement('button');
+        newBtn.className = 'btn-ghost';
+        newBtn.id = 'mark-unread-btn';
+        newBtn.textContent = 'Mark Unread';
+        newBtn.onclick = () => markUnread(comicId, newBtn);
+        btn.insertAdjacentElement('afterend', newBtn);
+      }
+    });
+}
+
+function markUnread(comicId, btn) {
+  fetch(`/api/reset-progress/${comicId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(() => {
+      const readBtn = document.getElementById('mark-read-btn');
+      readBtn.textContent = 'Mark as Read';
+      readBtn.classList.remove('mark-read-done');
+      const label = document.querySelector('.cd-progress-label');
+      const fill  = document.querySelector('.cd-progress-fill');
+      if (label) label.textContent = 'Not started';
+      if (fill)  fill.style.width  = '0%';
+      btn.remove();
+    });
+}
+
+function toggleReadingList(comicId) {
+  fetch(`/api/reading-list/${comicId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      const btn   = document.getElementById('cd-rl-btn');
+      const label = document.getElementById('cd-rl-label');
+      btn.classList.toggle('active', data.in_list);
+      label.textContent = data.in_list ? '✓ In Reading List' : '+ Want to Read';
     });
 }
 

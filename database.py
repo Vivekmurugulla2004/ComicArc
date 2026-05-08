@@ -37,6 +37,11 @@ def migrate_db():
            )""",
         "CREATE INDEX IF NOT EXISTS idx_comic_tags_comic ON comic_tags(comic_id)",
         "ALTER TABLE comics ADD COLUMN position INTEGER",
+        """CREATE TABLE IF NOT EXISTS reading_list (
+               comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE,
+               added_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+           )""",
+        "CREATE INDEX IF NOT EXISTS idx_reading_list ON reading_list(comic_id)",
     ]:
         try:
             conn.execute(sql)

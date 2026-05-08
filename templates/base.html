@@ -25,6 +25,7 @@
       <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Library</a>
       <a href="/runs" class="nav-link {% if request.endpoint in ['runs','run_detail','new_run','edit_run'] %}active{% endif %}">Runs</a>
       <a href="/stats" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+      <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
     </div>
   </nav>
 

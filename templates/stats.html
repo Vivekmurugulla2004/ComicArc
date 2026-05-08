@@ -9,6 +9,15 @@
   </div>
 </div>
 
+{% if total_comics == 0 %}
+<div class="empty-state">
+  <div class="empty-icon">◈</div>
+  <h2>No stats yet</h2>
+  <p>Add comics to your library and start reading to see your stats here.</p>
+  <a href="/" class="btn-primary">Go to Library</a>
+</div>
+{% else %}
+
 <!-- Top stat cards -->
 <div class="stat-grid">
   <div class="stat-card">
@@ -97,4 +106,5 @@
 </div>
 {% endif %}
 
+{% endif %}
 {% endblock %}

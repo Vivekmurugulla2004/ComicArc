@@ -4,10 +4,8 @@
 {% block content %}
 {% if unrar_missing %}
 <div class="warning-banner">
-  ⚠️ <strong>CBR files won't load covers or pages.</strong>
-  To fix it, open Terminal and run:
-  <code>brew install unrar</code>
-  then restart the app.
+  ⚠️ <strong>CBR files are not supported.</strong>
+  CBZ, PDF, and images work fine. <a href="/settings">Go to Settings</a> to enable CBR support.
 </div>
 {% endif %}
 <div class="library-header">
@@ -18,6 +16,7 @@
   <form class="search-form" method="get" action="/">
     <input type="hidden" name="publisher" value="{{ current_publisher }}">
     <input type="hidden" name="tag" value="{{ tag_filter }}">
+    {% if view == 'reading-list' %}<input type="hidden" name="view" value="reading-list">{% endif %}
     <input class="search-input" type="text" name="q" value="{{ search }}" placeholder="Search titles, series…">
     <select name="sort" class="sort-select" onchange="this.form.submit()" aria-label="Sort by">
       <option value="publisher" {% if sort == 'publisher' %}selected{% endif %}>Publisher</option>
@@ -30,6 +29,9 @@
     <button type="submit" class="search-btn">Search</button>
     {% if search %}<a href="/?publisher={{ current_publisher }}" class="clear-btn">✕</a>{% endif %}
   </form>
+  {% if total > 0 %}
+  <button id="select-btn" class="btn-ghost select-toggle" onclick="toggleSelectMode()">Select</button>
+  {% endif %}
 </div>
 
 {% if all_tags %}
@@ -45,11 +47,17 @@
 {% endif %}
 
 <div class="publisher-tabs">
+  {% if reading_list_count > 0 %}
+  <a href="/?view=reading-list{% if search %}&q={{ search }}{% endif %}"
+     class="tab {% if view == 'reading-list' %}active{% endif %}">
+    Want to Read <span class="tab-count">{{ reading_list_count }}</span>
+  </a>
+  {% endif %}
   <a href="/?publisher=All{% if search %}&q={{ search }}{% endif %}"
-     class="tab {% if current_publisher == 'All' %}active{% endif %}">All</a>
+     class="tab {% if current_publisher == 'All' and view != 'reading-list' %}active{% endif %}">All</a>
   {% for pub in publishers %}
   <a href="/?publisher={{ pub }}{% if search %}&q={{ search }}{% endif %}"
-     class="tab {% if current_publisher == pub %}active{% endif %}">{{ pub }}</a>
+     class="tab {% if current_publisher == pub and view != 'reading-list' %}active{% endif %}">{{ pub }}</a>
   {% endfor %}
 </div>
 
@@ -70,14 +78,6 @@
   <p class="import-legal-note">Only import files you have the legal right to possess and read.</p>
   <div id="import-queue" class="import-queue" hidden></div>
 </div>
-
-{% if total > 0 %}
-<div class="danger-zone minimal">
-  <form method="post" action="/library/clear" onsubmit="return confirm('Clear entire library? This removes all {{ total }} comics, reading progress, ratings, and favorites. This cannot be undone.')">
-    <button type="submit" class="btn-danger-sm">Clear Library</button>
-  </form>
-</div>
-{% endif %}
 
 {% if continuing %}
 <div class="continue-section">
@@ -105,7 +105,14 @@
 </div>
 {% endif %}
 
-{% if total == 0 %}
+{% if view == 'reading-list' and comics|length == 0 %}
+<div class="empty-state">
+  <div class="empty-icon">◈</div>
+  <h2>Reading list is empty</h2>
+  <p>Open any comic's detail page and tap <strong>Want to Read</strong> to save it here.</p>
+  <a href="/" class="btn-primary">Browse Library</a>
+</div>
+{% elif total == 0 %}
 <div class="empty-state">
   <div class="empty-icon">◈</div>
   <h2>No comics yet</h2>
@@ -116,23 +123,22 @@
   </div>
   {% else %}
   <p>Your library folder is <code>{{ library_path }}</code></p>
-  <form method="post" action="/api/scan/start" onsubmit="this.querySelector('button').textContent='Scanning…'">
-    <button type="submit" class="btn-primary">Scan Library</button>
-  </form>
+  <button class="btn-primary" onclick="triggerScan(this)">Scan Library</button>
   {% endif %}
 </div>
 {% elif comics|length == 0 %}
 <div class="empty-state">
   <h2>No results</h2>
-  <p>Try a different search or publisher filter.</p>
+  <p>Try a different search or filter.</p>
 </div>
 {% else %}
 <div class="comics-grid" id="comics-grid">
   {% for comic in comics %}
   <div class="comic-card" data-id="{{ comic.id }}"
        {% if sort == 'manual' %}draggable="true"{% endif %}
-       onclick="if(!this.dataset.dragging) window.location='/comic/{{ comic.id }}'">
+       onclick="if(selectMode){toggleCardSelect({{ comic.id }},this)}else if(!this.dataset.dragging){window.location='/comic/{{ comic.id }}'}">
     <div class="cover-wrap">
+      <div class="select-check">✓</div>
       <img class="cover-img" src="/cover/{{ comic.id }}" alt="{{ comic.title }}" loading="lazy">
       {% if comic.page_count > 0 %}
       <div class="progress-bar">
@@ -141,6 +147,9 @@
       {% endif %}
       {% if comic.is_favorite %}
       <div class="fav-badge">♥</div>
+      {% endif %}
+      {% if comic.in_reading_list %}
+      <div class="rl-badge" title="In reading list">⊕</div>
       {% endif %}
       <div class="cover-overlay">
         <span class="read-btn">Read</span>
@@ -171,10 +180,96 @@
   {% endfor %}
 </div>
 {% endif %}
+
+<!-- Bulk action bar -->
+<div id="bulk-bar" class="bulk-bar" hidden>
+  <span id="bulk-count" class="bulk-count">0 selected</span>
+  <div class="bulk-actions">
+    <button class="bulk-action-btn" disabled onclick="bulkAction('mark-read')">Mark Read</button>
+    <button class="bulk-action-btn" disabled onclick="bulkAction('mark-unread')">Mark Unread</button>
+    <button class="bulk-action-btn" disabled onclick="bulkAction('reading-list')">Want to Read</button>
+    <button class="bulk-action-btn bulk-danger" disabled onclick="bulkAction('delete')">Delete</button>
+  </div>
+  <button class="bulk-cancel-btn" onclick="toggleSelectMode()">Cancel</button>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// ── Scan ─────────────────────────────────────────────────────────────────────
+function triggerScan(btn) {
+  btn.textContent = 'Scanning…';
+  btn.disabled = true;
+  fetch('/api/scan/start', {method: 'POST'})
+    .then(r => r.json())
+    .then(() => {
+      const poll = () => fetch('/api/scan/status').then(r => r.json()).then(s => {
+        if (s.running) setTimeout(poll, 600);
+        else location.reload();
+      });
+      poll();
+    });
+}
+
+// ── Select / bulk ─────────────────────────────────────────────────────────────
+let selectMode = false;
+const selectedIds = new Set();
+
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  selectedIds.clear();
+  const grid = document.getElementById('comics-grid');
+  const btn  = document.getElementById('select-btn');
+  if (grid) grid.classList.toggle('select-mode', selectMode);
+  if (btn)  btn.classList.toggle('active', selectMode);
+  document.querySelectorAll('.comic-card').forEach(c => c.classList.remove('selected'));
+  if (selectMode) {
+    document.querySelectorAll('.comic-card[draggable]').forEach(c => {
+      c.dataset.wasDraggable = '1';
+      c.removeAttribute('draggable');
+    });
+  } else {
+    document.querySelectorAll('[data-was-draggable]').forEach(c => {
+      c.setAttribute('draggable', 'true');
+      delete c.dataset.wasDraggable;
+    });
+  }
+  updateBulkBar();
+}
+
+function toggleCardSelect(id, card) {
+  if (selectedIds.has(id)) { selectedIds.delete(id); card.classList.remove('selected'); }
+  else                      { selectedIds.add(id);    card.classList.add('selected'); }
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar   = document.getElementById('bulk-bar');
+  const count = selectedIds.size;
+  bar.hidden  = !selectMode;
+  document.getElementById('bulk-count').textContent = count + ' selected';
+  document.querySelectorAll('.bulk-action-btn').forEach(b => b.disabled = count === 0);
+}
+
+function bulkAction(type) {
+  if (!selectedIds.size) return;
+  const ids = [...selectedIds];
+  if (type === 'delete') {
+    if (!confirm(`Remove ${ids.length} comic${ids.length > 1 ? 's' : ''} from your library?`)) return;
+    fetch('/api/bulk/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
+      .then(() => location.reload());
+  } else if (type === 'mark-read') {
+    fetch('/api/bulk/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
+      .then(() => location.reload());
+  } else if (type === 'mark-unread') {
+    fetch('/api/bulk/mark-unread', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
+      .then(() => location.reload());
+  } else if (type === 'reading-list') {
+    fetch('/api/bulk/reading-list', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids, action:'add'})})
+      .then(() => { toggleSelectMode(); location.reload(); });
+  }
+}
+
 const dropArea = document.getElementById('drop-area');
 const fileInput = document.getElementById('file-input');
 const queue    = document.getElementById('import-queue');
