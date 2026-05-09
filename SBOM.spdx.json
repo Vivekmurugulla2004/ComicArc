@@ -1,0 +1,132 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "ComicArc-v1.0.0",
+  "documentNamespace": "https://github.com/Vivekmurugulla2004/ComicArc/sbom-v1.0.0",
+  "documentDescribes": ["SPDXRef-ComicArc"],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-ComicArc",
+      "name": "ComicArc",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "https://github.com/Vivekmurugulla2004/ComicArc/releases/tag/v1.0.0",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-pywebview",
+      "name": "pywebview",
+      "versionInfo": "6.2.1",
+      "downloadLocation": "https://pypi.org/project/pywebview/6.2.1/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-waitress",
+      "name": "waitress",
+      "versionInfo": "3.0.2",
+      "downloadLocation": "https://pypi.org/project/waitress/3.0.2/",
+      "licenseConcluded": "ZPL-2.1",
+      "licenseDeclared": "ZPL-2.1",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Flask",
+      "name": "Flask",
+      "versionInfo": "3.1.3",
+      "downloadLocation": "https://pypi.org/project/Flask/3.1.3/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Werkzeug",
+      "name": "Werkzeug",
+      "versionInfo": "3.1.8",
+      "downloadLocation": "https://pypi.org/project/Werkzeug/3.1.8/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Jinja2",
+      "name": "Jinja2",
+      "versionInfo": "3.1.6",
+      "downloadLocation": "https://pypi.org/project/Jinja2/3.1.6/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-MarkupSafe",
+      "name": "MarkupSafe",
+      "versionInfo": "3.0.3",
+      "downloadLocation": "https://pypi.org/project/MarkupSafe/3.0.3/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-click",
+      "name": "click",
+      "versionInfo": "8.1.8",
+      "downloadLocation": "https://pypi.org/project/click/8.1.8/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-itsdangerous",
+      "name": "itsdangerous",
+      "versionInfo": "2.2.0",
+      "downloadLocation": "https://pypi.org/project/itsdangerous/2.2.0/",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-blinker",
+      "name": "blinker",
+      "versionInfo": "1.9.0",
+      "downloadLocation": "https://pypi.org/project/blinker/1.9.0/",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-PyMuPDF",
+      "name": "PyMuPDF",
+      "versionInfo": "1.26.5",
+      "downloadLocation": "https://pypi.org/project/PyMuPDF/1.26.5/",
+      "licenseConcluded": "AGPL-3.0-only",
+      "licenseDeclared": "AGPL-3.0-only",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-rarfile",
+      "name": "rarfile",
+      "versionInfo": "4.2",
+      "downloadLocation": "https://pypi.org/project/rarfile/4.2/",
+      "licenseConcluded": "ISC",
+      "licenseDeclared": "ISC",
+      "filesAnalyzed": false
+    }
+  ],
+  "relationships": [
+    { "spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-ComicArc" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-pywebview" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-waitress" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-Flask" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-Werkzeug" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-Jinja2" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-MarkupSafe" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-click" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-itsdangerous" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-blinker" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-PyMuPDF" },
+    { "spdxElementId": "SPDXRef-ComicArc", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-rarfile" }
+  ]
+}
