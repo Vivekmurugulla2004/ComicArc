@@ -1,5 +1,15 @@
 import os
+import sys
+import platform as _platform
+
 root = os.path.abspath(os.path.join(SPECPATH, '..'))
+_system = _platform.system()
+
+_webview_platform = {
+    'Darwin':  'webview.platforms.cocoa',
+    'Windows': 'webview.platforms.winforms',
+    'Linux':   'webview.platforms.gtk',
+}.get(_system, 'webview.platforms.gtk')
 
 a = Analysis(
     [os.path.join(root, 'main.py')],
@@ -13,7 +23,7 @@ a = Analysis(
     ],
     hiddenimports=[
         'waitress', 'waitress.runner',
-        'webview', 'webview.platforms.cocoa',
+        'webview', _webview_platform,
         'flask', 'jinja2', 'werkzeug',
         'sqlite3', 'pymupdf', 'rarfile',
     ],
@@ -33,14 +43,15 @@ exe = EXE(
 
 coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name='ComicArc')
 
-app = BUNDLE(
-    coll,
-    name='ComicArc.app',
-    icon=os.path.join(root, 'assets', 'icon.icns'),
-    bundle_identifier='com.vivekmurugulla.comicarc',
-    info_plist={
-        'NSHighResolutionCapable': True,
-        'LSMinimumSystemVersion': '11.0',
-        'CFBundleShortVersionString': '1.0.0',
-    },
-)
+if _system == 'Darwin':
+    app = BUNDLE(
+        coll,
+        name='ComicArc.app',
+        icon=os.path.join(root, 'assets', 'icon.icns'),
+        bundle_identifier='com.vivekmurugulla.comicarc',
+        info_plist={
+            'NSHighResolutionCapable': True,
+            'LSMinimumSystemVersion': '11.0',
+            'CFBundleShortVersionString': '1.0.0',
+        },
+    )

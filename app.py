@@ -812,15 +812,18 @@ _cbr_install_state = {'running': False, 'log': '', 'done': False, 'ok': False}
 
 @app.route('/settings')
 def settings():
+    import platform as _platform
     from onboarding import load_config
     from comic_reader import cbr_tool_available, _find_bin
     import shutil
     cfg = load_config()
+    system = _platform.system()
     return render_template('settings.html',
                            library_path=cfg.get('library_path', ''),
                            reader_mode=cfg.get('reader_mode', 'page'),
                            cbr_ok=cbr_tool_available(),
                            brew_ok=bool(shutil.which('brew') or _find_bin('brew')),
+                           platform=system,
                            scan_status=get_scan_status())
 
 
@@ -843,10 +846,43 @@ def settings_save():
 
 @app.route('/api/settings/install-cbr', methods=['POST'])
 def install_cbr():
+    import platform as _platform
     import threading, subprocess, shutil
     from comic_reader import _find_bin
     if _cbr_install_state['running']:
         return jsonify({'ok': False, 'error': 'Already running'})
+
+    system = _platform.system()
+
+    if system == 'Windows':
+        return jsonify({'ok': False, 'error': 'manual', 'platform': 'Windows'})
+
+    if system == 'Linux':
+        pkg_mgr = (shutil.which('apt-get') and ['apt-get', 'install', '-y', 'unar']) or \
+                  (shutil.which('dnf')     and ['dnf', 'install', '-y', 'unar']) or \
+                  (shutil.which('pacman')  and ['pacman', '-S', '--noconfirm', 'unar'])
+        if not pkg_mgr:
+            return jsonify({'ok': False, 'error': 'manual', 'platform': 'Linux'})
+        def _run_linux():
+            _cbr_install_state.update({'running': True, 'log': '', 'done': False, 'ok': False})
+            try:
+                proc = subprocess.Popen(
+                    pkg_mgr,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                for line in proc.stdout:
+                    _cbr_install_state['log'] += line
+                proc.wait()
+                _cbr_install_state['ok'] = proc.returncode == 0
+            except Exception as e:
+                _cbr_install_state['log'] += f'\nError: {e}'
+            finally:
+                _cbr_install_state['running'] = False
+                _cbr_install_state['done'] = True
+        threading.Thread(target=_run_linux, daemon=True).start()
+        return jsonify({'ok': True})
+
+    # macOS
     brew = shutil.which('brew') or _find_bin('brew')
     if not brew:
         return jsonify({'ok': False, 'error': 'Homebrew not found'})

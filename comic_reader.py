@@ -44,8 +44,19 @@ def _lsar():
 def _unrar():
     return _find_bin('unrar')
 
+def _7zip():
+    import platform
+    if platform.system() == 'Windows':
+        for path in [
+            r'C:\Program Files\7-Zip\7z.exe',
+            r'C:\Program Files (x86)\7-Zip\7z.exe',
+        ]:
+            if os.path.exists(path):
+                return path
+    return _find_bin('7z')
+
 def cbr_tool_available():
-    return bool(_unar() or _unrar())
+    return bool(_unar() or _unrar() or _7zip())
 
 
 # ── CBR via unar/lsar ────────────────────────────────────────────────────────
@@ -77,6 +88,46 @@ def _unar_page(file_path, page_num):
     with tempfile.TemporaryDirectory() as tmpdir:
         subprocess.run(
             [_unar(), '-o', tmpdir, '-force-overwrite', file_path, target],
+            capture_output=True, timeout=30
+        )
+        for root, _, files in os.walk(tmpdir):
+            for f in sorted(files):
+                if any(f.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
+                    with open(os.path.join(root, f), 'rb') as fp:
+                        return fp.read(), _mime(f)
+    return None, None
+
+
+# ── CBR via 7-Zip ────────────────────────────────────────────────────────────
+
+def _7zip_list(file_path):
+    """Return sorted list of image paths inside a CBR using 7z."""
+    z7 = _7zip()
+    if not z7:
+        return []
+    result = subprocess.run(
+        [z7, 'l', '-slt', '-ba', file_path],
+        capture_output=True, text=True, timeout=15
+    )
+    images = []
+    for line in result.stdout.splitlines():
+        if line.startswith('Path = '):
+            name = line[7:].strip()
+            if any(name.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
+                if not os.path.basename(name).startswith('.'):
+                    images.append(name)
+    return sorted(images, key=natural_sort_key)
+
+
+def _7zip_page(file_path, page_num):
+    """Extract a single page from a CBR using 7z."""
+    images = _7zip_list(file_path)
+    if page_num >= len(images):
+        return None, None
+    target = images[page_num]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subprocess.run(
+            [_7zip(), 'e', f'-o{tmpdir}', '-y', file_path, target],
             capture_output=True, timeout=30
         )
         for root, _, files in os.walk(tmpdir):
@@ -128,6 +179,8 @@ def get_page_count(file_path):
                 return len(_unar_list(file_path))
             elif _unrar():
                 return _rarfile_count(file_path)
+            elif _7zip():
+                return len(_7zip_list(file_path))
         elif ext == '.pdf' and PDF_SUPPORT:
             doc = fitz.open(file_path)
             try:
@@ -161,6 +214,8 @@ def get_page(file_path, page_num):
                 return _unar_page(file_path, page_num)
             elif _unrar():
                 return _rarfile_page(file_path, page_num)
+            elif _7zip():
+                return _7zip_page(file_path, page_num)
 
         elif ext == '.pdf' and PDF_SUPPORT:
             doc = fitz.open(file_path)

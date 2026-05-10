@@ -10,7 +10,11 @@ Organize and read your CBZ, CBR, PDF, and image files in a clean, fast native ap
 
 **[→ Download ComicArc v1.0.0](https://github.com/Vivekmurugulla2004/ComicArc/releases/latest)**
 
-macOS 11.0 (Big Sur) or later — Apple Silicon (M1/M2/M3/M4). Intel Mac support via Rosetta 2 -- enable Rosetta in your terminal settings first.
+| Platform | File | Requirements |
+|----------|------|--------------|
+| macOS | `ComicArc-v1.0.0-macOS.zip` | macOS 11.0 (Big Sur) or later — Apple Silicon native, Intel via Rosetta 2 |
+| Windows | `ComicArc-v1.0.0-Windows.zip` | Windows 10 or later |
+| Linux | `ComicArc-v1.0.0-Linux.tar.gz` | Ubuntu 20.04+ or equivalent |
 
 ---
 
@@ -36,11 +40,21 @@ No built-in comics — you bring the files. Legal places to get them:
 
 ## Quick Start
 
-1. Download **ComicArc.zip** from the [Releases page](https://github.com/Vivekmurugulla2004/ComicArc/releases) and unzip it
+**macOS**
+1. Download and unzip `ComicArc-v1.0.0-macOS.zip`
 2. Move **ComicArc.app** to your **Applications** folder
 3. **Right-click → Open** (required the first time — see below)
-4. Follow the setup wizard: pick your comics folder, scan, choose a reading mode
-5. Done — your library is ready
+4. Follow the setup wizard and done
+
+**Windows**
+1. Download and unzip `ComicArc-v1.0.0-Windows.zip`
+2. Run **ComicArc.exe** inside the folder
+3. Follow the setup wizard and done
+
+**Linux**
+1. Download and extract `ComicArc-v1.0.0-Linux.tar.gz`
+2. Run the **ComicArc** binary
+3. Follow the setup wizard and done
 
 No Python, no Terminal, no configuration files.
 

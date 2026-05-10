@@ -50,20 +50,48 @@
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>CBR Support</h2>
-      <p>CBR files (RAR-based comic archives) require the <code>unar</code> tool. CBZ, PDF, and images always work without it. Installing <code>unar</code> requires an internet connection — it's a one-time setup.</p>
+      {% if platform == 'Windows' %}
+      <p>CBR files require <strong>7-Zip</strong>. CBZ, PDF, and images always work without it.</p>
+      {% elif platform == 'Linux' %}
+      <p>CBR files require <strong>unar</strong>. CBZ, PDF, and images always work without it.</p>
+      {% else %}
+      <p>CBR files require <strong>unar</strong>. CBZ, PDF, and images always work without it.</p>
+      {% endif %}
     </div>
 
     {% if cbr_ok %}
     <div class="settings-status ok">
       <span class="status-dot ok"></span>
-      CBR files supported — unar is installed
+      CBR files supported
     </div>
+
     {% else %}
     <div class="settings-status err" id="cbr-status-msg">
       <span class="status-dot err"></span>
-      CBR files not supported — unar not found
+      {% if platform == 'Windows' %}CBR files not supported — 7-Zip not found
+      {% else %}CBR files not supported — unar not found{% endif %}
     </div>
 
+    {% if platform == 'Windows' %}
+    <div class="settings-actions">
+      <a href="https://www.7-zip.org/download.html" target="_blank" rel="noopener" class="btn-primary">Download 7-Zip</a>
+      <span class="settings-hint">Install 7-Zip, then restart ComicArc. CBR support will be detected automatically.</span>
+    </div>
+
+    {% elif platform == 'Linux' %}
+    <div class="settings-actions" id="cbr-install-area">
+      <button class="btn-primary" id="cbr-install-btn" onclick="installCBR()">Install unar</button>
+      <span class="settings-hint">Runs your package manager automatically. Takes about a minute.</span>
+    </div>
+    <div id="cbr-log-wrap" class="cbr-log-wrap hidden">
+      <pre id="cbr-log" class="cbr-log"></pre>
+    </div>
+    <div class="settings-actions">
+      <code class="code-block">sudo apt install unar</code>
+      <button class="btn-ghost" onclick="copyCmd('sudo apt install unar')">Copy</button>
+    </div>
+
+    {% else %}
     {% if brew_ok %}
     <div class="settings-actions" id="cbr-install-area">
       <button class="btn-primary" id="cbr-install-btn" onclick="installCBR()">Install via Homebrew</button>
@@ -75,10 +103,11 @@
     {% else %}
     <div class="settings-actions">
       <code class="code-block">brew install unar</code>
-      <button class="btn-ghost" onclick="copyCmd()">Copy Command</button>
+      <button class="btn-ghost" onclick="copyCmd('brew install unar')">Copy Command</button>
       <span class="settings-hint" id="copy-confirm"></span>
     </div>
-    <p class="settings-hint">Homebrew is not installed on this Mac. First install it from <a href="https://brew.sh" target="_blank" rel="noopener" class="settings-link">brew.sh</a> (requires internet), then open Terminal and run the command above.</p>
+    <p class="settings-hint">Homebrew is not installed. First install it from <a href="https://brew.sh" target="_blank" rel="noopener" class="settings-link">brew.sh</a>, then run the command above.</p>
+    {% endif %}
     {% endif %}
     {% endif %}
   </div>
@@ -214,11 +243,10 @@ function resetSetup() {
     .then(() => window.location.href = '/onboarding');
 }
 
-function copyCmd() {
-  navigator.clipboard.writeText('brew install unar').then(() => {
+function copyCmd(cmd) {
+  navigator.clipboard.writeText(cmd).then(() => {
     const el = document.getElementById('copy-confirm');
-    el.textContent = 'Copied!';
-    setTimeout(() => el.textContent = '', 2000);
+    if (el) { el.textContent = 'Copied!'; setTimeout(() => el.textContent = '', 2000); }
   });
 }
 </script>
