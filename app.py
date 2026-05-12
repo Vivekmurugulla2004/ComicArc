@@ -63,10 +63,70 @@ def index():
         return redirect(url_for('onboarding'))
     db = get_db()
     publisher_filter = request.args.get('publisher', 'All')
-    search     = request.args.get('q', '').strip()
-    sort       = request.args.get('sort', 'publisher')
-    view       = request.args.get('view', '')
+    search       = request.args.get('q', '').strip()
+    sort         = request.args.get('sort', 'publisher')
+    view         = request.args.get('view', 'series')
+    char_filter  = request.args.get('character', '').strip()
+    series_filter = request.args.get('series', '').strip()
+    tag_filter   = request.args.get('tag', '').strip()
 
+    publishers = [r['publisher'] for r in db.execute(
+        "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
+    ).fetchall()]
+    total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    reading_list_count = db.execute("SELECT COUNT(*) FROM reading_list").fetchone()[0]
+    all_tags = db.execute("""
+        SELECT t.name, COUNT(ct.comic_id) as count
+        FROM tags t JOIN comic_tags ct ON t.id = ct.tag_id
+        GROUP BY t.name ORDER BY count DESC, t.name
+    """).fetchall()
+    continuing = db.execute("""
+        SELECT c.id, c.title, c.series, c.publisher, c.page_count,
+               rp.current_page as progress
+        FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id
+        WHERE rp.current_page > 0
+          AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+        ORDER BY rp.last_read DESC LIMIT 5
+    """).fetchall()
+    has_cbr = (not cbr_tool_available()) and (
+        db.execute("SELECT 1 FROM comics WHERE file_path LIKE '%.cbr' LIMIT 1").fetchone() is not None
+    )
+
+    # ── Series view ───────────────────────────────────────────────────────────
+    if view == 'series' and not search and not tag_filter and view != 'reading-list':
+        pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
+        pub_params = [publisher_filter] if publisher_filter != 'All' else []
+        series_groups = db.execute(f"""
+            SELECT c.publisher, c.character, c.series,
+                   COUNT(*) as issue_count,
+                   MIN(c.id) as cover_id,
+                   SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
+                   SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
+            FROM comics c
+            LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+            WHERE 1=1 {pub_cond}
+            GROUP BY c.publisher, c.character, c.series
+            ORDER BY c.publisher, c.character, c.series
+        """, pub_params).fetchall()
+        db.close()
+        return render_template('index.html',
+                               view='series',
+                               series_groups=series_groups,
+                               comics=[],
+                               publishers=publishers,
+                               current_publisher=publisher_filter,
+                               search=search, sort=sort,
+                               total=total,
+                               reading_list_count=reading_list_count,
+                               continuing=continuing,
+                               all_tags=all_tags,
+                               tag_filter=tag_filter,
+                               unrar_missing=has_cbr,
+                               library_path=_comics_dir(),
+                               scan_status=get_scan_status())
+
+    # ── Comics list view ──────────────────────────────────────────────────────
     query = """
         SELECT c.*, COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
@@ -81,13 +141,17 @@ def index():
     params = []
     conditions = []
 
-    tag_filter = request.args.get('tag', '').strip()
-
     if view == 'reading-list':
         conditions.append("c.id IN (SELECT comic_id FROM reading_list)")
     elif publisher_filter != 'All':
         conditions.append("c.publisher = ?")
         params.append(publisher_filter)
+    if char_filter:
+        conditions.append("c.character = ?")
+        params.append(char_filter)
+    if series_filter:
+        conditions.append("c.series = ?")
+        params.append(series_filter)
     if search:
         conditions.append("(c.title LIKE ? OR c.series LIKE ?)")
         params.extend([f'%{search}%', f'%{search}%'])
@@ -116,37 +180,18 @@ def index():
             natural_sort_key(c['series']),
             natural_sort_key(c['title'])
         ))
-    publishers = [r['publisher'] for r in db.execute(
-        "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
-    ).fetchall()]
-    total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
-    reading_list_count = db.execute("SELECT COUNT(*) FROM reading_list").fetchone()[0]
-    all_tags = db.execute("""
-        SELECT t.name, COUNT(ct.comic_id) as count
-        FROM tags t JOIN comic_tags ct ON t.id = ct.tag_id
-        GROUP BY t.name ORDER BY count DESC, t.name
-    """).fetchall()
-    continuing = db.execute("""
-        SELECT c.id, c.title, c.series, c.publisher, c.page_count,
-               rp.current_page as progress
-        FROM reading_progress rp
-        JOIN comics c ON rp.comic_id = c.id
-        WHERE rp.current_page > 0
-          AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
-        ORDER BY rp.last_read DESC LIMIT 5
-    """).fetchall()
-    has_cbr = (not cbr_tool_available()) and (
-        db.execute("SELECT 1 FROM comics WHERE file_path LIKE '%.cbr' LIMIT 1").fetchone() is not None
-    )
     db.close()
 
     return render_template('index.html',
                            comics=comics,
+                           series_groups=[],
                            publishers=publishers,
                            current_publisher=publisher_filter,
                            search=search,
                            sort=sort,
                            view=view,
+                           char_filter=char_filter,
+                           series_filter=series_filter,
                            total=total,
                            reading_list_count=reading_list_count,
                            continuing=continuing,

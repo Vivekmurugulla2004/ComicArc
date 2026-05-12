@@ -4,9 +4,66 @@ All notable changes to ComicArc are documented here.
 
 ---
 
+## [1.1.0] — 2026-05-12
+
+### Series View
+- Library now defaults to a series card view — one card per series, grouped by character and run
+- Each card shows the cover of the first issue, character name, series name, issue count, and a Done/Reading badge
+- Click any series card to see all issues inside
+- Breadcrumb navigation to jump back to the series grid
+- Toggle between series view and flat all-comics view
+
+### Library Improvements
+- Series names now reflect the actual run name only (e.g. "New 52" instead of "Superman — New 52") — character context is shown separately on the card
+- Character field extracted from folder structure and stored per comic for accurate grouping
+
+---
+
 ## [1.0.0] — 2026-05-08
 
-First public release.
+First public release for macOS and Windows.
+
+### App
+- Native app bundle — no Python or Terminal required
+- Built with PyWebView + PyInstaller; runs fully offline
+- Native folder-picker dialog for choosing library location
+- All data stored locally (database, covers, config)
+- Auto-scans library folder on every launch
+
+### Onboarding
+- First-launch wizard: choose folder → live scan progress → pick default reading mode
+- Reset Setup in Settings re-runs the wizard without losing library data
+
+### Library
+- Drag-and-drop and folder import for CBZ, CBR, PDF, JPG, JPEG, PNG
+- Grid view with cover thumbnails, reading progress bars, and star ratings
+- Publisher tabs, tag chips, and free-text search filtering
+- Continue Reading shelf on the library home page
+- Favorites and Want to Read reading queue
+- Metadata editor — title, series, publisher, issue number, tags
+- Bulk select — shift-click range select; mark read/unread, add to list, delete
+- Manual drag-and-drop reordering
+- Delete with confirmation (original file stays on disk)
+
+### Reader
+- Page-by-page, vertical scroll, and double-page spread modes
+- Zoom up to 5× with click-and-drag panning
+- Autoplay — auto-advances every 10 seconds
+- Auto-hiding toolbar, keyboard shortcuts, touch swipe
+- Progress saves automatically on every page turn and on close
+
+### Narrative Runs
+- Build ordered reading lists spanning multiple series and publishers
+- Drag-and-drop reordering, per-issue notes and ratings
+- Resume button finds the first unfinished issue automatically
+- Auto-advances to the next comic at end of each issue
+
+### Stats
+- Total comics, pages read, favorites, in-progress count, run count
+- Publisher breakdown, top series, recently read history
+
+### Settings
+- Change library folder, switch reader mode, CBR support (unar/7-Zip), JSON backup export
 
 ### App
 - Native macOS app bundle (.app) — no Python or Terminal required

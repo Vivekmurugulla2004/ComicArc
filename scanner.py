@@ -30,13 +30,13 @@ def _meta(file_path, base):
     title = os.path.splitext(filename)[0]
     mid = parts[1:-1]
     if not mid:
-        series = 'General'
+        character, series = None, 'General'
     elif len(mid) == 1:
-        series = mid[0]
+        character, series = None, mid[0]
     else:
-        series = ' — '.join(mid)
+        character, series = mid[-2], mid[-1]
     m = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
-    return {'publisher': publisher, 'series': series,
+    return {'publisher': publisher, 'character': character, 'series': series,
             'title': title, 'issue_number': m.group(1) if m else None}
 
 
@@ -75,9 +75,9 @@ def _run(library_path):
                 pc = get_page_count(fp)
                 db.execute(
                     """INSERT INTO comics
-                       (title, file_path, publisher, series, issue_number, page_count)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (m['title'], fp, m['publisher'], m['series'], m['issue_number'], pc)
+                       (title, file_path, publisher, character, series, issue_number, page_count)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (m['title'], fp, m['publisher'], m['character'], m['series'], m['issue_number'], pc)
                 )
                 added += 1
                 if sig:

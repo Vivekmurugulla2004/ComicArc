@@ -1,6 +1,6 @@
 # ComicArc
 
-**A local comic book reader for macOS. No accounts. No cloud. No subscriptions.**
+**A local comic book reader for macOS and Windows. No accounts. No cloud. No subscriptions.**
 
 Organize and read your CBZ, CBR, PDF, and image files in a clean, fast native app that lives entirely on your machine.
 
@@ -40,13 +40,13 @@ No built-in comics — you bring the files. Legal places to get them:
 ## Quick Start
 
 **macOS**
-1. Download and unzip `ComicArc-v1.0.0-macOS.zip`
+1. Download and unzip `ComicArc-macOS.zip`
 2. Move **ComicArc.app** to your **Applications** folder
 3. **Right-click → Open** (required the first time — see below)
 4. Follow the setup wizard and done
 
 **Windows**
-1. Download and unzip `ComicArc-v1.0.0-Windows.zip`
+1. Download and unzip `ComicArc-Windows.zip`
 2. Run **ComicArc.exe** inside the folder
 3. Follow the setup wizard and done
 
@@ -124,7 +124,7 @@ Then right-click → Open again.
 ### Settings
 - Change library folder and rescan at any time
 - Switch default reading mode (page-by-page or scroll)
-- **CBR support** — one-click Homebrew install of `unar` right from the Settings page
+- **CBR support** — one-click install from Settings (macOS: `unar` via Homebrew, Windows: 7-Zip)
 - Export full library as a JSON backup — comics, progress, ratings, tags, runs, reading list
 - Clear Library — wipes app data, leaves your files untouched
 
@@ -139,7 +139,7 @@ Then right-click → Open again.
 | `.pdf` | Built-in |
 | `.jpg` / `.jpeg` / `.png` | Built-in |
 
-CBZ, PDF, and images work immediately. CBR requires a one-time install of `unar` — you can do it from inside the app.
+CBZ, PDF, and images work immediately. CBR requires a one-time setup — `unar` on macOS, 7-Zip on Windows — both installable from inside the app.
 
 ---
 
@@ -169,11 +169,19 @@ Press `?` in the reader to see these at any time.
 
 Everything stays on your machine. Nothing is uploaded anywhere.
 
+**macOS**
 | What | Location |
 |------|----------|
 | Library database | `~/Library/Application Support/ComicArc/comics.db` |
 | Cover thumbnails | `~/Library/Application Support/ComicArc/covers/` |
 | Settings | `~/Library/Application Support/ComicArc/config.json` |
+
+**Windows**
+| What | Location |
+|------|----------|
+| Library database | `%APPDATA%\ComicArc\comics.db` |
+| Cover thumbnails | `%APPDATA%\ComicArc\covers\` |
+| Settings | `%APPDATA%\ComicArc\config.json` |
 
 Your comic files are **never moved, renamed, or modified.**
 

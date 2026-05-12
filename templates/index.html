@@ -22,6 +22,13 @@
       {% if search %}<button type="button" class="search-clear" onclick="clearSearch()">✕</button>{% endif %}
     </div>
     <div class="search-controls">
+      <div class="view-toggle">
+        <a href="/?publisher={{ current_publisher }}&view=series{% if search %}&q={{ search }}{% endif %}"
+           class="view-toggle-btn {% if view == 'series' %}active{% endif %}" title="Series view">⊞</a>
+        <a href="/?publisher={{ current_publisher }}&view=all{% if search %}&q={{ search }}{% endif %}"
+           class="view-toggle-btn {% if view != 'series' %}active{% endif %}" title="All comics">≡</a>
+      </div>
+      {% if view != 'series' %}
       <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
         <option value="publisher" {% if sort == 'publisher' %}selected{% endif %}>Publisher</option>
         <option value="title"     {% if sort == 'title'     %}selected{% endif %}>Title A–Z</option>
@@ -32,6 +39,7 @@
       </select>
       {% if total > 0 %}
       <button type="button" id="select-btn" class="btn-ghost select-toggle" onclick="toggleSelectMode()">Select</button>
+      {% endif %}
       {% endif %}
     </div>
   </form>
@@ -81,7 +89,16 @@
   <div id="import-queue" class="import-queue" hidden></div>
 </div>
 
-{% if continuing %}
+{% if series_filter %}
+<div class="series-breadcrumb">
+  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Series</a>
+  <span class="breadcrumb-sep">/</span>
+  {% if char_filter %}<span class="breadcrumb-char">{{ char_filter }}</span><span class="breadcrumb-sep">/</span>{% endif %}
+  <span class="breadcrumb-series">{{ series_filter }}</span>
+</div>
+{% endif %}
+
+{% if continuing and not series_filter %}
 <div class="continue-section">
   <h2 class="continue-heading">Continue Reading</h2>
   <div class="continue-row">
@@ -107,7 +124,28 @@
 </div>
 {% endif %}
 
-{% if view == 'reading-list' and comics|length == 0 %}
+{% if view == 'series' and series_groups %}
+<div class="series-grid">
+  {% for g in series_groups %}
+  <a class="series-card" href="/?publisher={{ g.publisher }}&character={{ g.character or '' }}&series={{ g.series }}&view=all">
+    <div class="series-cover-wrap">
+      <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="">
+      {% if g.completed == g.issue_count and g.issue_count > 0 %}
+      <div class="series-badge done">Done</div>
+      {% elif g.started > 0 %}
+      <div class="series-badge reading">Reading</div>
+      {% endif %}
+    </div>
+    <div class="series-info">
+      {% if g.character %}<div class="series-character">{{ g.character }}</div>{% endif %}
+      <div class="series-name">{{ g.series }}</div>
+      <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% elif view == 'reading-list' and comics|length == 0 %}
 <div class="empty-state">
   <div class="empty-icon">◈</div>
   <h2>Reading list is empty</h2>
