@@ -13,6 +13,12 @@ All notable changes to ComicArc are documented here.
 - Breadcrumb navigation to jump back to the series grid
 - Toggle between series view and flat all-comics view
 
+### Bug Fixes
+- Fixed comics getting lost when a character's books span both 2-level and 3-level folder layouts (e.g. Robin issues filed directly in `DC/Robin/` were invisible after clicking the Robin card)
+- Same fix covers Manga series and any character with no sub-series folders — all books now appear
+- Fixed the publisher filter locking to a single publisher after clicking a character card from the All view — back button now returns to the full library
+- Breadcrumb now shows the full 3-level path (Characters → Batman → New 52) when drilling to issues, with each level clickable
+
 ### Library Improvements
 - Series names now reflect the actual run name only (e.g. "New 52" instead of "Superman — New 52") — character context is shown separately on the card
 - Character field extracted from folder structure and stored per comic for accurate grouping
