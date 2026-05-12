@@ -89,16 +89,23 @@
   <div id="import-queue" class="import-queue" hidden></div>
 </div>
 
-{% if series_filter %}
+{% if char_filter %}
 <div class="series-breadcrumb">
-  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Series</a>
+  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Characters</a>
   <span class="breadcrumb-sep">/</span>
-  {% if char_filter %}<span class="breadcrumb-char">{{ char_filter }}</span><span class="breadcrumb-sep">/</span>{% endif %}
+  <span class="breadcrumb-char">{{ char_filter }}</span>
+</div>
+{% elif series_filter %}
+<div class="series-breadcrumb">
+  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Characters</a>
+  <span class="breadcrumb-sep">/</span>
+  <a href="/?publisher={{ current_publisher }}&character={{ char_filter }}&view=series" class="breadcrumb-char">{{ char_filter }}</a>
+  <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-series">{{ series_filter }}</span>
 </div>
 {% endif %}
 
-{% if continuing and not series_filter %}
+{% if continuing and not char_filter and not series_filter %}
 <div class="continue-section">
   <h2 class="continue-heading">Continue Reading</h2>
   <div class="continue-row">
@@ -126,23 +133,41 @@
 
 {% if view == 'series' and series_groups %}
 <div class="series-grid">
-  {% for g in series_groups %}
-  <a class="series-card" href="/?publisher={{ g.publisher }}&character={{ g.character or '' }}&series={{ g.series }}&view=all">
-    <div class="series-cover-wrap">
-      <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="">
-      {% if g.completed == g.issue_count and g.issue_count > 0 %}
-      <div class="series-badge done">Done</div>
-      {% elif g.started > 0 %}
-      <div class="series-badge reading">Reading</div>
-      {% endif %}
-    </div>
-    <div class="series-info">
-      {% if g.character %}<div class="series-character">{{ g.character }}</div>{% endif %}
-      <div class="series-name">{{ g.series }}</div>
-      <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}</div>
-    </div>
-  </a>
-  {% endfor %}
+  {% if series_level == 'character' %}
+    {% for g in series_groups %}
+    <a class="series-card" href="/?publisher={{ g.publisher }}&character={{ g.group_name }}&view=series">
+      <div class="series-cover-wrap">
+        <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="">
+        {% if g.completed == g.issue_count and g.issue_count > 0 %}
+        <div class="series-badge done">Done</div>
+        {% elif g.started > 0 %}
+        <div class="series-badge reading">Reading</div>
+        {% endif %}
+      </div>
+      <div class="series-info">
+        <div class="series-name">{{ g.group_name }}</div>
+        <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  {% else %}
+    {% for g in series_groups %}
+    <a class="series-card" href="/?publisher={{ g.publisher }}&character={{ g.character or '' }}&series={{ g.series }}&view=all">
+      <div class="series-cover-wrap">
+        <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="">
+        {% if g.completed == g.issue_count and g.issue_count > 0 %}
+        <div class="series-badge done">Done</div>
+        {% elif g.started > 0 %}
+        <div class="series-badge reading">Reading</div>
+        {% endif %}
+      </div>
+      <div class="series-info">
+        <div class="series-name">{{ g.series }}</div>
+        <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  {% endif %}
 </div>
 
 {% elif view == 'reading-list' and comics|length == 0 %}

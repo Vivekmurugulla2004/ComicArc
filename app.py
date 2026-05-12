@@ -93,38 +93,67 @@ def index():
         db.execute("SELECT 1 FROM comics WHERE file_path LIKE '%.cbr' LIMIT 1").fetchone() is not None
     )
 
-    # ── Series view ───────────────────────────────────────────────────────────
-    if view == 'series' and not search and not tag_filter and view != 'reading-list':
+    # ── Character / Series view ───────────────────────────────────────────────
+    if view == 'series' and not search and not tag_filter:
         pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
         pub_params = [publisher_filter] if publisher_filter != 'All' else []
-        series_groups = db.execute(f"""
-            SELECT c.publisher, c.character, c.series,
-                   COUNT(*) as issue_count,
-                   MIN(c.id) as cover_id,
-                   SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
-                   SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
-            FROM comics c
-            LEFT JOIN reading_progress rp ON c.id = rp.comic_id
-            WHERE 1=1 {pub_cond}
-            GROUP BY c.publisher, c.character, c.series
-            ORDER BY c.publisher, c.character, c.series
-        """, pub_params).fetchall()
-        db.close()
-        return render_template('index.html',
-                               view='series',
-                               series_groups=series_groups,
-                               comics=[],
-                               publishers=publishers,
-                               current_publisher=publisher_filter,
-                               search=search, sort=sort,
-                               total=total,
-                               reading_list_count=reading_list_count,
-                               continuing=continuing,
-                               all_tags=all_tags,
-                               tag_filter=tag_filter,
-                               unrar_missing=has_cbr,
-                               library_path=_comics_dir(),
-                               scan_status=get_scan_status())
+
+        if char_filter:
+            # Drill-down: show series cards for a specific character
+            rows = db.execute(f"""
+                SELECT c.publisher, c.character, c.series,
+                       COUNT(*) as issue_count,
+                       MIN(c.id) as cover_id,
+                       SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
+                FROM comics c
+                LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+                WHERE c.character = ? {pub_cond}
+                GROUP BY c.publisher, c.character, c.series
+                ORDER BY c.series
+            """, [char_filter] + pub_params).fetchall()
+            db.close()
+            return render_template('index.html',
+                                   view='series', series_level='series',
+                                   series_groups=rows, char_filter=char_filter,
+                                   comics=[], publishers=publishers,
+                                   current_publisher=publisher_filter,
+                                   search=search, sort=sort, total=total,
+                                   reading_list_count=reading_list_count,
+                                   continuing=[], all_tags=all_tags,
+                                   tag_filter=tag_filter, series_filter='',
+                                   unrar_missing=has_cbr,
+                                   library_path=_comics_dir(),
+                                   scan_status=get_scan_status())
+        else:
+            # Top level: show character cards (or series if no character subfolder)
+            rows = db.execute(f"""
+                SELECT c.publisher,
+                       COALESCE(c.character, c.series) as group_name,
+                       c.character,
+                       COUNT(*) as issue_count,
+                       MIN(c.id) as cover_id,
+                       SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
+                FROM comics c
+                LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+                WHERE 1=1 {pub_cond}
+                GROUP BY c.publisher, COALESCE(c.character, c.series)
+                ORDER BY c.publisher, group_name
+            """, pub_params).fetchall()
+            db.close()
+            return render_template('index.html',
+                                   view='series', series_level='character',
+                                   series_groups=rows, char_filter='',
+                                   comics=[], publishers=publishers,
+                                   current_publisher=publisher_filter,
+                                   search=search, sort=sort, total=total,
+                                   reading_list_count=reading_list_count,
+                                   continuing=continuing, all_tags=all_tags,
+                                   tag_filter=tag_filter, series_filter='',
+                                   unrar_missing=has_cbr,
+                                   library_path=_comics_dir(),
+                                   scan_status=get_scan_status())
 
     # ── Comics list view ──────────────────────────────────────────────────────
     query = """
