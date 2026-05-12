@@ -225,5 +225,3 @@ private struct RunDetailID: Identifiable {
     init(_ id: Int64) { self.id = id }
 }
 
-// Make Comic identifiable for sheet(item:)
-extension Comic: @retroactive Identifiable {}

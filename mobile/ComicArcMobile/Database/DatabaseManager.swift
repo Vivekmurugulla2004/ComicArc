@@ -114,7 +114,7 @@ final class DatabaseManager {
         let sql = """
             SELECT c.id, c.title, c.file_path, c.publisher, c.character, c.series,
                    c.issue_number, c.page_count, c.rating, c.is_favorite, c.in_reading_list,
-                   c.tags, c.date_added, COALESCE(rp.current_page, 0) as progress
+                   '' as tags, c.date_added, COALESCE(rp.current_page, 0) as progress
             FROM comics c
             LEFT JOIN reading_progress rp ON c.id = rp.comic_id
             WHERE \(conds.joined(separator: " AND "))
@@ -127,7 +127,7 @@ final class DatabaseManager {
         let sql = """
             SELECT c.id, c.title, c.file_path, c.publisher, c.character, c.series,
                    c.issue_number, c.page_count, c.rating, c.is_favorite, c.in_reading_list,
-                   c.tags, c.date_added, COALESCE(rp.current_page, 0) as progress
+                   '' as tags, c.date_added, COALESCE(rp.current_page, 0) as progress
             FROM comics c
             LEFT JOIN reading_progress rp ON c.id = rp.comic_id
             WHERE c.id = ?
@@ -139,7 +139,7 @@ final class DatabaseManager {
         let sql = """
             SELECT c.id, c.title, c.file_path, c.publisher, c.character, c.series,
                    c.issue_number, c.page_count, c.rating, c.is_favorite, c.in_reading_list,
-                   c.tags, c.date_added, rp.current_page as progress
+                   '' as tags, c.date_added, rp.current_page as progress
             FROM comics c
             JOIN reading_progress rp ON c.id = rp.comic_id
             WHERE rp.current_page > 0 AND (c.page_count = 0 OR rp.current_page < c.page_count - 1)
