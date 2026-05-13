@@ -36,15 +36,19 @@ struct ReaderView: View {
 
             Group {
                 if comic.fileExtension == "pdf" {
+                    // simultaneousGesture lets PDFView's UIKit recognizers receive touches
+                    // unblocked while still toggling the toolbar on tap.
                     PDFReaderView(url: URL(fileURLWithPath: comic.filePath),
                                   currentPage: $currentPage)
+                        .simultaneousGesture(TapGesture().onEnded { withAnimation { showToolbar.toggle() } })
                 } else if readMode == .scroll {
                     ScrollReaderView(comic: comic, currentPage: $currentPage)
+                        .onTapGesture { withAnimation { showToolbar.toggle() } }
                 } else {
                     PagedReaderView(comic: comic, currentPage: $currentPage)
+                        .onTapGesture { withAnimation { showToolbar.toggle() } }
                 }
             }
-            .onTapGesture { withAnimation { showToolbar.toggle() } }
             .onChange(of: currentPage) { _, page in
                 library.updateProgress(comic, page: page)
                 if autoplayOn { resetAutoplayTimer() }
