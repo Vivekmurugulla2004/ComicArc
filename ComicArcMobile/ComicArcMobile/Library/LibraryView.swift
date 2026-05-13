@@ -298,8 +298,12 @@ struct LibraryView: View {
     private var flatGrid: some View {
         Group {
             if library.comics.isEmpty && !library.searchText.isEmpty {
-                ContentUnavailableView.search(text: library.searchText)
-                    .padding(.top, 60)
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No Results",
+                    message: "Nothing matched \"\(library.searchText)\". Try a different title or series."
+                )
+                .padding(.top, 60)
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(library.comics) { comic in

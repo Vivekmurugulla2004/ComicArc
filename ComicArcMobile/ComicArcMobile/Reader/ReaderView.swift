@@ -13,6 +13,7 @@ struct ReaderView: View {
     @State private var readMode: ReadMode = .paged
     @State private var showToolbar = true
     @State private var showRatingSheet = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     // Autoplay
     @State private var autoplayOn = false
@@ -76,79 +77,109 @@ struct ReaderView: View {
 
     // MARK: - Toolbar
 
+    private var isLandscapePhone: Bool { verticalSizeClass == .compact }
+
     private var toolbar: some View {
-        VStack {
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-
-                Spacer()
-
-                // Autoplay countdown indicator
-                if autoplayOn {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                        Circle()
-                            .trim(from: 0, to: autoplayCountdown / 10)
-                            .stroke(Color.arcGold, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                    }
-                    .frame(width: 28, height: 28)
-                    .animation(.linear(duration: 1), value: autoplayCountdown)
-                }
-
-                Text("\(currentPage + 1) / \(comic.pageCount)")
-                    .font(.caption)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        withAnimation { readMode = readMode == .paged ? .scroll : .paged }
-                    } label: {
-                        Label(readMode == .paged ? "Switch to Scroll" : "Switch to Paged",
-                              systemImage: readMode == .paged ? "scroll" : "book")
-                    }
-
-                    Button {
-                        autoplayOn ? stopAutoplay() : startAutoplay()
-                    } label: {
-                        Label(autoplayOn ? "Stop Autoplay" : "Autoplay (10s)",
-                              systemImage: autoplayOn ? "stop.circle" : "play.circle")
-                    }
-
-                    Button { showRatingSheet = true } label: {
-                        Label("Rate", systemImage: "star")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-            }
-            .foregroundStyle(.white)
-            .padding()
-
-            Spacer()
-
-            if comic.pageCount > 0 {
-                Slider(value: Binding(
-                    get: { Double(currentPage) },
-                    set: { currentPage = Int($0) }
-                ), in: 0...Double(max(comic.pageCount - 1, 0)), step: 1)
-                .tint(.arcGold)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+        Group {
+            if isLandscapePhone {
+                landscapeToolbar
+            } else {
+                portraitToolbar
             }
         }
         .transition(.opacity)
+    }
+
+    private var portraitToolbar: some View {
+        VStack {
+            toolbarRow
+            Spacer()
+            pageSlider
+        }
+    }
+
+    private var landscapeToolbar: some View {
+        HStack {
+            toolbarRow
+            if comic.pageCount > 0 {
+                pageSlider
+                    .frame(maxWidth: 200)
+            }
+        }
+        .padding(.horizontal)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var toolbarRow: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+
+            Spacer()
+
+            if autoplayOn {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                    Circle()
+                        .trim(from: 0, to: autoplayCountdown / 10)
+                        .stroke(Color.arcGold, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                .frame(width: 28, height: 28)
+                .animation(.linear(duration: 1), value: autoplayCountdown)
+            }
+
+            Text("\(currentPage + 1) / \(comic.pageCount)")
+                .font(.caption)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(.ultraThinMaterial, in: Capsule())
+
+            Spacer()
+
+            Menu {
+                Button {
+                    withAnimation { readMode = readMode == .paged ? .scroll : .paged }
+                } label: {
+                    Label(readMode == .paged ? "Switch to Scroll" : "Switch to Paged",
+                          systemImage: readMode == .paged ? "scroll" : "book")
+                }
+
+                Button {
+                    autoplayOn ? stopAutoplay() : startAutoplay()
+                } label: {
+                    Label(autoplayOn ? "Stop Autoplay" : "Autoplay (10s)",
+                          systemImage: autoplayOn ? "stop.circle" : "play.circle")
+                }
+
+                Button { showRatingSheet = true } label: {
+                    Label("Rate", systemImage: "star")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+        }
+        .foregroundStyle(.white)
+        .padding()
+    }
+
+    @ViewBuilder
+    private var pageSlider: some View {
+        if comic.pageCount > 0 {
+            Slider(value: Binding(
+                get: { Double(currentPage) },
+                set: { currentPage = Int($0) }
+            ), in: 0...Double(max(comic.pageCount - 1, 0)), step: 1)
+            .tint(.arcGold)
+            .padding(.horizontal)
+            .padding(.bottom, isLandscapePhone ? 0 : 8)
+        }
     }
 
     // MARK: - Next Comic Banner
@@ -317,21 +348,31 @@ struct AsyncPageImage: View {
     }
 
     private func load() async {
-        guard image == nil else { return }
-        let url = URL(fileURLWithPath: comic.filePath)
-        let ext = comic.fileExtension
-        image = await Task.detached(priority: .userInitiated) {
+        let cacheKey = PageImageCache.key(filePath: comic.filePath, index: index)
+        if let cached = PageImageCache.shared.image(for: cacheKey) {
+            image = cached
+            return
+        }
+        let filePath = comic.filePath
+        let ext      = comic.fileExtension
+        let url      = URL(fileURLWithPath: filePath)
+        let result: UIImage? = await Task.detached(priority: .userInitiated) {
             switch ext {
             case "cbz":
-                return (try? CBZReader(url: url))?.image(at: index)
+                return CBZReaderCache.shared.reader(for: filePath)?.image(at: index)
             case "pdf":
                 return PDFPageCounter.image(url: url, at: index)
             case "jpg", "jpeg", "png":
-                return index == 0 ? UIImage(contentsOfFile: comic.filePath) : nil
+                return index == 0 ? UIImage(contentsOfFile: filePath) : nil
             default:
                 return nil
             }
         }.value
+        if let result {
+            let cost = Int(result.size.width * result.scale * result.size.height * result.scale * 4)
+            PageImageCache.shared.setImage(result, for: cacheKey, cost: cost)
+        }
+        image = result
     }
 }
 

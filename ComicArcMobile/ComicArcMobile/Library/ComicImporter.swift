@@ -9,6 +9,11 @@ struct ComicMeta {
 }
 
 enum ComicImporter {
+    private static let issueRegex: NSRegularExpression? = try? NSRegularExpression(
+        pattern: #"(?:v|vol|volume|#|issue)[\s.]?(\d+)"#,
+        options: .caseInsensitive
+    )
+
     /// Derive metadata from the file URL — mirrors the desktop scanner's _meta() logic.
     /// Expected folder layout: Publisher/Character/Series/file.cbz
     static func parse(url: URL) -> ComicMeta {
@@ -49,12 +54,8 @@ enum ComicImporter {
         }
 
         // Extract issue number from filename
-        let issueRegex = try? NSRegularExpression(
-            pattern: #"(?:v|vol|volume|#|issue)[\s.]?(\d+)"#,
-            options: .caseInsensitive
-        )
         var issueNumber: String?
-        if let match = issueRegex?.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
+        if let match = Self.issueRegex?.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
            let range = Range(match.range(at: 1), in: filename) {
             issueNumber = String(filename[range])
         }

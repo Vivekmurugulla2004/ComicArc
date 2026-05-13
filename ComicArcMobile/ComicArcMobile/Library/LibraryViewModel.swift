@@ -15,7 +15,6 @@ final class LibraryViewModel: ObservableObject {
     @Published var sortOrder: DatabaseManager.SortOrder = .publisher
     @Published var searchText: String = ""
     @Published var selectedTag: String?
-    @Published var isImporting = false
     @Published var importProgress: (done: Int, total: Int) = (0, 0)
     @Published var importError: String?
 
@@ -63,10 +62,27 @@ final class LibraryViewModel: ObservableObject {
 
     func loadSearchResults() {
         guard !searchText.isEmpty else { load(); return }
-        comics = db.allComics(search: searchText)
+        comics = db.allComics(
+            publisher: selectedPublisher == "All" ? nil : selectedPublisher,
+            search: searchText,
+            sortOrder: sortOrder
+        )
     }
 
     // MARK: - Import
+
+    func scanDocumentsFolder() {
+        let docs = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Comics")
+        guard let items = try? FileManager.default.contentsOfDirectory(
+            at: docs, includingPropertiesForKeys: nil
+        ) else { return }
+        let supported = ["cbz", "cbr", "pdf", "jpg", "jpeg", "png"]
+        let comics = items.filter { supported.contains($0.pathExtension.lowercased()) }
+        guard !comics.isEmpty else { return }
+        importFiles(comics)
+    }
 
     func importFiles(_ urls: [URL]) {
         Task.detached(priority: .userInitiated) { [weak self] in

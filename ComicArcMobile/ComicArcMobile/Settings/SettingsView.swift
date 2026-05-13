@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var library: LibraryViewModel
     @AppStorage("defaultReadMode") private var defaultReadMode: String = "paged"
+    @AppStorage("onboardingDone") private var onboardingDone = true
     @AppStorage("autoplayInterval") private var autoplayInterval: Double = 10
     @State private var showClearConfirm = false
     @State private var showExportSheet = false
@@ -37,6 +38,8 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button("Replay Onboarding") { onboardingDone = false }
+                        .foregroundStyle(Color.arcGold)
                     Button("Clear Library", role: .destructive) { showClearConfirm = true }
                 } footer: {
                     Text("Removes all comics from the library. Your files in the Comics folder are also deleted.")

@@ -15,10 +15,10 @@ struct FavoritesView: View {
         NavigationStack {
             Group {
                 if comics.isEmpty {
-                    ContentUnavailableView(
-                        "No Favorites",
-                        systemImage: "heart",
-                        description: Text("Open any comic's detail page and tap the heart to add it here.")
+                    EmptyStateView(
+                        icon: "heart",
+                        title: "No Favorites",
+                        message: "Open any comic's detail page and tap the heart to add it here."
                     )
                 } else {
                     ScrollView {

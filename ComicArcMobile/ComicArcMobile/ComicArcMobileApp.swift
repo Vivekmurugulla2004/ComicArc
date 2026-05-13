@@ -9,6 +9,7 @@ private let arcGoldUIColor    = UIColor(red: 247/255, green: 201/255, blue: 72/2
 @main
 struct ComicArcMobileApp: App {
     @StateObject private var library = LibraryViewModel()
+    @AppStorage("onboardingDone") private var onboardingDone = false
 
     init() {
         // Tab bar
@@ -39,14 +40,21 @@ struct ComicArcMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(library)
-                .preferredColorScheme(.dark)
-                .tint(.arcGold)
-                .background(Color.arcBg.ignoresSafeArea())
-                .onOpenURL { url in
-                    library.importFiles([url])
+            Group {
+                if onboardingDone {
+                    ContentView()
+                } else {
+                    OnboardingView()
                 }
+            }
+            .environmentObject(library)
+            .preferredColorScheme(.dark)
+            .tint(.arcGold)
+            .background(Color.arcBg.ignoresSafeArea())
+            .onOpenURL { url in
+                onboardingDone = true
+                library.importFiles([url])
+            }
         }
     }
 }

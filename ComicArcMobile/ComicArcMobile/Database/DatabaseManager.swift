@@ -25,7 +25,6 @@ final class DatabaseManager {
 
     private func openDatabase() {
         guard sqlite3_open(dbURL().path, &db) == SQLITE_OK else {
-            print("[DB] open failed")
             return
         }
         exec("PRAGMA foreign_keys = ON")

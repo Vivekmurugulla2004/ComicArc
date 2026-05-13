@@ -12,10 +12,10 @@ struct RunsView: View {
         NavigationStack {
             Group {
                 if runs.isEmpty {
-                    ContentUnavailableView(
-                        "No Reading Runs",
-                        systemImage: "list.number",
-                        description: Text("Create a run to build an ordered reading path across multiple series and publishers.")
+                    EmptyStateView(
+                        icon: "list.number",
+                        title: "No Reading Runs",
+                        message: "Create a run to build an ordered reading path across multiple series and publishers."
                     )
                 } else {
                     List {

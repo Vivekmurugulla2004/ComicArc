@@ -22,6 +22,32 @@ extension Color {
     static let pubIndie   = Color(red: 0.1, green: 0.42, blue: 0.23)
 }
 
+// MARK: - Empty state
+
+struct EmptyStateView: View {
+    let icon: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 52))
+                .foregroundStyle(Color.arcMuted)
+            Text(title)
+                .font(.title3.bold())
+                .foregroundStyle(.white)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(Color.arcMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 60)
+    }
+}
+
 // MARK: - Publisher badge helper
 
 struct PublisherBadge: View {

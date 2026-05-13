@@ -1,10 +1,15 @@
 import UIKit
 
-@MainActor
-final class ThumbnailCache {
+final class ThumbnailCache: @unchecked Sendable {
     static let shared = ThumbnailCache()
 
-    private var cache: [Int64: UIImage] = [:]
+    private let cache: NSCache<NSNumber, UIImage> = {
+        let c = NSCache<NSNumber, UIImage>()
+        c.countLimit       = 200
+        c.totalCostLimit   = 100 * 1024 * 1024   // 100 MB
+        return c
+    }()
+
     private let db = DatabaseManager.shared
 
     private let coversDir: URL = {
@@ -17,22 +22,30 @@ final class ThumbnailCache {
 
     private init() {}
 
-    func thumbnail(comicId: Int64) -> UIImage? {
-        if let cached = cache[comicId] { return cached }
+    /// Returns a cover image, generating and caching it on a background thread if needed.
+    func thumbnail(comicId: Int64) async -> UIImage? {
+        let key = NSNumber(value: comicId)
+        if let hit = cache.object(forKey: key) { return hit }
 
-        let diskURL = coversDir.appendingPathComponent("\(comicId).jpg")
-        if let data = try? Data(contentsOf: diskURL), let img = UIImage(data: data) {
-            cache[comicId] = img
+        return await Task.detached(priority: .utility) { [self] in
+            let diskURL = self.coversDir.appendingPathComponent("\(comicId).jpg")
+            if let data = try? Data(contentsOf: diskURL), let img = UIImage(data: data) {
+                self.cache.setObject(img, forKey: key)
+                return img
+            }
+
+            guard let comic = self.db.comic(id: comicId) else { return nil }
+            guard let img = self.generateCover(for: comic) else { return nil }
+            if let data = img.jpegData(compressionQuality: 0.85) {
+                try? data.write(to: diskURL)
+            }
+            self.cache.setObject(img, forKey: key)
             return img
-        }
+        }.value
+    }
 
-        guard let comic = db.comic(id: comicId) else { return nil }
-        let img = generateCover(for: comic)
-        if let img, let data = img.jpegData(compressionQuality: 0.85) {
-            try? data.write(to: diskURL)
-            cache[comicId] = img
-        }
-        return img
+    func invalidate(comicId: Int64) {
+        cache.removeObject(forKey: NSNumber(value: comicId))
     }
 
     private func generateCover(for comic: Comic) -> UIImage? {

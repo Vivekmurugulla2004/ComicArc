@@ -17,10 +17,10 @@ struct RunDetailView: View {
         NavigationStack {
             Group {
                 if items.isEmpty {
-                    ContentUnavailableView(
-                        "No Comics Yet",
-                        systemImage: "book",
-                        description: Text("Open a comic's detail page and tap \"Add to Run\" to add it here.")
+                    EmptyStateView(
+                        icon: "book",
+                        title: "No Comics Yet",
+                        message: "Open a comic's detail page and tap \"Add to Run\" to add it here."
                     )
                 } else {
                     List {
@@ -106,7 +106,15 @@ struct RunDetailView: View {
             .sheet(item: $readerComic) { comic in
                 ReaderView(comic: comic, runQueue: readerRunContext)
                     .environmentObject(library)
-                    .onDisappear { load() }
+                    .onDisappear {
+                        load()
+                        // Pick up auto-advance request set by ReaderView "Read Next" banner
+                        if let pending = library.pendingRunComic {
+                            library.pendingRunComic = nil
+                            readerRunContext = items.map(\.comic)
+                            readerComic = pending
+                        }
+                    }
             }
             .sheet(item: Binding(
                 get: { detailComicId.map { RunDetailID($0) } },

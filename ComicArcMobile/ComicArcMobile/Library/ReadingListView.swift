@@ -15,10 +15,10 @@ struct ReadingListView: View {
         NavigationStack {
             Group {
                 if comics.isEmpty {
-                    ContentUnavailableView(
-                        "Reading List Empty",
-                        systemImage: "bookmark",
-                        description: Text("Open any comic's detail page and tap Want to Read.")
+                    EmptyStateView(
+                        icon: "bookmark",
+                        title: "Reading List Empty",
+                        message: "Open any comic's detail page and tap Want to Read."
                     )
                 } else {
                     ScrollView {

@@ -336,7 +336,7 @@ struct ComicDetailView: View {
         comic = db.comic(id: comicId)
         tags  = db.tags(for: comicId)
         if let c = comic {
-            coverImage = ThumbnailCache.shared.thumbnail(comicId: c.id)
+            Task { coverImage = await ThumbnailCache.shared.thumbnail(comicId: c.id) }
         }
     }
 }
