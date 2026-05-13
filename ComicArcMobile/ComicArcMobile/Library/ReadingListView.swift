@@ -33,6 +33,7 @@ struct ReadingListView: View {
                 }
             }
             .navigationTitle("Want to Read")
+            .background(Color.arcBg)
             .onAppear { load() }
             .sheet(item: Binding(
                 get: { detailComicId.map { ReadingListID($0) } },

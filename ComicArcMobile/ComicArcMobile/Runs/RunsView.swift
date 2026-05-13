@@ -33,6 +33,8 @@ struct RunsView: View {
                 }
             }
             .navigationTitle("Reading Runs")
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showCreate = true } label: {

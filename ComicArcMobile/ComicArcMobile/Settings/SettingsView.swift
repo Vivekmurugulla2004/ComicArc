@@ -59,6 +59,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .onAppear { computeStorageSize() }
             .confirmationDialog(
                 "Clear all library data? Comics in your Documents folder will also be deleted.",

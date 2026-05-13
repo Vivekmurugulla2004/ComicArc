@@ -93,6 +93,8 @@ struct StatsView: View {
                 }
             }
             .navigationTitle("Stats")
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .onAppear { stats = LibraryStats.load() }
             .refreshable { stats = LibraryStats.load() }
         }

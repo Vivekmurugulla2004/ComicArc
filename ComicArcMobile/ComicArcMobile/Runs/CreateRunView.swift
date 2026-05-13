@@ -20,6 +20,8 @@ struct CreateRunView: View {
                         .lineLimit(3...6)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .navigationTitle(isEditing ? "Edit Run" : "New Run")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

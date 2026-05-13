@@ -27,6 +27,7 @@ struct ComicDetailView: View {
                             details(comic)
                         }
                     }
+                    .background(Color.arcBg)
                     .navigationTitle(comic.title)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { toolbar(comic) }

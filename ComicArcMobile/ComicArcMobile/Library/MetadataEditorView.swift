@@ -34,6 +34,8 @@ struct MetadataEditorView: View {
                         .font(.caption)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .navigationTitle("Edit Metadata")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

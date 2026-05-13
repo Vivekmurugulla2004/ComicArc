@@ -33,6 +33,7 @@ struct FavoritesView: View {
                 }
             }
             .navigationTitle("Favorites")
+            .background(Color.arcBg)
             .onAppear { load() }
             .sheet(item: Binding(
                 get: { detailComicId.map { FavID($0) } },

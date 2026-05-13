@@ -39,6 +39,8 @@ struct AddToRunView: View {
                 }
             }
             .navigationTitle("Add to Run")
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

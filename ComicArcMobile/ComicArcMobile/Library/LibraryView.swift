@@ -62,6 +62,7 @@ struct LibraryView: View {
                 .padding(.horizontal)
             }
             .navigationTitle(navigationTitle)
+            .background(Color.arcBg)
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $library.searchText, prompt: "Search comics")
             .onChange(of: library.searchText) { _, _ in

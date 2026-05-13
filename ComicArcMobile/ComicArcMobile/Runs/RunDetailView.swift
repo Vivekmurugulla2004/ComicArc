@@ -87,6 +87,8 @@ struct RunDetailView: View {
                 }
             }
             .navigationTitle(run.title)
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
