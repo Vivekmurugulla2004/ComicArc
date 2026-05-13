@@ -29,11 +29,7 @@ struct OnboardingView: View {
         }
         .fileImporter(
             isPresented: $showImporter,
-            allowedContentTypes: [
-                .init(filenameExtension: "cbz")!,
-                .init(filenameExtension: "cbr")!,
-                .pdf, .jpeg, .png
-            ],
+            allowedContentTypes: [.init(filenameExtension: "cbz")!, .pdf, .jpeg, .png],
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
@@ -106,7 +102,7 @@ struct OnboardingView: View {
                 Text("Add Your Comics")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
-                Text("Import CBZ, PDF, or image files from your device or iCloud Drive. You can also import anytime from the Library tab.")
+                Text("Import CBZ, PDF, JPEG, or PNG files from your device or iCloud Drive. You can also import anytime from the Library tab.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
@@ -186,6 +182,7 @@ struct OnboardingView: View {
                         .overlay(Circle().stroke(Color.arcBorder, lineWidth: 1))
                 }
                 .foregroundStyle(.white)
+                .accessibilityLabel("Back")
             } else {
                 Spacer().frame(width: 48)
             }
@@ -203,6 +200,8 @@ struct OnboardingView: View {
                         .foregroundStyle(Color.arcBg)
                         .clipShape(Capsule())
                 }
+                .accessibilityLabel("Next")
+                .accessibilityHint("Go to the next onboarding page")
             }
         }
     }

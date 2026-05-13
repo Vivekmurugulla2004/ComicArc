@@ -1,6 +1,4 @@
 import SwiftUI
-import Combine
-import UniformTypeIdentifiers
 
 @MainActor
 final class LibraryViewModel: ObservableObject {
@@ -51,11 +49,12 @@ final class LibraryViewModel: ObservableObject {
         )
     }
 
-    func loadIssues(character: String, series: String) {
+    func loadIssues(character: String?, series: String) {
         comics = db.allComics(
             publisher: selectedPublisher == "All" ? nil : selectedPublisher,
             character: character,
             series: series,
+            nullCharacterOnly: character == nil,
             sortOrder: sortOrder
         )
     }
@@ -70,19 +69,6 @@ final class LibraryViewModel: ObservableObject {
     }
 
     // MARK: - Import
-
-    func scanDocumentsFolder() {
-        let docs = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics")
-        guard let items = try? FileManager.default.contentsOfDirectory(
-            at: docs, includingPropertiesForKeys: nil
-        ) else { return }
-        let supported = ["cbz", "cbr", "pdf", "jpg", "jpeg", "png"]
-        let comics = items.filter { supported.contains($0.pathExtension.lowercased()) }
-        guard !comics.isEmpty else { return }
-        importFiles(comics)
-    }
 
     func importFiles(_ urls: [URL]) {
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -133,24 +119,20 @@ final class LibraryViewModel: ObservableObject {
 
     // MARK: - Mutations
 
-    func toggleFavorite(_ comic: Comic) {
-        db.setFavorite(comic.id, !comic.isFavorite)
-        load()
-    }
-
     func setRating(_ comic: Comic, rating: Int) {
         db.setRating(comic.id, rating)
         load()
     }
 
     func delete(_ comic: Comic) {
-        // Also delete the file from Documents if it lives there
         let docsPath = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Comics").path
         if comic.filePath.hasPrefix(docsPath) {
             try? FileManager.default.removeItem(atPath: comic.filePath)
         }
+        ThumbnailCache.shared.invalidate(comicId: comic.id)
+        CBZReaderCache.shared.invalidate(path: comic.filePath)
         db.deleteComic(comic.id)
         load()
     }

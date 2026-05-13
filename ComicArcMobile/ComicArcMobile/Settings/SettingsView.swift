@@ -20,6 +20,7 @@ struct SettingsView: View {
                         Text("Page by Page").tag("paged")
                         Text("Vertical Scroll").tag("scroll")
                     }
+                    .accessibilityLabel("Default reading mode")
 
                     HStack {
                         Text("Autoplay Interval")
@@ -27,38 +28,47 @@ struct SettingsView: View {
                         Stepper("\(Int(autoplayInterval))s",
                                 value: $autoplayInterval,
                                 in: 3...30, step: 1)
+                        .accessibilityLabel("Autoplay interval, \(Int(autoplayInterval)) seconds")
                     }
                 }
 
                 Section("Library") {
+                    NavigationLink {
+                        StatsView().environmentObject(library)
+                    } label: {
+                        Label("Library Stats", systemImage: "chart.bar")
+                    }
+                    .accessibilityLabel("View library stats")
+
                     LabeledContent("Comics", value: "\(db.scalarInt("SELECT COUNT(*) FROM comics"))")
                     LabeledContent("Storage Used", value: storageSize)
 
                     Button("Export Backup (JSON)") { exportBackup() }
+                        .accessibilityLabel("Export library backup as JSON")
+                        .accessibilityHint("Shares a JSON file with all your comics and runs data")
                 }
 
                 Section {
                     Button("Replay Onboarding") { onboardingDone = false }
                         .foregroundStyle(Color.arcGold)
+                        .accessibilityLabel("Replay onboarding")
                     Button("Clear Library", role: .destructive) { showClearConfirm = true }
+                        .accessibilityLabel("Clear library")
+                        .accessibilityHint("Removes all comics and deletes files from the Comics folder")
                 } footer: {
-                    Text("Removes all comics from the library. Your files in the Comics folder are also deleted.")
+                    Text("Clear Library removes all comics. Files in your Comics folder are also deleted.")
                 }
 
-                Section("Formats") {
-                    LabeledContent("CBZ", value: "Built-in")
-                    LabeledContent("PDF", value: "Built-in")
-                    LabeledContent("CBR", value: "Not supported on iOS")
-                    LabeledContent("JPEG / PNG", value: "Built-in")
+                Section("Supported Formats") {
+                    LabeledContent("CBZ", value: "Supported")
+                    LabeledContent("PDF", value: "Supported")
+                    LabeledContent("JPEG / PNG", value: "Supported")
+                    LabeledContent("CBR", value: "Not supported")
                 }
 
                 Section("About") {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Platform", value: "iOS \(UIDevice.current.systemVersion)")
-                    Link("GitHub",
-                         destination: URL(string: "https://github.com/ComicArc/ComicArc")!)
-                    Link("Report an Issue",
-                         destination: URL(string: "https://github.com/ComicArc/ComicArc/issues")!)
                 }
             }
             .navigationTitle("Settings")
@@ -137,6 +147,10 @@ struct SettingsView: View {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ComicArc/covers")
         try? FileManager.default.removeItem(at: coversDir)
+
+        ThumbnailCache.shared.invalidateAll()
+        PageImageCache.shared.invalidate()
+        CBZReaderCache.shared.invalidateAll()
 
         library.load()
     }

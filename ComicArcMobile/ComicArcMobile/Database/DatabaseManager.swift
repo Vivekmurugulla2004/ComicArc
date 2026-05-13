@@ -115,12 +115,18 @@ final class DatabaseManager {
                    search: String? = nil,
                    favoritesOnly: Bool = false,
                    readingListOnly: Bool = false,
+                   nullCharacterOnly: Bool = false,
                    sortOrder: SortOrder = .publisher) -> [Comic] {
         var conds = ["1=1"]
         var args: [String] = []
 
-        if let pub = publisher, pub != "All" { conds.append("c.publisher = ?");   args.append(pub) }
-        if let chr = character               { conds.append("c.character = ?");   args.append(chr) }
+        if let pub = publisher, pub != "All" { conds.append("c.publisher = ?"); args.append(pub) }
+        if nullCharacterOnly {
+            conds.append("c.character IS NULL")
+        } else if let chr = character {
+            conds.append("c.character = ?")
+            args.append(chr)
+        }
         if let ser = series                  { conds.append("c.series = ?");      args.append(ser) }
         if let q = search, !q.isEmpty {
             conds.append("(c.title LIKE ? OR c.series LIKE ?)")
@@ -280,10 +286,6 @@ final class DatabaseManager {
         exec("UPDATE comics SET in_reading_list = \(value ? 1 : 0) WHERE id = \(id)")
     }
 
-    func updatePageCount(_ id: Int64, _ count: Int) {
-        exec("UPDATE comics SET page_count = \(count) WHERE id = \(id)")
-    }
-
     func deleteComic(_ id: Int64) {
         exec("DELETE FROM comics WHERE id = \(id)")
     }
@@ -421,7 +423,7 @@ final class DatabaseManager {
                 isFavorite:    sqlite3_column_int(stmt, 13) != 0,
                 inReadingList: sqlite3_column_int(stmt, 14) != 0,
                 tags: [],
-                dateAdded: Date()
+                dateAdded: DatabaseManager.sqliteDateFormatter.date(from: colText(stmt, 15) ?? "") ?? Date()
             )
             return RunItem(
                 id:       sqlite3_column_int64(stmt, 0),
@@ -488,6 +490,16 @@ final class DatabaseManager {
         scalarInt("SELECT COUNT(*) FROM run_items WHERE run_id=\(runId) AND comic_id=\(comicId)") > 0
     }
 
+    // MARK: - Date parsing
+
+    static let sqliteDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+
     // MARK: - Public helpers for ad-hoc queries (used by StatsView)
 
     func scalarInt(_ sql: String) -> Int {
@@ -542,7 +554,7 @@ final class DatabaseManager {
                 isFavorite:    sqlite3_column_int(stmt, 9)  != 0,
                 inReadingList: sqlite3_column_int(stmt, 10) != 0,
                 tags: tags,
-                dateAdded: Date()
+                dateAdded: DatabaseManager.sqliteDateFormatter.date(from: colText(stmt, 12) ?? "") ?? Date()
             ))
         }
         sqlite3_finalize(stmt)

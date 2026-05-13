@@ -6,7 +6,6 @@ import SwiftUI
 extension Color {
     // Core palette
     static let arcGold    = Color(red: 247/255, green: 201/255, blue: 72/255)   // #f7c948
-    static let arcGold2   = Color(red: 255/255, green: 224/255, blue: 130/255)  // #ffe082
     static let arcRed     = Color(red: 239/255, green: 35/255,  blue: 60/255)   // #ef233c
     static let arcBg      = Color(red: 11/255,  green: 12/255,  blue: 24/255)   // #0b0c18
     static let arcSurface = Color(red: 19/255,  green: 21/255,  blue: 42/255)   // #13152a
@@ -28,6 +27,8 @@ struct EmptyStateView: View {
     let icon: String
     let title: String
     let message: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 16) {
@@ -42,6 +43,18 @@ struct EmptyStateView: View {
                 .foregroundStyle(Color.arcMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
+            if let actionTitle, let action {
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(.headline)
+                        .padding(.horizontal, 28).padding(.vertical, 12)
+                        .background(Color.arcGold)
+                        .foregroundStyle(Color.arcBg)
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 4)
+                .accessibilityLabel(actionTitle)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 60)

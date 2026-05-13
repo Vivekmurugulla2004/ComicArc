@@ -24,10 +24,8 @@ final class PageImageCache: @unchecked Sendable {
         cache.setObject(img, forKey: key as NSString, cost: cost)
     }
 
-    func invalidate(filePath: String) {
-        // NSCache has no enumeration API; clear all and let it repopulate
+    func invalidate() {
         cache.removeAllObjects()
-        _ = filePath  // suppress unused-variable warning
     }
 }
 
@@ -57,5 +55,10 @@ final class CBZReaderCache: @unchecked Sendable {
     func invalidate(path: String) {
         lock.lock(); defer { lock.unlock() }
         readers.removeAll { $0.path == path }
+    }
+
+    func invalidateAll() {
+        lock.lock(); defer { lock.unlock() }
+        readers.removeAll()
     }
 }
