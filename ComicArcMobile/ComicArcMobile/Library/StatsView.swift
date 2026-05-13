@@ -29,6 +29,31 @@ struct StatsView: View {
                             completionRow("Unread", count: s.unread, total: s.totalComics, color: .secondary)
                         }
 
+                        // Reading streak
+                        Section("Reading Activity") {
+                            HStack(spacing: 14) {
+                                Image(systemName: s.readingStreak > 0 ? "flame.fill" : "flame")
+                                    .font(.title2)
+                                    .foregroundStyle(s.readingStreak > 0 ? Color.orange : Color.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                        Text("\(s.readingStreak)")
+                                            .font(.title2.bold())
+                                        Text("day streak")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text(s.readingStreak > 0
+                                         ? "\(s.readingStreak) consecutive day\(s.readingStreak == 1 ? "" : "s") of reading"
+                                         : "Open a comic today to start a streak")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+
                         // Publisher breakdown
                         if !s.publisherBreakdown.isEmpty {
                             Section("By Publisher") {
@@ -95,8 +120,19 @@ struct StatsView: View {
             .navigationTitle("Stats")
             .scrollContentBackground(.hidden)
             .background(Color.arcBg)
-            .onAppear { stats = LibraryStats.load() }
-            .refreshable { stats = LibraryStats.load() }
+            .onAppear { loadStats() }
+            .refreshable { loadStats() }
+        }
+    }
+
+    // MARK: - Data
+
+    private func loadStats() {
+        Task {
+            let loaded = await Task.detached(priority: .utility) {
+                LibraryStats.load()
+            }.value
+            stats = loaded
         }
     }
 
@@ -178,6 +214,7 @@ struct LibraryStats {
     let inProgress: Int
     let finished: Int
     let unread: Int
+    let readingStreak: Int
     let publisherBreakdown: [PublisherStat]
     let topSeries: [SeriesStat]
     let recentlyRead: [Comic]
@@ -198,6 +235,11 @@ struct LibraryStats {
             WHERE c.page_count > 0 AND rp.current_page >= c.page_count - 1
         """)
 
+        let streakDates = db.rows(
+            "SELECT DISTINCT date(updated_at) FROM reading_progress ORDER BY date(updated_at) DESC"
+        ) { stmt in db.colText(stmt, 0) ?? "" }
+        let streak = computeStreak(dates: streakDates)
+
         let pubRows = db.rows("SELECT publisher, COUNT(*) as cnt FROM comics GROUP BY publisher ORDER BY cnt DESC") { stmt in
             PublisherStat(publisher: db.colText(stmt, 0) ?? "", count: Int(sqlite3_column_int(stmt, 1)))
         }
@@ -214,7 +256,31 @@ struct LibraryStats {
         return LibraryStats(
             totalComics: total, pagesRead: pagesRead, favorites: favorites,
             inProgress: inProg, finished: finished, unread: max(0, total - inProg - finished),
+            readingStreak: streak,
             publisherBreakdown: pubRows, topSeries: seriesRows, recentlyRead: recent
         )
+    }
+
+    private static func computeStreak(dates: [String]) -> Int {
+        guard !dates.isEmpty else { return 0 }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var streak = 0
+        var expected = today
+        for str in dates {
+            guard let d = fmt.date(from: str) else { continue }
+            let day = cal.startOfDay(for: d)
+            if day == expected {
+                streak += 1
+                expected = cal.date(byAdding: .day, value: -1, to: expected)!
+            } else if day < expected {
+                break
+            }
+        }
+        return streak
     }
 }

@@ -46,6 +46,12 @@ final class ThumbnailCache: @unchecked Sendable {
 
     func invalidate(comicId: Int64) {
         cache.removeObject(forKey: NSNumber(value: comicId))
+        let diskURL = coversDir.appendingPathComponent("\(comicId).jpg")
+        try? FileManager.default.removeItem(at: diskURL)
+    }
+
+    func invalidateAll() {
+        cache.removeAllObjects()
     }
 
     private func generateCover(for comic: Comic) -> UIImage? {

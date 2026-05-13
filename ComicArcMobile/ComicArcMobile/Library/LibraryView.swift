@@ -11,7 +11,30 @@ struct LibraryView: View {
     @State private var detailComicId: Int64?
     @State private var continueComicId: Int64?
 
+    // Selection
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<Int64> = []
+    @State private var showBulkDeleteConfirm = false
+
+    // Smart filters
+    @State private var selectedSmartFilter: SmartFilter? = nil
+
+    // Continue Run
+    @State private var activeRun: Run?
+    @State private var selectedRun: Run?
+
+    @State private var missingFileComic: Comic?
+
+    private let db = DatabaseManager.shared
+
     enum BrowseMode { case characters, flat }
+
+    enum SmartFilter: String, CaseIterable {
+        case recentlyAdded = "New"
+        case inProgress    = "In Progress"
+        case unread        = "Unread"
+        case finished      = "Finished"
+    }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: sizeClass == .regular ? 160 : 140), spacing: 12)]
@@ -20,75 +43,98 @@ struct LibraryView: View {
     // True when user is actively searching — bypass the hierarchy
     private var isSearching: Bool { !library.searchText.isEmpty }
 
+    private var filteredComics: [Comic] {
+        guard let filter = selectedSmartFilter else { return library.comics }
+        switch filter {
+        case .recentlyAdded:
+            let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+            return library.comics.filter { $0.dateAdded >= cutoff }
+        case .inProgress:
+            return library.comics.filter { $0.isStarted && !$0.isFinished }
+        case .unread:
+            return library.comics.filter { !$0.isStarted }
+        case .finished:
+            return library.comics.filter { $0.isFinished }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Import progress banner
-                    if library.importProgress.total > 0 {
-                        importBanner
-                    }
+                    if library.importProgress.total > 0 { importBanner }
 
-                    // Publisher filter tabs
                     if !library.publishers.isEmpty && !isSearching {
                         publisherFilterRow
                     }
 
-                    // Tag filter chips (only in flat / search mode)
                     if (browseMode == .flat || isSearching) && !library.allTags.isEmpty {
                         tagFilterRow
                     }
 
-                    // Search results bypass the hierarchy
+                    // Smart filters — flat / search mode only
+                    if browseMode == .flat || isSearching {
+                        smartFilterRow
+                    }
+
                     if isSearching {
                         flatGrid
                     } else if browseMode == .characters {
+                        if selectedCharacter != nil {
+                            breadcrumbBar
+                        }
                         if let series = selectedSeries {
                             issueGrid(series: series)
                         } else if let char = selectedCharacter {
                             seriesGrid(character: char)
                         } else {
-                            // Continue Reading
                             if !library.inProgress.isEmpty { continueReadingSection }
+                            continueRunSection
                             characterGrid
                         }
                     } else {
                         if !library.inProgress.isEmpty && library.selectedTag == nil {
                             continueReadingSection
                         }
+                        continueRunSection
                         flatGrid
                     }
                 }
                 .padding(.horizontal)
             }
-            .navigationTitle(navigationTitle)
+            .navigationTitle(isSelecting ? "\(selectedIds.count) Selected" : navigationTitle)
             .background(Color.arcBg)
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $library.searchText, prompt: "Search comics")
             .onChange(of: library.searchText) { _, _ in
-                if isSearching {
-                    library.loadSearchResults()
-                } else {
-                    library.load()
-                }
+                if isSearching { library.loadSearchResults() } else { library.load() }
+                if isSelecting { exitSelection() }
+                selectedSmartFilter = nil
+            }
+            .onChange(of: browseMode) { _, _ in
+                selectedSmartFilter = nil
+                selectedCharacter = nil
+                selectedSeries = nil
             }
             .toolbar { toolbarContent }
+            .safeAreaInset(edge: .bottom) {
+                if isSelecting { bulkActionsToolbar }
+            }
             .fileImporter(
                 isPresented: $showImporter,
-                allowedContentTypes: [.init(filenameExtension: "cbz")!,
-                                      .init(filenameExtension: "cbr")!,
-                                      .pdf, .jpeg, .png],
+                allowedContentTypes: [.init(filenameExtension: "cbz")!, .pdf, .jpeg, .png],
                 allowsMultipleSelection: true
             ) { result in
                 if case .success(let urls) = result { library.importFiles(urls) }
             }
-            .onAppear { library.load() }
+            .onAppear { library.load(); loadActiveRun() }
             .sheet(item: Binding(
                 get: { detailComicId.map { LibID($0) } },
                 set: { detailComicId = $0?.id }
             )) { w in
                 ComicDetailView(comicId: w.id)
                     .environmentObject(library)
+                    .onDisappear { library.load() }
             }
             .sheet(item: Binding(
                 get: { continueComicId.map { LibID($0) } },
@@ -100,6 +146,18 @@ struct LibraryView: View {
                         .onDisappear { library.load() }
                 }
             }
+            .sheet(item: $selectedRun) { run in
+                RunDetailView(run: run)
+                    .environmentObject(library)
+                    .onDisappear { loadActiveRun() }
+            }
+            .confirmationDialog(
+                "Delete \(selectedIds.count) comic\(selectedIds.count == 1 ? "" : "s")? This cannot be undone.",
+                isPresented: $showBulkDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { bulkDelete() }
+            }
             .alert("Import Error", isPresented: Binding(
                 get: { library.importError != nil },
                 set: { if !$0 { library.importError = nil } }
@@ -107,6 +165,18 @@ struct LibraryView: View {
                 Button("OK", role: .cancel) { library.importError = nil }
             } message: {
                 Text(library.importError ?? "")
+            }
+            .alert("File Not Found", isPresented: Binding(
+                get: { missingFileComic != nil },
+                set: { if !$0 { missingFileComic = nil } }
+            )) {
+                Button("Remove from Library", role: .destructive) {
+                    if let c = missingFileComic { library.delete(c) }
+                    missingFileComic = nil
+                }
+                Button("Cancel", role: .cancel) { missingFileComic = nil }
+            } message: {
+                Text("The file for \"\(missingFileComic?.title ?? "this comic")\" can't be found on your device.")
             }
         }
     }
@@ -133,11 +203,13 @@ struct LibraryView: View {
             HStack(spacing: 8) {
                 publisherChip("All", isActive: library.selectedPublisher == "All") {
                     library.selectedPublisher = "All"
+                    selectedCharacter = nil; selectedSeries = nil
                     library.load()
                 }
                 ForEach(library.publishers, id: \.self) { pub in
                     publisherChip(pub, isActive: library.selectedPublisher == pub) {
                         library.selectedPublisher = (library.selectedPublisher == pub) ? "All" : pub
+                        selectedCharacter = nil; selectedSeries = nil
                         library.load()
                     }
                 }
@@ -196,38 +268,67 @@ struct LibraryView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if !isSearching {
-                Picker("", selection: $browseMode) {
-                    Image(systemName: "square.grid.2x2").tag(BrowseMode.characters)
-                    Image(systemName: "list.bullet").tag(BrowseMode.flat)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 80)
-
-                Menu {
-                    ForEach(DatabaseManager.SortOrder.allCases, id: \.self) { order in
-                        Button {
-                            library.sortOrder = order
-                            library.load()
-                        } label: {
-                            Label(order.rawValue,
-                                  systemImage: library.sortOrder == order ? "checkmark" : "")
-                        }
+            if isSelecting {
+                Button {
+                    let allIds = Set(filteredComics.map(\.id))
+                    withAnimation {
+                        selectedIds = (selectedIds == allIds) ? [] : allIds
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Text(selectedIds.count == filteredComics.count && !filteredComics.isEmpty
+                         ? "None" : "All")
+                        .font(.subheadline)
                 }
-            }
-            Button { showImporter = true } label: {
-                Image(systemName: "plus")
+                .accessibilityLabel("Select all or deselect all")
+            } else {
+                if !isSearching {
+                    Picker("Browse Mode", selection: $browseMode) {
+                        Image(systemName: "square.grid.2x2").tag(BrowseMode.characters)
+                            .accessibilityLabel("Character View")
+                        Image(systemName: "list.bullet").tag(BrowseMode.flat)
+                            .accessibilityLabel("All Comics")
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 80)
+                    .accessibilityLabel("Browse Mode")
+
+                    Menu {
+                        ForEach(DatabaseManager.SortOrder.allCases, id: \.self) { order in
+                            Button {
+                                library.sortOrder = order
+                                library.load()
+                            } label: {
+                                Label(order.rawValue,
+                                      systemImage: library.sortOrder == order ? "checkmark" : "")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .accessibilityLabel("Sort Comics")
+                    }
+                }
+                Button { showImporter = true } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Import Comics")
             }
         }
-        if !isSearching && (selectedSeries != nil || selectedCharacter != nil) {
-            ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarLeading) {
+            if isSelecting {
+                Button("Cancel") { exitSelection() }
+                    .accessibilityLabel("Cancel selection")
+            } else if !isSearching && (selectedSeries != nil || selectedCharacter != nil) {
                 Button {
                     withAnimation {
-                        if selectedSeries != nil { selectedSeries = nil }
-                        else { selectedCharacter = nil }
+                        if selectedSeries != nil {
+                            selectedSeries = nil
+                            // Null-character groups skip the series level, so pop character too
+                            if selectedCharacter?.character == nil {
+                                selectedCharacter = nil
+                            }
+                        } else {
+                            selectedCharacter = nil
+                        }
                     }
                 } label: {
                     Label("Back", systemImage: "chevron.left")
@@ -245,7 +346,13 @@ struct LibraryView: View {
                 HStack(spacing: 12) {
                     ForEach(library.inProgress) { comic in
                         ContinueCard(comic: comic)
-                            .onTapGesture { continueComicId = comic.id }
+                            .onTapGesture {
+                                if FileManager.default.fileExists(atPath: comic.filePath) {
+                                    continueComicId = comic.id
+                                } else {
+                                    missingFileComic = comic
+                                }
+                            }
                     }
                 }
             }
@@ -256,40 +363,71 @@ struct LibraryView: View {
     // MARK: - Grids
 
     private var characterGrid: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(library.characterGroups) { group in
-                SeriesCard(group: group)
-                    .onTapGesture {
-                        withAnimation {
-                            selectedCharacter = group
-                            library.loadSeries(for: group.groupName)
-                        }
+        Group {
+            if library.characterGroups.isEmpty {
+                EmptyStateView(
+                    icon: "books.vertical",
+                    title: "No Comics Yet",
+                    message: "Tap + to import CBZ, PDF, or image files and start your library.",
+                    actionTitle: "Import Comics",
+                    action: { showImporter = true }
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(library.characterGroups) { group in
+                        SeriesCard(group: group)
+                            .onTapGesture {
+                                withAnimation {
+                                    selectedSmartFilter = nil
+                                    selectedCharacter = group
+                                    if group.character != nil {
+                                        library.loadSeries(for: group.groupName)
+                                    } else {
+                                        // No character hierarchy — go straight to issues
+                                        selectedSeries = group
+                                        library.loadIssues(character: nil, series: group.groupName)
+                                    }
+                                }
+                            }
                     }
+                }
+                .padding(.top, 8)
             }
         }
-        .padding(.top, 8)
     }
 
     private func seriesGrid(character: SeriesGroup) -> some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(library.seriesGroups) { group in
-                SeriesCard(group: group)
-                    .onTapGesture {
-                        withAnimation {
-                            selectedSeries = group
-                            library.loadIssues(character: character.groupName, series: group.groupName)
-                        }
+        Group {
+            if library.seriesGroups.isEmpty {
+                EmptyStateView(
+                    icon: "books.vertical",
+                    title: "No Series Found",
+                    message: "No series for \(character.groupName) match the current publisher filter."
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(library.seriesGroups) { group in
+                        SeriesCard(group: group, characterName: character.groupName)
+                            .onTapGesture {
+                                withAnimation {
+                                    selectedSeries = group
+                                    selectedSmartFilter = nil
+                                    library.loadIssues(character: character.character, series: group.groupName)
+                                }
+                            }
                     }
+                }
+                .padding(.top, 8)
             }
         }
-        .padding(.top, 8)
     }
 
     private func issueGrid(series: SeriesGroup) -> some View {
         LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(library.comics) { comic in
-                ComicCard(comic: comic)
-                    .onTapGesture { detailComicId = comic.id }
+            ForEach(filteredComics) { comic in
+                selectableComicCard(comic)
             }
         }
         .padding(.top, 8)
@@ -297,18 +435,35 @@ struct LibraryView: View {
 
     private var flatGrid: some View {
         Group {
-            if library.comics.isEmpty && !library.searchText.isEmpty {
-                EmptyStateView(
-                    icon: "magnifyingglass",
-                    title: "No Results",
-                    message: "Nothing matched \"\(library.searchText)\". Try a different title or series."
-                )
-                .padding(.top, 60)
+            if filteredComics.isEmpty {
+                if library.searchText.isEmpty && selectedSmartFilter == nil {
+                    EmptyStateView(
+                        icon: "books.vertical",
+                        title: "No Comics Yet",
+                        message: "Tap + to import CBZ, PDF, or image files and start your library.",
+                        actionTitle: "Import Comics",
+                        action: { showImporter = true }
+                    )
+                    .padding(.top, 60)
+                } else if let filter = selectedSmartFilter {
+                    EmptyStateView(
+                        icon: "line.3.horizontal.decrease",
+                        title: "No \(filter.rawValue) Comics",
+                        message: "No comics match this filter right now."
+                    )
+                    .padding(.top, 60)
+                } else {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: "No Results",
+                        message: "Nothing matched \"\(library.searchText)\". Try a different title or series."
+                    )
+                    .padding(.top, 60)
+                }
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(library.comics) { comic in
-                        ComicCard(comic: comic)
-                            .onTapGesture { detailComicId = comic.id }
+                    ForEach(filteredComics) { comic in
+                        selectableComicCard(comic)
                     }
                 }
                 .padding(.top, 8)
@@ -322,6 +477,294 @@ struct LibraryView: View {
         if let c = selectedCharacter          { return c.groupName }
         if let t = library.selectedTag        { return t }
         return "Library"
+    }
+
+    // MARK: - Selectable Card
+
+    @ViewBuilder
+    private func selectableComicCard(_ comic: Comic) -> some View {
+        let isSelected = selectedIds.contains(comic.id)
+        ComicCard(comic: comic)
+            .overlay(alignment: .topLeading) {
+                if isSelecting {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(isSelected ? Color.arcGold : .white)
+                        .background(Circle()
+                            .fill(isSelected ? Color.arcBg : Color.black.opacity(0.5))
+                            .padding(-3))
+                        .padding(8)
+                        .animation(.easeInOut(duration: 0.15), value: isSelected)
+                }
+            }
+            .overlay {
+                if isSelecting && isSelected {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.arcGold, lineWidth: 2)
+                        .animation(.easeInOut(duration: 0.15), value: isSelected)
+                }
+            }
+            .onTapGesture {
+                if isSelecting {
+                    withAnimation(.easeInOut(duration: 0.15)) { toggleSelection(comic.id) }
+                } else {
+                    detailComicId = comic.id
+                }
+            }
+            .contextMenu {
+                if !isSelecting {
+                    Button {
+                        withAnimation { isSelecting = true; selectedIds.insert(comic.id) }
+                    } label: {
+                        Label("Select", systemImage: "checkmark.circle")
+                    }
+                    Divider()
+                    Button {
+                        if comic.pageCount > 0 {
+                            db.updateProgress(comicId: comic.id, page: comic.pageCount - 1)
+                            library.load()
+                        }
+                    } label: {
+                        Label("Mark as Read", systemImage: "checkmark.circle.fill")
+                    }
+                    Button {
+                        db.setFavorite(comic.id, !comic.isFavorite)
+                        library.load()
+                    } label: {
+                        Label(comic.isFavorite ? "Remove Favorite" : "Add to Favorites",
+                              systemImage: comic.isFavorite ? "heart.slash" : "heart")
+                    }
+                    Button {
+                        db.setInReadingList(comic.id, !comic.inReadingList)
+                        library.load()
+                    } label: {
+                        Label(comic.inReadingList ? "Remove from Reading List" : "Want to Read",
+                              systemImage: comic.inReadingList ? "bookmark.slash" : "bookmark")
+                    }
+                    Button { detailComicId = comic.id } label: {
+                        Label("View Details", systemImage: "info.circle")
+                    }
+                    Divider()
+                    Button(role: .destructive) { library.delete(comic) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+    }
+
+    // MARK: - Breadcrumb
+
+    private var breadcrumbBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                breadcrumbSegment("Library") {
+                    withAnimation { selectedCharacter = nil; selectedSeries = nil }
+                }
+                if let char = selectedCharacter {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    if selectedSeries != nil && char.character != nil {
+                        breadcrumbSegment(char.groupName) {
+                            withAnimation {
+                                selectedSeries = nil
+                                library.loadSeries(for: char.groupName)
+                            }
+                        }
+                        if let series = selectedSeries {
+                            Image(systemName: "chevron.right")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text(series.groupName)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.white)
+                        }
+                    } else {
+                        Text(char.groupName)
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func breadcrumbSegment(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label).font(.caption2).foregroundStyle(Color.arcGold)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Smart Filter Row
+
+    private var smartFilterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(SmartFilter.allCases, id: \.self) { filter in
+                    let active = selectedSmartFilter == filter
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedSmartFilter = active ? nil : filter
+                        }
+                    } label: {
+                        Text(filter.rawValue)
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(active ? Color.arcGold.opacity(0.2) : Color.arcSurface)
+                            .foregroundStyle(active ? Color.arcGold : Color.primary)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(active ? Color.arcGold : Color.arcBorder,
+                                                     lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(filter.rawValue) filter\(active ? ", active" : "")")
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Continue Run Section
+
+    private var continueRunSection: some View {
+        Group {
+            if let run = activeRun {
+                Button { selectedRun = run } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "list.number")
+                            .foregroundStyle(Color.arcGold)
+                            .frame(width: 32, height: 32)
+                            .background(Color.arcGold.opacity(0.15))
+                            .clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(run.title)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Text("\(run.completedCount) of \(run.itemCount) issues")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        // Inline progress bar
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.arcBorder)
+                                Capsule()
+                                    .fill(Color.arcGold)
+                                    .frame(width: geo.size.width * CGFloat(run.progressPercent))
+                            }
+                        }
+                        .frame(width: 56, height: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.arcCard)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.arcBorder, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 12)
+                .accessibilityLabel("Continue run: \(run.title), \(run.completedCount) of \(run.itemCount) issues")
+            }
+        }
+    }
+
+    // MARK: - Bulk Actions Toolbar
+
+    private var bulkActionsToolbar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 20) {
+                Text(selectedIds.isEmpty ? "Tap comics to select" : "\(selectedIds.count) selected")
+                    .font(.caption)
+                    .foregroundStyle(selectedIds.isEmpty ? Color.arcMuted : .white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !selectedIds.isEmpty {
+                    Button { bulkMarkRead() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "checkmark.circle").font(.title3)
+                            Text("Read").font(.system(size: 9))
+                        }
+                    }
+                    .accessibilityLabel("Mark selected as read")
+
+                    Button { bulkToggleFavorite() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "heart").font(.title3)
+                            Text("Favorite").font(.system(size: 9))
+                        }
+                    }
+                    .accessibilityLabel("Toggle favorite for selected")
+
+                    Button { bulkToggleReadingList() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "bookmark").font(.title3)
+                            Text("Want").font(.system(size: 9))
+                        }
+                    }
+                    .accessibilityLabel("Toggle reading list for selected")
+
+                    Button { showBulkDeleteConfirm = true } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "trash").font(.title3).foregroundStyle(Color.arcRed)
+                            Text("Delete").font(.system(size: 9)).foregroundStyle(Color.arcRed)
+                        }
+                    }
+                    .accessibilityLabel("Delete selected comics")
+                }
+            }
+            .foregroundStyle(Color.arcGold)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    // MARK: - Bulk Action Helpers
+
+    private func toggleSelection(_ id: Int64) {
+        if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
+    }
+
+    private func exitSelection() {
+        withAnimation(.easeInOut(duration: 0.2)) { isSelecting = false; selectedIds.removeAll() }
+    }
+
+    private func loadActiveRun() {
+        activeRun = db.allRuns().first { $0.isStarted && !$0.isFinished }
+    }
+
+    private func bulkMarkRead() {
+        for id in selectedIds {
+            if let c = db.comic(id: id), c.pageCount > 0 {
+                db.updateProgress(comicId: id, page: c.pageCount - 1)
+            }
+        }
+        library.load(); exitSelection()
+    }
+
+    private func bulkToggleFavorite() {
+        let comics = selectedIds.compactMap { db.comic(id: $0) }
+        let allFav = comics.allSatisfy(\.isFavorite)
+        comics.forEach { db.setFavorite($0.id, !allFav) }
+        library.load(); exitSelection()
+    }
+
+    private func bulkToggleReadingList() {
+        let comics = selectedIds.compactMap { db.comic(id: $0) }
+        let allIn = comics.allSatisfy(\.inReadingList)
+        comics.forEach { db.setInReadingList($0.id, !allIn) }
+        library.load(); exitSelection()
+    }
+
+    private func bulkDelete() {
+        selectedIds.compactMap { db.comic(id: $0) }.forEach { library.delete($0) }
+        loadActiveRun()
+        exitSelection()
     }
 }
 
@@ -364,6 +807,7 @@ struct ContinueCard: View {
 
 struct SeriesCard: View {
     let group: SeriesGroup
+    var characterName: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -379,6 +823,10 @@ struct SeriesCard: View {
             }
             Text(group.groupName)
                 .font(.subheadline).fontWeight(.semibold).lineLimit(2)
+            if let charName = characterName {
+                Text(charName)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
             Text("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
                 .font(.caption).foregroundStyle(.secondary)
         }

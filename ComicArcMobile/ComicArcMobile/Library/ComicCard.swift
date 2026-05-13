@@ -78,6 +78,6 @@ struct CoverImage: View {
                     }
             }
         }
-        .task { image = await ThumbnailCache.shared.thumbnail(comicId: comicId) }
+        .task(id: comicId) { image = await ThumbnailCache.shared.thumbnail(comicId: comicId) }
     }
 }

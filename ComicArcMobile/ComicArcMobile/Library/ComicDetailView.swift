@@ -9,6 +9,7 @@ struct ComicDetailView: View {
     @State private var comic: Comic?
     @State private var tags: [Tag] = []
     @State private var showReader = false
+    @State private var showMissingFileAlert = false
     @State private var showDeleteConfirm = false
     @State private var showMetadataEditor = false
     @State private var showAddToRun = false
@@ -21,10 +22,11 @@ struct ComicDetailView: View {
         NavigationStack {
             Group {
                 if let comic {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            hero(comic)
-                            details(comic)
+                    Group {
+                        if sizeClass == .regular {
+                            iPadLayout(comic)
+                        } else {
+                            iPhoneLayout(comic)
                         }
                     }
                     .background(Color.arcBg)
@@ -54,12 +56,85 @@ struct ComicDetailView: View {
                             dismiss()
                         }
                     }
+                    .alert("File Not Found", isPresented: $showMissingFileAlert) {
+                        Button("Remove from Library", role: .destructive) {
+                            library.delete(comic)
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This comic's file can't be found on your device. It may have been moved or deleted.")
+                    }
                 } else {
                     ProgressView()
                 }
             }
         }
         .onAppear { reload() }
+    }
+
+    // MARK: - Layout Variants
+
+    private func iPhoneLayout(_ comic: Comic) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                hero(comic)
+                details(comic)
+            }
+        }
+    }
+
+    private func iPadLayout(_ comic: Comic) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Left column — sticky cover + read button
+            ScrollView {
+                VStack(spacing: 20) {
+                    if let img = coverImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .shadow(radius: 16)
+                    } else {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.arcSurface)
+                            .aspectRatio(2/3, contentMode: .fit)
+                            .overlay {
+                                Image(systemName: "book.closed")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
+
+                    Button {
+                        if FileManager.default.fileExists(atPath: comic.filePath) {
+                            showReader = true
+                        } else {
+                            showMissingFileAlert = true
+                        }
+                    } label: {
+                        Label(comic.isStarted ? "Continue Reading" : "Read",
+                              systemImage: comic.isStarted ? "book.fill" : "book")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.arcGold)
+                    .accessibilityLabel(comic.isStarted ? "Continue reading \(comic.title)" : "Read \(comic.title)")
+                }
+                .padding(24)
+            }
+            .frame(maxWidth: 320)
+            .background(Color.arcSurface.opacity(0.4))
+
+            Divider()
+
+            // Right column — all details
+            ScrollView {
+                details(comic)
+                    .padding(.top, 8)
+            }
+        }
     }
 
     // MARK: - Hero
@@ -92,7 +167,11 @@ struct ComicDetailView: View {
                 }
 
                 Button {
-                    showReader = true
+                    if FileManager.default.fileExists(atPath: comic.filePath) {
+                        showReader = true
+                    } else {
+                        showMissingFileAlert = true
+                    }
                 } label: {
                     Label(comic.isStarted ? "Continue Reading" : "Read",
                           systemImage: comic.isStarted ? "book.fill" : "book")
@@ -307,6 +386,7 @@ struct ComicDetailView: View {
                 Image(systemName: comic.isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(comic.isFavorite ? .red : .primary)
             }
+            .accessibilityLabel(comic.isFavorite ? "Remove from favorites" : "Add to favorites")
         }
     }
 

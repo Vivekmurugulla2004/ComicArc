@@ -10,6 +10,7 @@ struct RunDetailView: View {
     @State private var readerComic: Comic?
     @State private var readerRunContext: [Comic] = []
     @State private var detailComicId: Int64?
+    @State private var missingFileComic: Comic?
 
     private let db = DatabaseManager.shared
 
@@ -28,8 +29,13 @@ struct RunDetailView: View {
                         if let firstUnfinished = items.first(where: { !$0.isFinished }) {
                             Section {
                                 Button {
-                                    readerRunContext = items.map(\.comic)
-                                    readerComic = firstUnfinished.comic
+                                    let comic = firstUnfinished.comic
+                                    if FileManager.default.fileExists(atPath: comic.filePath) {
+                                        readerRunContext = items.map(\.comic)
+                                        readerComic = comic
+                                    } else {
+                                        missingFileComic = comic
+                                    }
                                 } label: {
                                     HStack {
                                         Image(systemName: "play.fill")
@@ -60,8 +66,12 @@ struct RunDetailView: View {
                                 RunItemRow(item: item,
                                            allComics: items.map(\.comic),
                                            onRead: { comic, context in
-                                               readerRunContext = context
-                                               readerComic = comic
+                                               if FileManager.default.fileExists(atPath: comic.filePath) {
+                                                   readerRunContext = context
+                                                   readerComic = comic
+                                               } else {
+                                                   missingFileComic = comic
+                                               }
                                            },
                                            onDetail: { detailComicId = item.comic.id },
                                            onNotesChanged: { notes in
@@ -125,6 +135,21 @@ struct RunDetailView: View {
                     .onDisappear { load() }
             }
             .onAppear { load() }
+            .alert("File Not Found", isPresented: Binding(
+                get: { missingFileComic != nil },
+                set: { if !$0 { missingFileComic = nil } }
+            )) {
+                Button("Remove from Library", role: .destructive) {
+                    if let c = missingFileComic {
+                        library.delete(c)
+                        load()
+                    }
+                    missingFileComic = nil
+                }
+                Button("Cancel", role: .cancel) { missingFileComic = nil }
+            } message: {
+                Text("The file for \"\(missingFileComic?.title ?? "this comic")\" can't be found on your device.")
+            }
         }
     }
 
