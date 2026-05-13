@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// A zoomable, pannable image view — pinch to zoom, double-tap to fit/fill, drag to pan.
+/// `scale` is owned by the parent so it can reset on page navigation and drive double-tap zoom.
 struct ZoomableImage: View {
     let image: UIImage
+    @Binding var scale: CGFloat
 
-    @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
@@ -20,50 +21,48 @@ struct ZoomableImage: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .scaleEffect(scale)
                 .offset(offset)
+                // Pinch-to-zoom — always active
                 .gesture(
-                    SimultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let delta = value / lastScale
-                                lastScale = value
-                                scale = min(max(scale * delta, minScale), maxScale)
-                            }
-                            .onEnded { _ in
-                                lastScale = 1
-                                if scale <= minScale {
-                                    withAnimation { scale = minScale; offset = .zero }
-                                }
-                            },
-                        DragGesture()
-                            .onChanged { value in
-                                guard scale > 1 else { return }
-                                offset = CGSize(
-                                    width: lastOffset.width + value.translation.width,
-                                    height: lastOffset.height + value.translation.height
-                                )
-                            }
-                            .onEnded { _ in
-                                lastOffset = offset
-                                clampOffset(in: geo.size)
-                            }
-                    )
-                )
-                .onTapGesture(count: 2) {
-                    withAnimation(.spring()) {
-                        if scale > minScale {
-                            scale = minScale
-                            offset = .zero
-                            lastOffset = .zero
-                        } else {
-                            scale = 2.5
+                    MagnificationGesture()
+                        .onChanged { value in
+                            let delta = value / lastScale
+                            lastScale = value
+                            scale = min(max(scale * delta, minScale), maxScale)
                         }
+                        .onEnded { _ in
+                            lastScale = 1
+                            if scale <= minScale {
+                                withAnimation { scale = minScale; offset = .zero }
+                            }
+                        }
+                )
+                // Pan — only active when zoomed in; when scale == 1 the mask is .none
+                // so this gesture is never recognised and TabView's swipe fires freely.
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width:  lastOffset.width  + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in
+                            lastOffset = offset
+                            clampOffset(in: geo.size)
+                        },
+                    including: scale > minScale ? .all : .none
+                )
+                // Reset pan offset when scale is driven back to 1 from outside
+                .onChange(of: scale) { _, newScale in
+                    if newScale <= minScale {
+                        withAnimation { offset = .zero; lastOffset = .zero }
                     }
                 }
         }
     }
 
     private func clampOffset(in size: CGSize) {
-        let maxX = (size.width * (scale - 1)) / 2
+        let maxX = (size.width  * (scale - 1)) / 2
         let maxY = (size.height * (scale - 1)) / 2
         withAnimation(.spring(response: 0.3)) {
             offset = CGSize(

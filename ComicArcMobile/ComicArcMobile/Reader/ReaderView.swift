@@ -45,8 +45,11 @@ struct ReaderView: View {
                     ScrollReaderView(comic: comic, currentPage: $currentPage)
                         .onTapGesture { withAnimation { showToolbar.toggle() } }
                 } else {
-                    PagedReaderView(comic: comic, currentPage: $currentPage)
-                        .onTapGesture { withAnimation { showToolbar.toggle() } }
+                    PagedReaderView(
+                        comic: comic,
+                        currentPage: $currentPage,
+                        onTapCenter: { withAnimation { showToolbar.toggle() } }
+                    )
                 }
             }
             .onChange(of: currentPage) { _, page in
@@ -363,15 +366,43 @@ struct ReaderView: View {
 struct PagedReaderView: View {
     let comic: Comic
     @Binding var currentPage: Int
+    var onTapCenter: () -> Void = {}
+
+    @State private var zoomScale: CGFloat = 1
 
     var body: some View {
-        TabView(selection: $currentPage) {
-            ForEach(0..<max(1, comic.pageCount), id: \.self) { index in
-                AsyncPageImage(comic: comic, index: index)
+        GeometryReader { geo in
+            TabView(selection: $currentPage) {
+                ForEach(0..<max(1, comic.pageCount), id: \.self) { index in
+                    AsyncPageImage(
+                        comic: comic,
+                        index: index,
+                        zoomScale: index == currentPage ? $zoomScale : .constant(1)
+                    )
                     .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            // Double-tap: zoom in/out. Must be on the same view as the single-tap
+            // below so SwiftUI coordinates them — count:1 waits for count:2 to fail.
+            .onTapGesture(count: 2) {
+                withAnimation(.spring()) {
+                    zoomScale = zoomScale > 1 ? 1 : 2.5
+                }
+            }
+            // Single-tap with location: left third → prev, right third → next, centre → toolbar
+            .onTapGesture { location in
+                guard zoomScale <= 1 else { return }
+                if location.x < geo.size.width / 3 {
+                    if currentPage > 0 { currentPage -= 1 }
+                } else if location.x > geo.size.width * 2 / 3 {
+                    if currentPage < comic.pageCount - 1 { currentPage += 1 }
+                } else {
+                    onTapCenter()
+                }
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        .onChange(of: currentPage) { _, _ in zoomScale = 1 }
     }
 }
 
@@ -399,11 +430,14 @@ struct AsyncPageImage: View {
     let comic: Comic
     let index: Int
     let zoomable: Bool
+    var zoomScale: Binding<CGFloat>
 
-    init(comic: Comic, index: Int, zoomable: Bool = true) {
-        self.comic   = comic
-        self.index   = index
-        self.zoomable = zoomable
+    init(comic: Comic, index: Int, zoomable: Bool = true,
+         zoomScale: Binding<CGFloat> = .constant(1)) {
+        self.comic     = comic
+        self.index     = index
+        self.zoomable  = zoomable
+        self.zoomScale = zoomScale
     }
 
     @State private var image: UIImage?
@@ -412,7 +446,7 @@ struct AsyncPageImage: View {
         Group {
             if let img = image {
                 if zoomable {
-                    ZoomableImage(image: img)
+                    ZoomableImage(image: img, scale: zoomScale)
                 } else {
                     Image(uiImage: img)
                         .resizable()
