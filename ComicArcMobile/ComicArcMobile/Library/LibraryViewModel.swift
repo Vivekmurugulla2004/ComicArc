@@ -40,16 +40,16 @@ final class LibraryViewModel: ObservableObject {
         let tag  = selectedTag
         let q    = searchText.isEmpty ? nil : searchText
         let sort = sortOrder
+        let db   = db
 
         Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let publishers      = self.db.publishers()
-            let inProgress      = self.db.inProgress()
-            let allTags         = self.db.allTags()
-            let characterGroups = self.db.characterGroups(publisher: pub)
+            let publishers      = db.publishers()
+            let inProgress      = db.inProgress()
+            let allTags         = db.allTags()
+            let characterGroups = db.characterGroups(publisher: pub)
             let comics: [Comic] = tag != nil
-                ? self.db.comics(withTag: tag!)
-                : self.db.allComics(publisher: pub, search: q, sortOrder: sort)
+                ? db.comics(withTag: tag!)
+                : db.allComics(publisher: pub, search: q, sortOrder: sort)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.publishers      = publishers
@@ -63,9 +63,10 @@ final class LibraryViewModel: ObservableObject {
 
     func loadSeries(for character: String) {
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
+        let db  = db
         Task.detached(priority: .userInitiated) { [weak self] in
+            let groups = db.seriesGroups(character: character, publisher: pub)
             guard let self else { return }
-            let groups = self.db.seriesGroups(character: character, publisher: pub)
             await MainActor.run { self.seriesGroups = groups }
         }
     }
@@ -73,12 +74,13 @@ final class LibraryViewModel: ObservableObject {
     func loadIssues(character: String?, series: String) {
         let pub  = selectedPublisher == "All" ? nil : selectedPublisher
         let sort = sortOrder
+        let db   = db
         Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let result = self.db.allComics(
+            let result = db.allComics(
                 publisher: pub, character: character, series: series,
                 nullCharacterOnly: character == nil, sortOrder: sort
             )
+            guard let self else { return }
             await MainActor.run { self.comics = result }
         }
     }
@@ -88,17 +90,19 @@ final class LibraryViewModel: ObservableObject {
         let pub  = selectedPublisher == "All" ? nil : selectedPublisher
         let q    = searchText
         let sort = sortOrder
+        let db   = db
         Task.detached(priority: .userInitiated) { [weak self] in
+            let result = db.allComics(publisher: pub, search: q, sortOrder: sort)
             guard let self else { return }
-            let result = self.db.allComics(publisher: pub, search: q, sortOrder: sort)
             await MainActor.run { self.comics = result }
         }
     }
 
     func refreshInProgress() {
+        let db = db
         Task.detached(priority: .utility) { [weak self] in
+            let result = db.inProgress()
             guard let self else { return }
-            let result = self.db.inProgress()
             await MainActor.run { self.inProgress = result }
         }
     }
@@ -119,13 +123,15 @@ final class LibraryViewModel: ObservableObject {
             var failures = 0
             for (i, url) in urls.enumerated() {
                 guard !Task.isCancelled else { break }
+                let name = url.lastPathComponent
                 await MainActor.run {
                     self.importProgress.done        = i
-                    self.importProgress.currentFile = url.lastPathComponent
+                    self.importProgress.currentFile = name
                 }
                 let ok = await self.importFile(url)
                 if !ok { failures += 1 }
-                await MainActor.run { self.importProgress.failures = failures }
+                let f = failures
+                await MainActor.run { self.importProgress.failures = f }
             }
             await MainActor.run {
                 self.importProgress = ImportProgress()
@@ -151,7 +157,7 @@ final class LibraryViewModel: ObservableObject {
             ) else { return }
 
             var files: [URL] = []
-            for case let fileURL as URL in enumerator {
+            while let fileURL = enumerator.nextObject() as? URL {
                 guard !Task.isCancelled else { return }
                 if supported.contains(fileURL.pathExtension.lowercased()) {
                     files.append(fileURL)
@@ -159,21 +165,24 @@ final class LibraryViewModel: ObservableObject {
             }
             files.sort { $0.path < $1.path }
 
+            let fileCount = files.count
             await MainActor.run {
-                self.importProgress = ImportProgress(done: 0, total: files.count,
+                self.importProgress = ImportProgress(done: 0, total: fileCount,
                                                      currentFile: "", failures: 0)
             }
 
             var failures = 0
             for (i, fileURL) in files.enumerated() {
                 guard !Task.isCancelled else { break }
+                let name = fileURL.lastPathComponent
                 await MainActor.run {
                     self.importProgress.done        = i
-                    self.importProgress.currentFile = fileURL.lastPathComponent
+                    self.importProgress.currentFile = name
                 }
                 let ok = await self.importFileFromFolder(fileURL, folderRoot: folderURL)
                 if !ok { failures += 1 }
-                await MainActor.run { self.importProgress.failures = failures }
+                let f = failures
+                await MainActor.run { self.importProgress.failures = f }
             }
 
             await MainActor.run {
@@ -355,11 +364,11 @@ final class LibraryViewModel: ObservableObject {
     func updateProgress(_ comic: Comic, page: Int) {
         progressTask?.cancel()
         let comicId = comic.id
-        progressTask = Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
+        let db = db
+        progressTask = Task.detached(priority: .utility) {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
-            self.db.updateProgress(comicId: comicId, page: page)
+            db.updateProgress(comicId: comicId, page: page)
         }
     }
 }

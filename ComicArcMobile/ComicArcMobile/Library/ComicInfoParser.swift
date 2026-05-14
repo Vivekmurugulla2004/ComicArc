@@ -14,7 +14,7 @@ struct ComicInfo {
 /// The file may be at the archive root or one level deep.
 enum ComicInfoParser {
     static func parse(cbzURL: URL) -> ComicInfo? {
-        guard let archive = try? Archive(url: cbzURL, accessMode: .read) else { return nil }
+        guard let archive = try? Archive(url: cbzURL, accessMode: .read, pathEncoding: nil) else { return nil }
         let entry = archive.first(where: {
             let lower = $0.path.lowercased()
             return lower == "comicinfo.xml" || lower.hasSuffix("/comicinfo.xml")
