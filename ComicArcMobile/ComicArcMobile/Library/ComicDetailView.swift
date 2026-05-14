@@ -47,11 +47,12 @@ struct ComicDetailView: View {
                         AddToRunView(comicId: comicId)
                     }
                     .confirmationDialog(
-                        "Remove from library? Your file will not be deleted.",
+                        "Delete this comic? The file will also be removed from your Comics folder.",
                         isPresented: $showDeleteConfirm,
                         titleVisibility: .visible
                     ) {
-                        Button("Remove", role: .destructive) {
+                        Button("Delete Comic", role: .destructive) {
+                            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                             library.delete(comic)
                             dismiss()
                         }
@@ -242,9 +243,11 @@ struct ComicDetailView: View {
                         .font(.title2)
                         .foregroundStyle(i <= comic.rating ? Color.arcGold : Color.arcMuted)
                         .onTapGesture {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             db.setRating(comic.id, i == comic.rating ? 0 : i)
                             reload(); library.load()
                         }
+                        .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")\(i == comic.rating ? ", selected. Tap to clear." : "")")
                 }
             }
             .padding(.horizontal)
@@ -327,6 +330,7 @@ struct ComicDetailView: View {
                 icon: comic.isFavorite ? "heart.slash" : "heart",
                 tint: .red
             ) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 db.setFavorite(comic.id, !comic.isFavorite)
                 reload(); library.load()
             }
@@ -336,6 +340,7 @@ struct ComicDetailView: View {
                 icon: comic.inReadingList ? "bookmark.slash" : "bookmark",
                 tint: .blue
             ) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 db.setInReadingList(comic.id, !comic.inReadingList)
                 reload(); library.load()
             }
@@ -353,6 +358,7 @@ struct ComicDetailView: View {
             if comic.pageCount > 0 && !comic.isFinished {
                 actionButton(title: "Mark as Read",
                              icon: "checkmark.circle", tint: .green) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     db.updateProgress(comicId: comic.id, page: comic.pageCount - 1)
                     reload(); library.load()
                 }
@@ -366,7 +372,7 @@ struct ComicDetailView: View {
                 }
             }
 
-            actionButton(title: "Remove from Library",
+            actionButton(title: "Delete Comic",
                          icon: "trash", tint: .red) {
                 showDeleteConfirm = true
             }

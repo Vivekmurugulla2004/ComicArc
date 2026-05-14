@@ -102,7 +102,7 @@ struct OnboardingView: View {
                 Text("Add Your Comics")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
-                Text("Import CBZ, PDF, JPEG, or PNG files from your device or iCloud Drive. You can also import anytime from the Library tab.")
+                Text("Import individual CBZ or PDF files, or tap + and choose Import Folder to bring in an entire collection at once.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
@@ -119,12 +119,15 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.arcBg)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
+            .accessibilityLabel("Import comics now")
+            .accessibilityHint("Opens the file picker to select CBZ or PDF files")
 
             Button("Skip for now") {
                 finish()
             }
             .font(.subheadline)
             .foregroundStyle(Color.arcMuted)
+            .accessibilityLabel("Skip import for now")
 
             Spacer()
             Spacer()

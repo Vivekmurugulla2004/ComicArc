@@ -58,7 +58,8 @@ final class ThumbnailCache: @unchecked Sendable {
         let url = URL(fileURLWithPath: comic.filePath)
         switch comic.fileExtension {
         case "cbz":
-            return (try? CBZReader(url: url))?.image(at: 0)
+            // Reuse open archive if available — avoids reopening ZIP for sequential thumbnail loads
+            return CBZReaderCache.shared.reader(for: comic.filePath)?.image(at: 0)
         case "pdf":
             return PDFPageCounter.firstPage(url: url)
         case "jpg", "jpeg", "png":

@@ -290,6 +290,56 @@ final class DatabaseManager {
         exec("DELETE FROM comics WHERE id = \(id)")
     }
 
+    /// Upserts a comic record for backup restore.
+    /// On conflict (same file_path) preserves existing title/series/publisher from the DB
+    /// but restores ratings, favorites, reading list, and page count.
+    @discardableResult
+    func restoreComic(title: String, filePath: String, publisher: String, character: String?,
+                      series: String, issueNumber: String?, pageCount: Int,
+                      rating: Int, isFavorite: Bool, inReadingList: Bool) -> Int64? {
+        let sql = """
+            INSERT INTO comics
+              (title, file_path, publisher, character, series, issue_number, page_count, rating, is_favorite, in_reading_list)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(file_path) DO UPDATE SET
+              rating          = MAX(excluded.rating,          comics.rating),
+              is_favorite     = MAX(excluded.is_favorite,     comics.is_favorite),
+              in_reading_list = MAX(excluded.in_reading_list, comics.in_reading_list),
+              page_count      = CASE WHEN excluded.page_count > 0 THEN excluded.page_count ELSE comics.page_count END
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        sqlite3_bind_text(stmt, 1, title,     -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, filePath,  -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, publisher, -1, SQLITE_TRANSIENT)
+        if let c = character { sqlite3_bind_text(stmt, 4, c, -1, SQLITE_TRANSIENT) }
+        else                 { sqlite3_bind_null(stmt, 4) }
+        sqlite3_bind_text(stmt, 5, series, -1, SQLITE_TRANSIENT)
+        if let n = issueNumber { sqlite3_bind_text(stmt, 6, n, -1, SQLITE_TRANSIENT) }
+        else                   { sqlite3_bind_null(stmt, 6) }
+        sqlite3_bind_int(stmt,  7, Int32(pageCount))
+        sqlite3_bind_int(stmt,  8, Int32(rating))
+        sqlite3_bind_int(stmt,  9, isFavorite    ? 1 : 0)
+        sqlite3_bind_int(stmt, 10, inReadingList ? 1 : 0)
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+        // sqlite3_last_insert_rowid returns the rowid of the upserted row
+        let rowid = sqlite3_last_insert_rowid(db)
+        if rowid > 0 { return rowid }
+        // Fallback: look up by file path (handles the DO UPDATE path on some SQLite builds)
+        return comicId(forFilePath: filePath)
+    }
+
+    func comicId(forFilePath filePath: String) -> Int64? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT id FROM comics WHERE file_path = ?",
+                                 -1, &stmt, nil) == SQLITE_OK else { return nil }
+        sqlite3_bind_text(stmt, 1, filePath, -1, SQLITE_TRANSIENT)
+        let result = sqlite3_step(stmt) == SQLITE_ROW ? sqlite3_column_int64(stmt, 0) : nil
+        sqlite3_finalize(stmt)
+        return result
+    }
+
     func updateMetadata(_ id: Int64, title: String, publisher: String, character: String?,
                         series: String, issueNumber: String?) {
         var stmt: OpaquePointer?

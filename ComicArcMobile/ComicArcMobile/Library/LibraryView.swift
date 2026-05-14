@@ -5,6 +5,7 @@ struct LibraryView: View {
     @EnvironmentObject var library: LibraryViewModel
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showImporter = false
+    @State private var showFolderImporter = false
     @State private var browseMode: BrowseMode = .characters
     @State private var selectedCharacter: SeriesGroup?
     @State private var selectedSeries: SeriesGroup?
@@ -36,8 +37,16 @@ struct LibraryView: View {
         case finished      = "Finished"
     }
 
+    private var phoneColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 130), spacing: 12)]
+    }
+
+    private var ipadColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 180), spacing: 16)]
+    }
+
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: sizeClass == .regular ? 160 : 140), spacing: 12)]
+        sizeClass == .regular ? ipadColumns : phoneColumns
     }
 
     // True when user is actively searching — bypass the hierarchy
@@ -60,47 +69,13 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if library.importProgress.total > 0 { importBanner }
-
-                    if !library.publishers.isEmpty && !isSearching {
-                        publisherFilterRow
-                    }
-
-                    if (browseMode == .flat || isSearching) && !library.allTags.isEmpty {
-                        tagFilterRow
-                    }
-
-                    // Smart filters — flat / search mode only
-                    if browseMode == .flat || isSearching {
-                        smartFilterRow
-                    }
-
-                    if isSearching {
-                        flatGrid
-                    } else if browseMode == .characters {
-                        if selectedCharacter != nil {
-                            breadcrumbBar
-                        }
-                        if let series = selectedSeries {
-                            issueGrid(series: series)
-                        } else if let char = selectedCharacter {
-                            seriesGrid(character: char)
-                        } else {
-                            if !library.inProgress.isEmpty { continueReadingSection }
-                            continueRunSection
-                            characterGrid
-                        }
-                    } else {
-                        if !library.inProgress.isEmpty && library.selectedTag == nil {
-                            continueReadingSection
-                        }
-                        continueRunSection
-                        flatGrid
-                    }
+            Group {
+                // iPad character browse: two-panel layout
+                if sizeClass == .regular && browseMode == .characters && !isSearching {
+                    ipadCharacterBrowse
+                } else {
+                    phoneScrollContent
                 }
-                .padding(.horizontal)
             }
             .navigationTitle(isSelecting ? "\(selectedIds.count) Selected" : navigationTitle)
             .background(Color.arcBg)
@@ -115,6 +90,7 @@ struct LibraryView: View {
                 selectedSmartFilter = nil
                 selectedCharacter = nil
                 selectedSeries = nil
+                library.load()
             }
             .toolbar { toolbarContent }
             .safeAreaInset(edge: .bottom) {
@@ -126,6 +102,15 @@ struct LibraryView: View {
                 allowsMultipleSelection: true
             ) { result in
                 if case .success(let urls) = result { library.importFiles(urls) }
+            }
+            .fileImporter(
+                isPresented: $showFolderImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    library.importFolder(url)
+                }
             }
             .onAppear { library.load(); loadActiveRun() }
             .sheet(item: Binding(
@@ -181,14 +166,259 @@ struct LibraryView: View {
         }
     }
 
+    // MARK: - iPad Two-Panel Layout
+
+    private var ipadCharacterBrowse: some View {
+        VStack(spacing: 0) {
+            if library.importProgress.isActive {
+                importBanner.padding(.horizontal)
+            }
+            HStack(alignment: .top, spacing: 0) {
+                // Left panel: character list + contextual sections
+                VStack(alignment: .leading, spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if !library.publishers.isEmpty {
+                                publisherFilterRow.padding(.horizontal, 12)
+                            }
+                            if !library.inProgress.isEmpty {
+                                continueReadingSection.padding(.horizontal, 12)
+                            }
+                            continueRunSection.padding(.horizontal, 12)
+
+                            if library.characterGroups.isEmpty {
+                                EmptyStateView(
+                                    icon: "books.vertical",
+                                    title: "No Comics Yet",
+                                    message: "Tap + to import files.",
+                                    actionTitle: "Import Comics",
+                                    action: { showImporter = true }
+                                )
+                                .padding(.top, 24)
+                            } else {
+                                ForEach(library.characterGroups) { group in
+                                    ipadCharacterRow(group)
+                                }
+                            }
+                            Spacer(minLength: 24)
+                        }
+                    }
+                }
+                .frame(width: 280)
+                .background(Color.arcSurface.ignoresSafeArea(edges: .bottom))
+
+                Divider().ignoresSafeArea()
+
+                // Right panel: series or issues
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let series = selectedSeries {
+                            ipadIssuePanel(series: series)
+                        } else if selectedCharacter != nil {
+                            ipadSeriesPanel
+                        } else {
+                            VStack(spacing: 12) {
+                                Image(systemName: "arrow.left")
+                                    .font(.title2)
+                                    .foregroundStyle(Color.arcMuted)
+                                Text("Select a character")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.arcMuted)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 100)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .background(Color.arcBg)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func ipadCharacterRow(_ group: SeriesGroup) -> some View {
+        let isSelected = selectedCharacter?.id == group.id
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if isSelected {
+                    selectedCharacter = nil
+                    selectedSeries = nil
+                } else {
+                    selectCharacter(group)
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                CoverImage(comicId: group.coverComicId)
+                    .frame(width: 38, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.groupName)
+                        .font(.subheadline)
+                        .fontWeight(isSelected ? .bold : .regular)
+                        .foregroundStyle(isSelected ? Color.arcGold : .white)
+                        .lineLimit(1)
+                    Text("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if group.isFinished {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                } else if group.isReading {
+                    Image(systemName: "book.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.arcGold)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Color.arcGold : Color.arcMuted)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.arcGold.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var ipadSeriesPanel: some View {
+        Group {
+            if library.seriesGroups.isEmpty {
+                EmptyStateView(
+                    icon: "books.vertical",
+                    title: "No Series Found",
+                    message: "No series match the current filter."
+                )
+                .padding(.top, 60)
+            } else {
+                LazyVGrid(columns: ipadColumns, spacing: 16) {
+                    ForEach(library.seriesGroups) { group in
+                        SeriesCard(group: group, characterName: selectedCharacter?.groupName)
+                            .onTapGesture {
+                                withAnimation { selectSeries(group) }
+                            }
+                    }
+                }
+                .padding()
+            }
+        }
+    }
+
+    private func ipadIssuePanel(series: SeriesGroup) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Back to series (only when character has sub-series)
+            if selectedCharacter?.character != nil {
+                Button {
+                    withAnimation { selectedSeries = nil }
+                } label: {
+                    Label("Back to \(selectedCharacter?.groupName ?? "Series")",
+                          systemImage: "chevron.left")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.arcGold)
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            }
+
+            if filteredComics.isEmpty {
+                EmptyStateView(
+                    icon: "books.vertical",
+                    title: "No Issues",
+                    message: "No issues match the current filter."
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVGrid(columns: ipadColumns, spacing: 16) {
+                    ForEach(filteredComics) { comic in
+                        selectableComicCard(comic)
+                    }
+                }
+                .padding()
+            }
+        }
+    }
+
+    // MARK: - Phone Scroll Content
+
+    private var phoneScrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if library.importProgress.isActive { importBanner }
+
+                if !library.publishers.isEmpty && !isSearching {
+                    publisherFilterRow
+                }
+
+                if (browseMode == .flat || isSearching) && !library.allTags.isEmpty {
+                    tagFilterRow
+                }
+
+                if browseMode == .flat || isSearching {
+                    smartFilterRow
+                }
+
+                if isSearching {
+                    flatGrid
+                } else if browseMode == .characters {
+                    if selectedCharacter != nil {
+                        breadcrumbBar
+                    }
+                    if let series = selectedSeries {
+                        issueGrid(series: series)
+                    } else if let char = selectedCharacter {
+                        seriesGrid(character: char)
+                    } else {
+                        if !library.inProgress.isEmpty { continueReadingSection }
+                        continueRunSection
+                        characterGrid
+                    }
+                } else {
+                    if !library.inProgress.isEmpty && library.selectedTag == nil {
+                        continueReadingSection
+                    }
+                    continueRunSection
+                    flatGrid
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
     // MARK: - Import Banner
 
     private var importBanner: some View {
-        HStack {
+        HStack(spacing: 10) {
             ProgressView()
-            Text("Importing \(library.importProgress.done + 1) of \(library.importProgress.total)…")
-                .font(.subheadline)
+            VStack(alignment: .leading, spacing: 2) {
+                if library.importProgress.isScanning {
+                    Text("Scanning folder…")
+                        .font(.subheadline)
+                } else {
+                    Text("Importing \(library.importProgress.done + 1) of \(library.importProgress.total)…")
+                        .font(.subheadline)
+                    if !library.importProgress.currentFile.isEmpty {
+                        Text(library.importProgress.currentFile)
+                            .font(.caption2)
+                            .foregroundStyle(Color.arcMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
             Spacer()
+            if library.importProgress.failures > 0 {
+                Text("\(library.importProgress.failures) failed")
+                    .font(.caption2.bold())
+                    .foregroundStyle(Color.arcRed)
+            }
+            Button("Cancel") { library.cancelImport() }
+                .font(.caption.bold())
+                .foregroundStyle(Color.arcGold)
         }
         .padding(12)
         .background(Color.arcGold.opacity(0.15))
@@ -202,15 +432,11 @@ struct LibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 publisherChip("All", isActive: library.selectedPublisher == "All") {
-                    library.selectedPublisher = "All"
-                    selectedCharacter = nil; selectedSeries = nil
-                    library.load()
+                    selectPublisher("All")
                 }
                 ForEach(library.publishers, id: \.self) { pub in
                     publisherChip(pub, isActive: library.selectedPublisher == pub) {
-                        library.selectedPublisher = (library.selectedPublisher == pub) ? "All" : pub
-                        selectedCharacter = nil; selectedSeries = nil
-                        library.load()
+                        selectPublisher(library.selectedPublisher == pub ? "All" : pub)
                     }
                 }
             }
@@ -307,7 +533,16 @@ struct LibraryView: View {
                             .accessibilityLabel("Sort Comics")
                     }
                 }
-                Button { showImporter = true } label: {
+
+                // Import menu: files or folder
+                Menu {
+                    Button { showImporter = true } label: {
+                        Label("Import Files", systemImage: "doc.badge.plus")
+                    }
+                    Button { showFolderImporter = true } label: {
+                        Label("Import Folder", systemImage: "folder.badge.plus")
+                    }
+                } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Import Comics")
@@ -322,7 +557,6 @@ struct LibraryView: View {
                     withAnimation {
                         if selectedSeries != nil {
                             selectedSeries = nil
-                            // Null-character groups skip the series level, so pop character too
                             if selectedCharacter?.character == nil {
                                 selectedCharacter = nil
                             }
@@ -368,7 +602,7 @@ struct LibraryView: View {
                 EmptyStateView(
                     icon: "books.vertical",
                     title: "No Comics Yet",
-                    message: "Tap + to import CBZ, PDF, or image files and start your library.",
+                    message: "Tap + to import CBZ or PDF files, or import an entire folder at once.",
                     actionTitle: "Import Comics",
                     action: { showImporter = true }
                 )
@@ -378,17 +612,7 @@ struct LibraryView: View {
                     ForEach(library.characterGroups) { group in
                         SeriesCard(group: group)
                             .onTapGesture {
-                                withAnimation {
-                                    selectedSmartFilter = nil
-                                    selectedCharacter = group
-                                    if group.character != nil {
-                                        library.loadSeries(for: group.groupName)
-                                    } else {
-                                        // No character hierarchy — go straight to issues
-                                        selectedSeries = group
-                                        library.loadIssues(character: nil, series: group.groupName)
-                                    }
-                                }
+                                withAnimation { selectCharacter(group) }
                             }
                     }
                 }
@@ -411,11 +635,7 @@ struct LibraryView: View {
                     ForEach(library.seriesGroups) { group in
                         SeriesCard(group: group, characterName: character.groupName)
                             .onTapGesture {
-                                withAnimation {
-                                    selectedSeries = group
-                                    selectedSmartFilter = nil
-                                    library.loadIssues(character: character.character, series: group.groupName)
-                                }
+                                withAnimation { selectSeries(group) }
                             }
                     }
                 }
@@ -440,7 +660,7 @@ struct LibraryView: View {
                     EmptyStateView(
                         icon: "books.vertical",
                         title: "No Comics Yet",
-                        message: "Tap + to import CBZ, PDF, or image files and start your library.",
+                        message: "Tap + to import CBZ or PDF files, or import an entire folder at once.",
                         actionTitle: "Import Comics",
                         action: { showImporter = true }
                     )
@@ -646,7 +866,6 @@ struct LibraryView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        // Inline progress bar
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.arcBorder)
@@ -722,6 +941,37 @@ struct LibraryView: View {
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
         }
+    }
+
+    // MARK: - Navigation Helpers
+
+    private func selectCharacter(_ group: SeriesGroup) {
+        selectedSmartFilter = nil
+        selectedCharacter = group
+        selectedSeries = nil
+        if group.character != nil {
+            library.loadSeries(for: group.groupName)
+        } else {
+            selectedSeries = group
+            library.loadIssues(character: nil, series: group.groupName)
+        }
+    }
+
+    private func selectSeries(_ group: SeriesGroup) {
+        selectedSmartFilter = nil
+        selectedSeries = group
+        library.loadIssues(
+            character: selectedCharacter?.character,
+            series: group.groupName
+        )
+    }
+
+    private func selectPublisher(_ publisher: String) {
+        library.selectedPublisher = publisher
+        selectedCharacter = nil
+        selectedSeries = nil
+        selectedSmartFilter = nil
+        library.load()
     }
 
     // MARK: - Bulk Action Helpers
@@ -830,6 +1080,15 @@ struct SeriesCard: View {
             Text("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
                 .font(.caption).foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel({
+            var parts = [group.groupName]
+            if let c = characterName { parts.append(c) }
+            parts.append("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
+            if group.isFinished { parts.append("Finished") }
+            else if group.isReading { parts.append("In progress") }
+            return parts.joined(separator: ", ")
+        }())
     }
 
     private func badge(_ label: String, color: Color) -> some View {

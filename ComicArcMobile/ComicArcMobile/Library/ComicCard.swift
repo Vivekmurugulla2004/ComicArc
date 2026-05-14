@@ -13,19 +13,28 @@ struct ComicCard: View {
                         if comic.pageCount > 0 && comic.progress > 0 {
                             GeometryReader { geo in
                                 Rectangle()
-                                    .fill(Color.arcGold)
+                                    .fill(comic.isFinished ? Color.green : Color.arcGold)
                                     .frame(width: geo.size.width * comic.progressPercent, height: 4)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                             }
                         }
                     }
 
-                if comic.isFavorite {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(Color.arcRed)
-                        .padding(6)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .padding(4)
+                // Status badges (top-right stack)
+                VStack(spacing: 4) {
+                    if comic.isFinished {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .padding(5)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .padding(4)
+                    } else if comic.isFavorite {
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(Color.arcRed)
+                            .padding(5)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .padding(4)
+                    }
                 }
             }
 
@@ -53,6 +62,22 @@ struct ComicCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.arcBorder, lineWidth: 1)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        var parts: [String] = [comic.title]
+        if comic.publisher != "Unknown" { parts.append(comic.publisher) }
+        if comic.isFinished {
+            parts.append("Finished")
+        } else if comic.isStarted, comic.pageCount > 0 {
+            parts.append("Page \(comic.progress) of \(comic.pageCount)")
+        } else {
+            parts.append("Unread")
+        }
+        if comic.rating > 0 { parts.append("\(comic.rating) star\(comic.rating == 1 ? "" : "s")") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -78,6 +103,7 @@ struct CoverImage: View {
                     }
             }
         }
+        .accessibilityHidden(true)
         .task(id: comicId) { image = await ThumbnailCache.shared.thumbnail(comicId: comicId) }
     }
 }

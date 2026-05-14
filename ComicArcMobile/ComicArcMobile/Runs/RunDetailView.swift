@@ -237,6 +237,7 @@ struct RunItemRow: View {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
+                    .accessibilityLabel("Comic options")
             }
         }
         .padding(.vertical, 2)

@@ -6,6 +6,8 @@ struct ComicMeta {
     var character: String?
     var series: String
     var issueNumber: String?
+    var writer: String?
+    var summary: String?
 }
 
 enum ComicImporter {
@@ -14,12 +16,46 @@ enum ComicImporter {
         options: .caseInsensitive
     )
 
-    /// Derive metadata from the file URL — mirrors the desktop scanner's _meta() logic.
+    /// Derive metadata from the file URL.
     /// Expected folder layout: Publisher/Character/Series/file.cbz
+    /// For CBZ files, ComicInfo.xml inside the archive overrides filename-guessed fields.
     static func parse(url: URL) -> ComicMeta {
+        var meta = pathMeta(url: url)
+
+        // ComicInfo.xml is the ground truth — override filename guesses when present
+        if url.pathExtension.lowercased() == "cbz",
+           let info = ComicInfoParser.parse(cbzURL: url) {
+            if let s = info.series,    !s.isEmpty { meta.series = s }
+            if let p = info.publisher, !p.isEmpty { meta.publisher = p }
+            if let n = info.number,    !n.isEmpty { meta.issueNumber = n }
+            if let c = info.characters.first       { meta.character = c }
+            meta.writer  = info.writer
+            meta.summary = info.summary
+        }
+
+        return meta
+    }
+
+    /// Returns page count without caching — call off main thread.
+    static func pageCount(url: URL) async -> Int {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "cbz":
+            return (try? CBZReader(url: url))?.pageCount ?? 0
+        case "pdf":
+            return PDFPageCounter.count(url: url)
+        case "jpg", "jpeg", "png", "gif", "webp":
+            return 1
+        default:
+            return 0
+        }
+    }
+
+    // MARK: - Path-based metadata (fallback)
+
+    private static func pathMeta(url: URL) -> ComicMeta {
         let filename = url.deletingPathExtension().lastPathComponent
 
-        // Strip the app's Documents/Comics prefix to get relative parts
         let docsPath = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Comics").path
@@ -53,9 +89,8 @@ enum ComicImporter {
             series    = "General"
         }
 
-        // Extract issue number from filename
         var issueNumber: String?
-        if let match = Self.issueRegex?.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
+        if let match = issueRegex?.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
            let range = Range(match.range(at: 1), in: filename) {
             issueNumber = String(filename[range])
         }
@@ -67,20 +102,5 @@ enum ComicImporter {
             series: series,
             issueNumber: issueNumber
         )
-    }
-
-    /// Returns page count without caching — call off main thread.
-    static func pageCount(url: URL) async -> Int {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "cbz":
-            return (try? CBZReader(url: url))?.pageCount ?? 0
-        case "pdf":
-            return PDFPageCounter.count(url: url)
-        case "jpg", "jpeg", "png", "gif", "webp":
-            return 1
-        default:
-            return 0
-        }
     }
 }

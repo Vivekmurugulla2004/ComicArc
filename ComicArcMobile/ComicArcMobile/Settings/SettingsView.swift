@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject var library: LibraryViewModel
@@ -7,10 +8,16 @@ struct SettingsView: View {
     @AppStorage("autoplayInterval") private var autoplayInterval: Double = 10
     @State private var showClearConfirm = false
     @State private var showExportSheet = false
+    @State private var showImportBackup = false
     @State private var exportURL: URL?
     @State private var storageSize: String = "…"
+    @State private var restoreResult: String?
+    @State private var isRestoring = false
 
     private let db = DatabaseManager.shared
+    private let comicsFolder = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Comics").path
 
     var body: some View {
         NavigationStack {
@@ -45,7 +52,18 @@ struct SettingsView: View {
 
                     Button("Export Backup (JSON)") { exportBackup() }
                         .accessibilityLabel("Export library backup as JSON")
-                        .accessibilityHint("Shares a JSON file with all your comics and runs data")
+
+                    Button {
+                        showImportBackup = true
+                    } label: {
+                        if isRestoring {
+                            HStack { ProgressView(); Text("Restoring…") }
+                        } else {
+                            Text("Import Backup (JSON)")
+                        }
+                    }
+                    .disabled(isRestoring)
+                    .accessibilityLabel("Import library backup from JSON")
                 }
 
                 Section {
@@ -87,6 +105,20 @@ struct SettingsView: View {
                     ShareSheet(url: url)
                 }
             }
+            .fileImporter(
+                isPresented: $showImportBackup,
+                allowedContentTypes: [.json]
+            ) { result in
+                if case .success(let url) = result { restoreBackup(from: url) }
+            }
+            .alert("Restore Complete", isPresented: Binding(
+                get: { restoreResult != nil },
+                set: { if !$0 { restoreResult = nil } }
+            )) {
+                Button("OK", role: .cancel) { restoreResult = nil }
+            } message: {
+                Text(restoreResult ?? "")
+            }
         }
     }
 
@@ -94,18 +126,35 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     }
 
+    // MARK: - Export
+
     private func exportBackup() {
         let comics = db.allComics()
         let runs   = db.allRuns()
 
-        let comicEntries: [[String: Any]] = comics.map { c in [
-            "id": c.id, "title": c.title, "publisher": c.publisher,
-            "character": c.character ?? "", "series": c.series,
-            "issue_number": c.issueNumber ?? "", "page_count": c.pageCount,
-            "progress": c.progress, "rating": c.rating,
-            "is_favorite": c.isFavorite, "in_reading_list": c.inReadingList,
-            "tags": db.tags(for: c.id).map(\.name)
-        ]}
+        let comicEntries: [[String: Any]] = comics.map { c in
+            // Store path relative to Comics folder so it's device-independent
+            var relPath = c.filePath
+            if relPath.hasPrefix(comicsFolder) {
+                relPath = String(relPath.dropFirst(comicsFolder.count))
+                while relPath.hasPrefix("/") { relPath = String(relPath.dropFirst()) }
+            }
+            return [
+                "id": c.id,
+                "title": c.title,
+                "file_path": relPath,
+                "publisher": c.publisher,
+                "character": c.character ?? "",
+                "series": c.series,
+                "issue_number": c.issueNumber ?? "",
+                "page_count": c.pageCount,
+                "progress": c.progress,
+                "rating": c.rating,
+                "is_favorite": c.isFavorite,
+                "in_reading_list": c.inReadingList,
+                "tags": db.tags(for: c.id).map(\.name)
+            ]
+        }
 
         let runEntries: [[String: Any]] = runs.map { r in
             let items = db.runItems(runId: r.id).map { item in [
@@ -121,18 +170,99 @@ struct SettingsView: View {
         let payload: [String: Any] = [
             "exported_at": ISO8601DateFormatter().string(from: Date()),
             "app": "ComicArc iOS",
+            "version": 2,
             "comics": comicEntries,
             "runs": runEntries
         ]
 
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: .prettyPrinted) else { return }
-
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("ComicArc-backup.json")
         try? data.write(to: url)
         exportURL = url
         showExportSheet = true
     }
+
+    // MARK: - Restore
+
+    private func restoreBackup(from url: URL) {
+        isRestoring = true
+        Task.detached { [db, comicsFolder] in
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            guard let data = try? Data(contentsOf: url),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let comicList = json["comics"] as? [[String: Any]] else {
+                await MainActor.run { isRestoring = false; restoreResult = "Invalid backup file." }
+                return
+            }
+
+            var restoredComics = 0
+            var idMap: [Int64: Int64] = [:]  // backup ID → current DB ID
+
+            for c in comicList {
+                let relPath   = c["file_path"]    as? String ?? ""
+                let title     = c["title"]        as? String ?? ""
+                let publisher = c["publisher"]    as? String ?? "Unknown"
+                let character = (c["character"]   as? String).flatMap { $0.isEmpty ? nil : $0 }
+                let series    = c["series"]       as? String ?? "General"
+                let issueNum  = (c["issue_number"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                let pageCount = c["page_count"]   as? Int ?? 0
+                let progress  = c["progress"]     as? Int ?? 0
+                let rating    = c["rating"]       as? Int ?? 0
+                let isFav     = c["is_favorite"]  as? Bool ?? false
+                let inRL      = c["in_reading_list"] as? Bool ?? false
+                let tags      = c["tags"]         as? [String] ?? []
+                let backupId  = (c["id"]          as? Int).map { Int64($0) } ?? 0
+
+                guard !relPath.isEmpty else { continue }
+                let fullPath = (comicsFolder as NSString).appendingPathComponent(relPath)
+
+                guard let newId = db.restoreComic(
+                    title: title, filePath: fullPath,
+                    publisher: publisher, character: character,
+                    series: series, issueNumber: issueNum,
+                    pageCount: pageCount, rating: rating,
+                    isFavorite: isFav, inReadingList: inRL
+                ) else { continue }
+
+                if backupId > 0 { idMap[backupId] = newId }
+                if progress > 0 { db.updateProgress(comicId: newId, page: progress) }
+                if !tags.isEmpty { db.setTags(for: newId, names: tags) }
+                restoredComics += 1
+            }
+
+            // Restore runs, mapping backup comic IDs to current IDs
+            var restoredRuns = 0
+            if let runList = json["runs"] as? [[String: Any]] {
+                for r in runList {
+                    guard let title = r["title"] as? String, !title.isEmpty else { continue }
+                    let desc  = r["description"] as? String ?? ""
+                    let items = (r["items"] as? [[String: Any]] ?? [])
+                        .sorted { ($0["position"] as? Int ?? 0) < ($1["position"] as? Int ?? 0) }
+                    guard let runId = db.createRun(title: title, description: desc) else { continue }
+                    for item in items {
+                        let oldId = (item["comic_id"] as? Int).map { Int64($0) } ?? 0
+                        if let currentId = idMap[oldId] {
+                            db.addToRun(runId: runId, comicId: currentId)
+                        }
+                    }
+                    restoredRuns += 1
+                }
+            }
+
+            let msg = "Restored \(restoredComics) comic\(restoredComics == 1 ? "" : "s")" +
+                      " and \(restoredRuns) run\(restoredRuns == 1 ? "" : "s")."
+            await MainActor.run {
+                isRestoring = false
+                library.load()
+                restoreResult = msg
+            }
+        }
+    }
+
+    // MARK: - Clear
 
     private func clearLibrary() {
         let comicsDir = FileManager.default
@@ -154,6 +284,8 @@ struct SettingsView: View {
 
         library.load()
     }
+
+    // MARK: - Storage
 
     private func computeStorageSize() {
         Task.detached {

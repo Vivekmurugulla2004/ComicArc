@@ -275,6 +275,7 @@ struct ReaderView: View {
                     Image(systemName: "xmark")
                         .foregroundStyle(.white.opacity(0.7))
                 }
+                .accessibilityLabel("Dismiss")
             }
             .padding()
             .background(.ultraThinMaterial)
