@@ -8,11 +8,11 @@ private typealias ArchiveEntryPtr = OpaquePointer
 
 @_silgen_name("archive_read_new")
 private func _archive_read_new() -> ArchivePtr?
-@_silgen_name("archive_read_support_filter_all")
+@discardableResult @_silgen_name("archive_read_support_filter_all")
 private func _archive_read_support_filter_all(_ a: ArchivePtr?) -> Int32
-@_silgen_name("archive_read_support_format_rar")
+@discardableResult @_silgen_name("archive_read_support_format_rar")
 private func _archive_read_support_format_rar(_ a: ArchivePtr?) -> Int32
-@_silgen_name("archive_read_support_format_rar5")
+@discardableResult @_silgen_name("archive_read_support_format_rar5")
 private func _archive_read_support_format_rar5(_ a: ArchivePtr?) -> Int32
 @_silgen_name("archive_read_open_filename")
 private func _archive_read_open_filename(_ a: ArchivePtr?, _ filename: UnsafePointer<CChar>?, _ blockSize: Int) -> Int32
@@ -24,9 +24,9 @@ private func _archive_entry_pathname(_ entry: ArchiveEntryPtr?) -> UnsafePointer
 private func _archive_entry_size(_ entry: ArchiveEntryPtr?) -> Int64
 @_silgen_name("archive_read_data")
 private func _archive_read_data(_ a: ArchivePtr?, _ buff: UnsafeMutableRawPointer?, _ size: Int) -> Int
-@_silgen_name("archive_read_data_skip")
+@discardableResult @_silgen_name("archive_read_data_skip")
 private func _archive_read_data_skip(_ a: ArchivePtr?) -> Int32
-@_silgen_name("archive_read_free")
+@discardableResult @_silgen_name("archive_read_free")
 private func _archive_read_free(_ a: ArchivePtr?) -> Int32
 @_silgen_name("archive_error_string")
 private func _archive_error_string(_ a: ArchivePtr?) -> UnsafePointer<CChar>?
