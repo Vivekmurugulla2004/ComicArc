@@ -33,28 +33,20 @@ struct ContentView: View {
 
     // MARK: - iPad (sidebar)
 
-    @State private var iPadSelection: SidebarTab = .library
+    @State private var iPadSelection: SidebarTab? = .library
 
     private var iPadLayout: some View {
         NavigationSplitView {
-            List {
+            List(selection: $iPadSelection) {
                 ForEach(SidebarTab.allCases) { tab in
-                    Button {
-                        iPadSelection = tab
-                    } label: {
-                        Label(tab.label, systemImage: tab.icon)
-                            .foregroundStyle(iPadSelection == tab ? Color.arcGold : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(
-                        iPadSelection == tab ? Color.arcGold.opacity(0.15) : Color.clear
-                    )
+                    Label(tab.label, systemImage: tab.icon)
+                        .tag(tab)
                 }
             }
             .navigationTitle("ComicArc")
             .listStyle(.sidebar)
         } detail: {
-            switch iPadSelection {
+            switch iPadSelection ?? .library {
             case .library:     LibraryView()
             case .runs:        RunsView()
             case .favorites:   FavoritesView()
@@ -69,7 +61,7 @@ struct ContentView: View {
 
 // MARK: - Sidebar tabs
 
-enum SidebarTab: String, CaseIterable, Identifiable {
+enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
     case library, runs, favorites, readingList, stats, settings
     var id: String { rawValue }
 

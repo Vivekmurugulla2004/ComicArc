@@ -118,22 +118,48 @@ final class LibraryViewModel: ObservableObject {
     func importFiles(_ urls: [URL]) {
         importTask?.cancel()
         importProgress = ImportProgress(done: 0, total: urls.count, currentFile: "", failures: 0)
+        let db = db
         importTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
+            try? FileManager.default.createDirectory(at: Self.comicsDir, withIntermediateDirectories: true)
+
+            var done = 0
             var failures = 0
-            for (i, url) in urls.enumerated() {
-                guard !Task.isCancelled else { break }
-                let name = url.lastPathComponent
-                await MainActor.run {
-                    self.importProgress.done        = i
-                    self.importProgress.currentFile = name
+
+            await withTaskGroup(of: (Bool, String).self) { group in
+                var remaining = urls
+                var inFlight  = 0
+                let limit     = 4
+
+                while !remaining.isEmpty && inFlight < limit {
+                    let url  = remaining.removeFirst()
+                    let name = url.lastPathComponent
+                    group.addTask { (await Self.importOne(source: url, db: db), name) }
+                    inFlight += 1
                 }
-                let ok = await self.importFile(url)
-                if !ok { failures += 1 }
-                let f = failures
-                await MainActor.run { self.importProgress.failures = f }
+
+                while let (ok, name) = await group.next() {
+                    inFlight -= 1
+                    if !ok { failures += 1 }
+                    done += 1
+                    let d = done, f = failures, n = name
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.importProgress.done        = d
+                        self.importProgress.failures    = f
+                        self.importProgress.currentFile = n
+                    }
+                    if !remaining.isEmpty {
+                        let url  = remaining.removeFirst()
+                        let name = url.lastPathComponent
+                        group.addTask { (await Self.importOne(source: url, db: db), name) }
+                        inFlight += 1
+                    }
+                }
             }
-            await MainActor.run {
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 self.importProgress = ImportProgress()
                 self.load()
             }
@@ -143,11 +169,20 @@ final class LibraryViewModel: ObservableObject {
     func importFolder(_ folderURL: URL) {
         importTask?.cancel()
         importProgress = ImportProgress(isScanning: true)
+        let db = db
         importTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
 
             let accessing = folderURL.startAccessingSecurityScopedResource()
-            defer { if accessing { folderURL.stopAccessingSecurityScopedResource() } }
+            guard accessing else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.importProgress = ImportProgress()
+                    self.importError = "Could not access the selected folder."
+                }
+                return
+            }
+            defer { folderURL.stopAccessingSecurityScopedResource() }
 
             let supported = Set(["cbz", "cbr", "pdf", "jpg", "jpeg", "png"])
             guard let enumerator = FileManager.default.enumerator(
@@ -166,99 +201,109 @@ final class LibraryViewModel: ObservableObject {
             files.sort { $0.path < $1.path }
 
             let fileCount = files.count
-            await MainActor.run {
-                self.importProgress = ImportProgress(done: 0, total: fileCount,
-                                                     currentFile: "", failures: 0)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.importProgress = ImportProgress(done: 0, total: fileCount, currentFile: "", failures: 0)
             }
 
+            try? FileManager.default.createDirectory(at: Self.comicsDir, withIntermediateDirectories: true)
+
+            var done = 0
             var failures = 0
-            for (i, fileURL) in files.enumerated() {
-                guard !Task.isCancelled else { break }
-                let name = fileURL.lastPathComponent
-                await MainActor.run {
-                    self.importProgress.done        = i
-                    self.importProgress.currentFile = name
+
+            await withTaskGroup(of: (Bool, String).self) { group in
+                var remaining = files
+                var inFlight  = 0
+                let limit     = 4
+
+                while !remaining.isEmpty && inFlight < limit {
+                    let fileURL = remaining.removeFirst()
+                    let name    = fileURL.lastPathComponent
+                    group.addTask { (await Self.importFromFolder(fileURL, folderRoot: folderURL, db: db), name) }
+                    inFlight += 1
                 }
-                let ok = await self.importFileFromFolder(fileURL, folderRoot: folderURL)
-                if !ok { failures += 1 }
-                let f = failures
-                await MainActor.run { self.importProgress.failures = f }
+
+                while let (ok, name) = await group.next() {
+                    inFlight -= 1
+                    if !ok { failures += 1 }
+                    done += 1
+                    let d = done, f = failures, n = name
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.importProgress.done        = d
+                        self.importProgress.failures    = f
+                        self.importProgress.currentFile = n
+                    }
+                    if !remaining.isEmpty {
+                        let fileURL = remaining.removeFirst()
+                        let name    = fileURL.lastPathComponent
+                        group.addTask { (await Self.importFromFolder(fileURL, folderRoot: folderURL, db: db), name) }
+                        inFlight += 1
+                    }
+                }
             }
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 self.importProgress = ImportProgress()
                 self.load()
             }
         }
     }
 
-    // MARK: - Private import helpers
+    // MARK: - Private import helpers (nonisolated static — run off main thread)
 
-    private func importFileFromFolder(_ source: URL, folderRoot: URL) async -> Bool {
-        if source.pathExtension.lowercased() == "cbr" {
-            var rel = source.path
-            let rootPath = folderRoot.path
-            if rel.hasPrefix(rootPath) {
-                rel = String(rel.dropFirst(rootPath.count))
-                while rel.hasPrefix("/") { rel = String(rel.dropFirst()) }
-            } else {
-                rel = source.lastPathComponent
-            }
-            let relDir = URL(fileURLWithPath: rel).deletingPathExtension().path + ".cbr"
-            return await importCBR(source, relativePathHint: relDir)
-        }
-
-        let docs = FileManager.default
+    private static var comicsDir: URL {
+        FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Comics")
-
-        var relative = source.path
-        let rootPath = folderRoot.path
-        if relative.hasPrefix(rootPath) {
-            relative = String(relative.dropFirst(rootPath.count))
-            while relative.hasPrefix("/") { relative = String(relative.dropFirst()) }
-        } else {
-            relative = source.lastPathComponent
-        }
-        if relative.isEmpty { relative = source.lastPathComponent }
-
-        let dest = docs.appendingPathComponent(relative)
-        try? FileManager.default.createDirectory(
-            at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-        if db.comicId(forFilePath: dest.path) != nil { return true }
-
-        if !FileManager.default.fileExists(atPath: dest.path) {
-            do {
-                try FileManager.default.copyItem(at: source, to: dest)
-            } catch {
-                await MainActor.run { self.importError = error.localizedDescription }
-                return false
-            }
-        }
-
-        return await finalizeImport(dest: dest)
     }
 
-    private func importCBR(_ source: URL, relativePathHint: String? = nil) async -> Bool {
-        let docs = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics")
-        try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+    private static func importOne(source: URL, db: DatabaseManager) async -> Bool {
+        let accessing = source.startAccessingSecurityScopedResource()
+        defer { if accessing { source.stopAccessingSecurityScopedResource() } }
 
-        let folderName = relativePathHint ?? source.deletingPathExtension().lastPathComponent + ".cbr"
-        let destDir    = docs.appendingPathComponent(folderName)
+        if source.pathExtension.lowercased() == "cbr" {
+            let destDir = comicsDir.appendingPathComponent(
+                source.deletingPathExtension().lastPathComponent + ".cbr"
+            )
+            return importCBR(source: source, destDir: destDir, db: db)
+        }
 
+        let dest = comicsDir.appendingPathComponent(source.lastPathComponent)
+        return await copyThenFinalize(source: source, dest: dest, db: db)
+    }
+
+    private static func importFromFolder(_ source: URL, folderRoot: URL, db: DatabaseManager) async -> Bool {
+        var rel = source.path
+        let rootPath = folderRoot.path
+        if rel.hasPrefix(rootPath) {
+            rel = String(rel.dropFirst(rootPath.count))
+            while rel.hasPrefix("/") { rel = String(rel.dropFirst()) }
+        } else {
+            rel = source.lastPathComponent
+        }
+        if rel.isEmpty { rel = source.lastPathComponent }
+
+        if source.pathExtension.lowercased() == "cbr" {
+            let cbrFolder = URL(fileURLWithPath: rel).deletingPathExtension().path + ".cbr"
+            let destDir   = comicsDir.appendingPathComponent(cbrFolder)
+            return importCBR(source: source, destDir: destDir, db: db)
+        }
+
+        let dest = comicsDir.appendingPathComponent(rel)
+        try? FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return await copyThenFinalize(source: source, dest: dest, db: db)
+    }
+
+    private static func importCBR(source: URL, destDir: URL, db: DatabaseManager) -> Bool {
         if db.comicId(forFilePath: destDir.path) != nil { return true }
 
-        let extractedURLs: [URL]
+        let extracted: [URL]
         do {
-            extractedURLs = try await Task.detached(priority: .userInitiated) {
-                try RARExtractor.extract(archiveURL: source, destination: destDir)
-            }.value
+            extracted = try RARExtractor.extract(archiveURL: source, destination: destDir)
         } catch {
             try? FileManager.default.removeItem(at: destDir)
-            await MainActor.run { self.importError = error.localizedDescription }
             return false
         }
 
@@ -270,53 +315,32 @@ final class LibraryViewModel: ObservableObject {
             character:   meta.character,
             series:      meta.series,
             issueNumber: meta.issueNumber,
-            pageCount:   extractedURLs.count,
+            pageCount:   extracted.count,
             writer:      meta.writer,
             summary:     meta.summary
         )
         return true
     }
 
-    @discardableResult
-    private func importFile(_ source: URL) async -> Bool {
-        let accessing = source.startAccessingSecurityScopedResource()
-        defer { if accessing { source.stopAccessingSecurityScopedResource() } }
-
-        if source.pathExtension.lowercased() == "cbr" {
-            return await importCBR(source)
-        }
-
-        let docs = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics")
-        try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
-
-        let dest = docs.appendingPathComponent(source.lastPathComponent)
-
+    private static func copyThenFinalize(source: URL, dest: URL, db: DatabaseManager) async -> Bool {
         if db.comicId(forFilePath: dest.path) != nil { return true }
 
         if !FileManager.default.fileExists(atPath: dest.path) {
             do {
                 try FileManager.default.copyItem(at: source, to: dest)
             } catch {
-                await MainActor.run { self.importError = error.localizedDescription }
                 return false
             }
         }
 
-        return await finalizeImport(dest: dest)
+        return await finalize(dest: dest, db: db)
     }
 
-    private func finalizeImport(dest: URL) async -> Bool {
+    private static func finalize(dest: URL, db: DatabaseManager) async -> Bool {
         let meta      = ComicImporter.parse(url: dest)
         let pageCount = await ComicImporter.pageCount(url: dest)
         let ext       = dest.pathExtension.lowercased()
-        if pageCount == 0 && (ext == "cbz" || ext == "pdf") {
-            await MainActor.run {
-                self.importError = "\(dest.lastPathComponent) appears to be empty or unreadable."
-            }
-            return false
-        }
+        if pageCount == 0 && (ext == "cbz" || ext == "pdf") { return false }
         db.insertComic(
             title:       meta.title,
             filePath:    dest.path,

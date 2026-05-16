@@ -177,72 +177,70 @@ struct LibraryView: View {
     // MARK: - iPad Two-Panel Layout
 
     private var ipadCharacterBrowse: some View {
-        VStack(spacing: 0) {
-            if library.importProgress.isActive {
-                importBanner.padding(.horizontal)
-            }
-            HStack(alignment: .top, spacing: 0) {
-                // Left panel: character list + contextual sections
-                VStack(alignment: .leading, spacing: 0) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            if !library.publishers.isEmpty {
-                                publisherFilterRow.padding(.horizontal, 12)
-                            }
-                            if !library.inProgress.isEmpty {
-                                continueReadingSection.padding(.horizontal, 12)
-                            }
-                            continueRunSection.padding(.horizontal, 12)
-
-                            if library.characterGroups.isEmpty {
-                                EmptyStateView(
-                                    icon: "books.vertical",
-                                    title: "No Comics Yet",
-                                    message: "Tap + to import files.",
-                                    actionTitle: "Import Comics",
-                                    action: { showImporter = true }
-                                )
-                                .padding(.top, 24)
-                            } else {
-                                ForEach(library.characterGroups) { group in
-                                    ipadCharacterRow(group)
-                                }
-                            }
-                            Spacer(minLength: 24)
-                        }
-                    }
-                }
-                .frame(width: 280)
-                .background(Color.arcSurface.ignoresSafeArea(edges: .bottom))
-
-                Divider().ignoresSafeArea()
-
-                // Right panel: series or issues
+        HStack(alignment: .top, spacing: 0) {
+            // Left panel: character list + contextual sections
+            VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        if let series = selectedSeries {
-                            ipadIssuePanel(series: series)
-                        } else if selectedCharacter != nil {
-                            ipadSeriesPanel
-                        } else {
-                            VStack(spacing: 12) {
-                                Image(systemName: "arrow.left")
-                                    .font(.title2)
-                                    .foregroundStyle(Color.arcMuted)
-                                Text("Select a character")
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.arcMuted)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 100)
+                        if library.importProgress.isActive {
+                            importBanner.padding(.horizontal, 12).padding(.top, 8)
                         }
+                        if !library.publishers.isEmpty {
+                            publisherFilterRow.padding(.horizontal, 12)
+                        }
+                        if !library.inProgress.isEmpty {
+                            continueReadingSection.padding(.horizontal, 12)
+                        }
+                        continueRunSection.padding(.horizontal, 12)
+
+                        if library.characterGroups.isEmpty {
+                            EmptyStateView(
+                                icon: "books.vertical",
+                                title: "No Comics Yet",
+                                message: "Tap + to import files.",
+                                actionTitle: "Import Comics",
+                                action: { showImporter = true }
+                            )
+                            .padding(.top, 24)
+                        } else {
+                            ForEach(library.characterGroups) { group in
+                                ipadCharacterRow(group)
+                            }
+                        }
+                        Spacer(minLength: 24)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .background(Color.arcBg)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .frame(width: 280)
+            .background(Color.arcSurface.ignoresSafeArea(edges: .bottom))
+
+            Divider().ignoresSafeArea()
+
+            // Right panel: series or issues
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let series = selectedSeries {
+                        ipadIssuePanel(series: series)
+                    } else if selectedCharacter != nil {
+                        ipadSeriesPanel
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "arrow.left")
+                                .font(.title2)
+                                .foregroundStyle(Color.arcMuted)
+                            Text("Select a character")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.arcMuted)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 100)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color.arcBg)
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private func ipadCharacterRow(_ group: SeriesGroup) -> some View {
