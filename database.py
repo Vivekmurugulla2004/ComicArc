@@ -47,7 +47,7 @@ def migrate_db():
     ]:
         try:
             conn.execute(sql)
-        except Exception:
+        except sqlite3.OperationalError:
             pass
     conn.execute("UPDATE comics SET position = id WHERE position IS NULL")
     conn.commit()

@@ -24,6 +24,8 @@ struct ContentView: View {
                 .tabItem { Label("Favorites",   systemImage: "heart") }
             ReadingListView()
                 .tabItem { Label("Want to Read",systemImage: "bookmark") }
+            StatsView()
+                .tabItem { Label("Stats",       systemImage: "chart.bar") }
             SettingsView()
                 .tabItem { Label("Settings",    systemImage: "gear") }
         }

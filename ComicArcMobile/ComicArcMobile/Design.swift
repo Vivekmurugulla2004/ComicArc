@@ -12,6 +12,7 @@ extension Color {
     static let arcCard    = Color(red: 26/255,  green: 29/255,  blue: 53/255)   // #1a1d35
     static let arcBorder  = Color(red: 45/255,  green: 49/255,  blue: 88/255)   // #2d3158
     static let arcMuted   = Color(red: 122/255, green: 122/255, blue: 154/255)  // #7a7a9a
+    static let arcBlue    = Color(red: 37/255,  green: 99/255,  blue: 235/255)  // #2563eb — matches macOS reading badge
 
     // Publisher badge colors
     static let pubMarvel  = Color(red: 0.8, green: 0,    blue: 0)
@@ -144,6 +145,67 @@ struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 60)
+    }
+}
+
+// MARK: - Comic Collection View
+// Shared component for Favorites and Reading List — both are identical grids
+// differing only in title, empty state text, and DB query.
+
+struct ComicCollectionView: View {
+    @EnvironmentObject var library: LibraryViewModel
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    let title: String
+    let emptyIcon: String
+    let emptyTitle: String
+    let emptyMessage: String
+    let loader: @Sendable () -> [Comic]
+
+    @State private var comics: [Comic] = []
+    @State private var detailComicId: Int64?
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: sizeClass == .regular ? 160 : 140), spacing: 12)]
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if comics.isEmpty {
+                    EmptyStateView(icon: emptyIcon, title: emptyTitle, message: emptyMessage)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(comics) { comic in
+                                ComicCard(comic: comic)
+                                    .onTapGesture { detailComicId = comic.id }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .background(Color.arcBg)
+            .onAppear { load() }
+            .sheet(item: Binding(
+                get: { detailComicId.map { ComicSheetID(id: $0) } },
+                set: { detailComicId = $0?.id }
+            )) { wrapper in
+                ComicDetailView(comicId: wrapper.id)
+                    .environmentObject(library)
+                    .onDisappear { load() }
+            }
+        }
+    }
+
+    private func load() {
+        let fn = loader
+        Task {
+            let result = await Task.detached(priority: .userInitiated, operation: fn).value
+            comics = result
+        }
     }
 }
 

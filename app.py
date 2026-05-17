@@ -1126,5 +1126,5 @@ def export_library():
     return Response(
         _json.dumps(data, indent=2, default=str),
         mimetype='application/json',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
     )
