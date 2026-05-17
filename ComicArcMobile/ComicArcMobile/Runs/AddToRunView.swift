@@ -61,7 +61,7 @@ struct AddToRunView: View {
 
     private func load() {
         runs = db.allRuns()
-        membership = Set(runs.filter { db.isComicInRun(runId: $0.id, comicId: comicId) }.map(\.id))
+        membership = db.runsContainingComic(comicId: comicId)
     }
 
     private func toggle(run: Run) {

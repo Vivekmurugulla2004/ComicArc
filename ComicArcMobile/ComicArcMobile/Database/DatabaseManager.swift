@@ -448,6 +448,7 @@ final class DatabaseManager {
 
     func setTags(for comicId: Int64, names: [String]) {
         queue.sync {
+            exec("BEGIN")
             prepared_unsafe("DELETE FROM comic_tags WHERE comic_id = ?") {
                 sqlite3_bind_int64($0, 1, comicId)
             }
@@ -471,6 +472,29 @@ final class DatabaseManager {
                 }
                 sqlite3_finalize(stmt)
             }
+            exec("COMMIT")
+        }
+    }
+
+    /// Returns all tags for all comics in a single JOIN query.
+    /// Use this instead of calling tags(for:) inside a loop.
+    func allTagsByComicId() -> [Int64: [String]] {
+        queue.sync {
+            var result: [Int64: [String]] = [:]
+            var stmt: OpaquePointer?
+            let sql = """
+                SELECT ct.comic_id, t.name
+                FROM comic_tags ct JOIN tags t ON ct.tag_id = t.id
+                ORDER BY ct.comic_id, t.name
+            """
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return result }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id   = sqlite3_column_int64(stmt, 0)
+                let name = colText(stmt, 1) ?? ""
+                result[id, default: []].append(name)
+            }
+            sqlite3_finalize(stmt)
+            return result
         }
     }
 
@@ -505,16 +529,37 @@ final class DatabaseManager {
             GROUP BY r.id
             ORDER BY r.created_at DESC
         """
-        return rows(sql) { stmt in
-            Run(
-                id:             sqlite3_column_int64(stmt, 0),
-                title:          colText(stmt, 1) ?? "",
-                description:    colText(stmt, 2) ?? "",
-                createdAt:      Date(),
-                itemCount:      Int(sqlite3_column_int(stmt, 4)),
-                completedCount: Int(sqlite3_column_int(stmt, 5))
-            )
-        }
+        return rows(sql) { mapRun(stmt: $0) }
+    }
+
+    /// Returns the first run that has been started but not fully finished, without loading all runs.
+    func firstActiveRun() -> Run? {
+        let sql = """
+            SELECT r.id, r.title, r.description, r.created_at,
+                   COUNT(ri.id) as item_count,
+                   SUM(CASE WHEN c.page_count > 0 AND COALESCE(rp.current_page,0) >= c.page_count - 1
+                            THEN 1 ELSE 0 END) as completed
+            FROM runs r
+            LEFT JOIN run_items ri ON r.id = ri.run_id
+            LEFT JOIN comics c ON ri.comic_id = c.id
+            LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+            GROUP BY r.id
+            HAVING item_count > 0 AND completed > 0 AND completed < item_count
+            ORDER BY r.created_at DESC
+            LIMIT 1
+        """
+        return rows(sql) { mapRun(stmt: $0) }.first
+    }
+
+    private func mapRun(stmt: OpaquePointer?) -> Run {
+        Run(
+            id:             sqlite3_column_int64(stmt, 0),
+            title:          colText(stmt, 1) ?? "",
+            description:    colText(stmt, 2) ?? "",
+            createdAt:      DatabaseManager.sqliteDateFormatter.date(from: colText(stmt, 3) ?? "") ?? Date(),
+            itemCount:      Int(sqlite3_column_int(stmt, 4)),
+            completedCount: Int(sqlite3_column_int(stmt, 5))
+        )
     }
 
     func runItems(runId: Int64) -> [RunItem] {
@@ -579,6 +624,46 @@ final class DatabaseManager {
     func deleteAllComics() { prepared("DELETE FROM comics")  { _ in } }
     func deleteAllRuns()   { prepared("DELETE FROM runs")    { _ in } }
 
+    /// Returns id→pageCount for the given comic IDs in one query.
+    func pageCountsForIds(_ ids: [Int64]) -> [Int64: Int] {
+        guard !ids.isEmpty else { return [:] }
+        return queue.sync {
+            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            let sql = "SELECT id, page_count FROM comics WHERE id IN (\(placeholders))"
+            var result: [Int64: Int] = [:]
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return result }
+            for (i, id) in ids.enumerated() { sqlite3_bind_int64(stmt, Int32(i + 1), id) }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                result[sqlite3_column_int64(stmt, 0)] = Int(sqlite3_column_int(stmt, 1))
+            }
+            sqlite3_finalize(stmt)
+            return result
+        }
+    }
+
+    /// Updates reading progress for multiple comics in a single transaction.
+    func updateProgressBatch(_ items: [(comicId: Int64, page: Int)]) {
+        guard !items.isEmpty else { return }
+        queue.sync {
+            exec("BEGIN")
+            let sql = """
+                INSERT INTO reading_progress (comic_id, current_page)
+                VALUES (?, ?)
+                ON CONFLICT(comic_id) DO UPDATE
+                  SET current_page = excluded.current_page,
+                      updated_at   = datetime('now')
+            """
+            for item in items {
+                prepared_unsafe(sql) {
+                    sqlite3_bind_int64($0, 1, item.comicId)
+                    sqlite3_bind_int($0,  2, Int32(item.page))
+                }
+            }
+            exec("COMMIT")
+        }
+    }
+
     func addToRun(runId: Int64, comicId: Int64) {
         queue.sync {
             var pos = 0
@@ -605,6 +690,7 @@ final class DatabaseManager {
 
     func reorderRunItems(runId: Int64, orderedItemIds: [Int64]) {
         queue.sync {
+            exec("BEGIN")
             for (pos, itemId) in orderedItemIds.enumerated() {
                 prepared_unsafe("UPDATE run_items SET position = ? WHERE id = ? AND run_id = ?") {
                     sqlite3_bind_int($0,  1, Int32(pos))
@@ -612,6 +698,7 @@ final class DatabaseManager {
                     sqlite3_bind_int64($0, 3, runId)
                 }
             }
+            exec("COMMIT")
         }
     }
 
@@ -630,6 +717,54 @@ final class DatabaseManager {
             sqlite3_bind_int64(stmt, 1, runId)
             sqlite3_bind_int64(stmt, 2, comicId)
             let result = sqlite3_step(stmt) == SQLITE_ROW ? sqlite3_column_int(stmt, 0) > 0 : false
+            sqlite3_finalize(stmt)
+            return result
+        }
+    }
+
+    /// Sets is_favorite for all specified IDs in a single UPDATE … IN (…) statement.
+    func setFavoriteForIds(_ ids: [Int64], isFavorite: Bool) {
+        guard !ids.isEmpty else { return }
+        queue.sync {
+            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db,
+                "UPDATE comics SET is_favorite = ? WHERE id IN (\(placeholders))",
+                -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_int(stmt, 1, isFavorite ? 1 : 0)
+            for (i, id) in ids.enumerated() { sqlite3_bind_int64(stmt, Int32(i + 2), id) }
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    /// Sets in_reading_list for all specified IDs in a single UPDATE … IN (…) statement.
+    func setInReadingListForIds(_ ids: [Int64], inList: Bool) {
+        guard !ids.isEmpty else { return }
+        queue.sync {
+            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db,
+                "UPDATE comics SET in_reading_list = ? WHERE id IN (\(placeholders))",
+                -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_int(stmt, 1, inList ? 1 : 0)
+            for (i, id) in ids.enumerated() { sqlite3_bind_int64(stmt, Int32(i + 2), id) }
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    /// Returns the set of run IDs that contain the given comic — one query instead of N.
+    func runsContainingComic(comicId: Int64) -> Set<Int64> {
+        queue.sync {
+            var result = Set<Int64>()
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "SELECT run_id FROM run_items WHERE comic_id=?",
+                                     -1, &stmt, nil) == SQLITE_OK else { return result }
+            sqlite3_bind_int64(stmt, 1, comicId)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                result.insert(sqlite3_column_int64(stmt, 0))
+            }
             sqlite3_finalize(stmt)
             return result
         }

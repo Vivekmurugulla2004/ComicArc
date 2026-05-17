@@ -116,7 +116,7 @@ struct OnboardingView: View {
                     .padding()
                     .background(Color.arcGold)
                     .foregroundStyle(Color.arcBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .accessibilityLabel("Import comics now")
             .accessibilityHint("Opens the file picker to select CBZ or PDF files")

@@ -437,11 +437,11 @@ struct LibraryView: View {
     private var publisherFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                publisherChip("All", isActive: library.selectedPublisher == "All") {
+                FilterChip(label: "All", isActive: library.selectedPublisher == "All") {
                     selectPublisher("All")
                 }
                 ForEach(library.publishers, id: \.self) { pub in
-                    publisherChip(pub, isActive: library.selectedPublisher == pub) {
+                    FilterChip(label: pub, isActive: library.selectedPublisher == pub) {
                         selectPublisher(library.selectedPublisher == pub ? "All" : pub)
                     }
                 }
@@ -450,30 +450,17 @@ struct LibraryView: View {
         }
     }
 
-    private func publisherChip(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption.bold())
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(isActive ? Color.arcGold : Color.arcSurface)
-                .foregroundStyle(isActive ? Color.arcBg : Color.primary)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.arcBorder, lineWidth: isActive ? 0 : 1))
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Tag Filter Row
 
     private var tagFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                tagChip("All", isActive: library.selectedTag == nil) {
+                FilterChip(label: "All", isActive: library.selectedTag == nil) {
                     library.selectedTag = nil
                     library.load()
                 }
                 ForEach(library.allTags) { tag in
-                    tagChip(tag.name, isActive: library.selectedTag == tag.name) {
+                    FilterChip(label: tag.name, isActive: library.selectedTag == tag.name) {
                         library.selectedTag = (library.selectedTag == tag.name) ? nil : tag.name
                         library.load()
                     }
@@ -481,18 +468,6 @@ struct LibraryView: View {
             }
             .padding(.vertical, 8)
         }
-    }
-
-    private func tagChip(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(isActive ? Color.arcGold : Color.arcSurface)
-                .foregroundStyle(isActive ? .white : .primary)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Toolbar
@@ -725,7 +700,7 @@ struct LibraryView: View {
             }
             .overlay {
                 if isSelecting && isSelected {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: .arcCardRadius)
                         .stroke(Color.arcGold, lineWidth: 2)
                         .animation(.easeInOut(duration: 0.15), value: isSelected)
                 }
@@ -828,21 +803,11 @@ struct LibraryView: View {
             HStack(spacing: 8) {
                 ForEach(SmartFilter.allCases, id: \.self) { filter in
                     let active = selectedSmartFilter == filter
-                    Button {
+                    FilterChip(label: filter.rawValue, isActive: active, style: .outlined) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedSmartFilter = active ? nil : filter
                         }
-                    } label: {
-                        Text(filter.rawValue)
-                            .font(.caption.bold())
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(active ? Color.arcGold.opacity(0.2) : Color.arcSurface)
-                            .foregroundStyle(active ? Color.arcGold : Color.primary)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(active ? Color.arcGold : Color.arcBorder,
-                                                     lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
                     .accessibilityLabel("\(filter.rawValue) filter\(active ? ", active" : "")")
                 }
             }
@@ -989,29 +954,31 @@ struct LibraryView: View {
     }
 
     private func loadActiveRun() {
-        activeRun = db.allRuns().first { $0.isStarted && !$0.isFinished }
+        activeRun = db.firstActiveRun()
     }
 
     private func bulkMarkRead() {
-        for id in selectedIds {
-            if let c = db.comic(id: id), c.pageCount > 0 {
-                db.updateProgress(comicId: id, page: c.pageCount - 1)
-            }
+        let ids      = Array(selectedIds)
+        let counts   = db.pageCountsForIds(ids)
+        let updates  = ids.compactMap { id -> (comicId: Int64, page: Int)? in
+            guard let n = counts[id], n > 0 else { return nil }
+            return (comicId: id, page: n - 1)
         }
+        db.updateProgressBatch(updates)
         library.load(); exitSelection()
     }
 
     private func bulkToggleFavorite() {
-        let comics = selectedIds.compactMap { db.comic(id: $0) }
-        let allFav = comics.allSatisfy(\.isFavorite)
-        comics.forEach { db.setFavorite($0.id, !allFav) }
+        let ids = Array(selectedIds)
+        let allFav = ids.compactMap { db.comic(id: $0) }.allSatisfy(\.isFavorite)
+        db.setFavoriteForIds(ids, isFavorite: !allFav)
         library.load(); exitSelection()
     }
 
     private func bulkToggleReadingList() {
-        let comics = selectedIds.compactMap { db.comic(id: $0) }
-        let allIn = comics.allSatisfy(\.inReadingList)
-        comics.forEach { db.setInReadingList($0.id, !allIn) }
+        let ids = Array(selectedIds)
+        let allIn = ids.compactMap { db.comic(id: $0) }.allSatisfy(\.inReadingList)
+        db.setInReadingListForIds(ids, inList: !allIn)
         library.load(); exitSelection()
     }
 
@@ -1056,35 +1023,50 @@ struct SeriesCard: View {
     var characterName: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Cover — full-bleed, top corners clipped by parent arcCard.
+            // Matches macOS .series-cover-wrap layout.
             ZStack(alignment: .topTrailing) {
                 CoverImage(comicId: group.coverComicId)
                     .aspectRatio(2/3, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipped()
                 if group.isFinished {
                     badge("Done", color: .green)
                 } else if group.isReading {
                     badge("Reading", color: .arcGold)
                 }
             }
-            Text(group.groupName)
-                .font(.subheadline).fontWeight(.semibold).lineLimit(2)
-            if let charName = characterName {
-                Text(charName)
-                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+
+            // Info section — matches macOS .series-info padding
+            VStack(alignment: .leading, spacing: 4) {
+                if let charName = characterName {
+                    Text(charName.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.arcGold)
+                        .lineLimit(1)
+                }
+                Text(group.groupName)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Text("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
-                .font(.caption).foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
+        .arcCard()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel({
-            var parts = [group.groupName]
-            if let c = characterName { parts.append(c) }
-            parts.append("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
-            if group.isFinished { parts.append("Finished") }
-            else if group.isReading { parts.append("In progress") }
-            return parts.joined(separator: ", ")
-        }())
+        .accessibilityLabel(a11yLabel)
+    }
+
+    private var a11yLabel: String {
+        var parts = [group.groupName]
+        if let c = characterName { parts.append(c) }
+        parts.append("\(group.issueCount) issue\(group.issueCount == 1 ? "" : "s")")
+        if group.isFinished { parts.append("Finished") }
+        else if group.isReading { parts.append("In progress") }
+        return parts.joined(separator: ", ")
     }
 
     private func badge(_ label: String, color: Color) -> some View {

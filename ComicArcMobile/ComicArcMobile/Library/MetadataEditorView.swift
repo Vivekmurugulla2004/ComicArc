@@ -52,15 +52,19 @@ struct MetadataEditorView: View {
     }
 
     private func load() {
-        guard let comic = db.comic(id: comicId) else { return }
-        title       = comic.title
-        publisher   = comic.publisher
-        character   = comic.character ?? ""
-        series      = comic.series
-        issueNumber = comic.issueNumber ?? ""
-
-        let tags = db.tags(for: comicId)
-        tagsText = tags.map(\.name).joined(separator: ", ")
+        let id = comicId
+        Task {
+            let (comic, tags) = await Task.detached(priority: .userInitiated) {
+                (DatabaseManager.shared.comic(id: id), DatabaseManager.shared.tags(for: id))
+            }.value
+            guard let comic else { return }
+            title       = comic.title
+            publisher   = comic.publisher
+            character   = comic.character ?? ""
+            series      = comic.series
+            issueNumber = comic.issueNumber ?? ""
+            tagsText    = tags.map(\.name).joined(separator: ", ")
+        }
     }
 
     private func save() {

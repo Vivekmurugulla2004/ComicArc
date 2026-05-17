@@ -46,6 +46,20 @@
     </div>
   </div>
 
+  <!-- Autoplay Interval -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>Autoplay Interval</h2>
+      <p>How long to wait before advancing to the next page when autoplay is active.</p>
+    </div>
+    <div class="settings-row">
+      <input type="range" id="autoplay-range" min="3" max="30" step="1"
+             value="{{ autoplay_interval }}" oninput="updateAutoplayLabel(this.value)"
+             aria-label="Autoplay interval in seconds">
+      <span id="autoplay-label" class="settings-hint">{{ autoplay_interval }}s</span>
+    </div>
+  </div>
+
   <!-- CBR Support -->
   <div class="settings-card">
     <div class="settings-card-header">
@@ -148,6 +162,15 @@
 
 {% block scripts %}
 <script>
+function updateAutoplayLabel(val) {
+  document.getElementById('autoplay-label').textContent = val + 's';
+  fetch('/api/settings/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({autoplay_interval: parseInt(val)})
+  });
+}
+
 function browseFolder() {
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.open_folder().then(path => {

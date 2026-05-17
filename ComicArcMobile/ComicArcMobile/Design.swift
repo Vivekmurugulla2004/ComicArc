@@ -21,6 +21,92 @@ extension Color {
     static let pubIndie   = Color(red: 0.1, green: 0.42, blue: 0.23)
 }
 
+// MARK: - Design Tokens
+
+extension CGFloat {
+    /// Matches macOS CSS `--radius: 12px`
+    static let arcCardRadius: CGFloat  = 12
+    /// Inner elements (cover images within cards)
+    static let arcInnerRadius: CGFloat = 8
+    /// Publisher/status badge corner radius — matches macOS `border-radius: 4px`
+    static let arcBadgeRadius: CGFloat = 4
+}
+
+// MARK: - Arc Card Style Modifier
+// Consolidates the repeating pattern: arcCard background + clip + 1pt border.
+// Matches macOS `.comic-card` / `.series-card` styling.
+
+private struct ArcCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    func body(content: Content) -> some View {
+        content
+            .background(Color.arcCard)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(Color.arcBorder, lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    func arcCard(cornerRadius: CGFloat = .arcCardRadius) -> some View {
+        modifier(ArcCardModifier(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Filter Chip
+// Single component for all horizontal filter bars (publisher, tag, smart filter).
+// Two visual styles mirror the macOS tab hierarchy:
+//   .filled  — primary filter (publisher/tag): solid gold when active, matches `.tab.active`
+//   .outlined — secondary filter (smart filters): gold-tinted outline when active
+
+struct FilterChip: View {
+    enum Style { case filled, outlined }
+
+    let label: String
+    let isActive: Bool
+    var style: Style = .filled
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption.bold())
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(chipBackground)
+                .foregroundStyle(chipForeground)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(chipBorder, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var chipBackground: Color {
+        switch (style, isActive) {
+        case (.filled, true):   return .arcGold
+        case (.outlined, true): return Color.arcGold.opacity(0.15)
+        default:                return .arcSurface
+        }
+    }
+
+    private var chipForeground: Color {
+        switch (style, isActive) {
+        case (.filled, true):   return .arcBg         // matches macOS: #0b0c18 on gold
+        case (.outlined, true): return .arcGold
+        default:                return Color.primary
+        }
+    }
+
+    private var chipBorder: Color {
+        switch (style, isActive) {
+        case (.filled, true):   return .clear
+        case (.outlined, true): return .arcGold
+        default:                return .arcBorder
+        }
+    }
+}
+
 // MARK: - Empty state
 
 struct EmptyStateView: View {
@@ -50,7 +136,7 @@ struct EmptyStateView: View {
                         .padding(.horizontal, 28).padding(.vertical, 12)
                         .background(Color.arcGold)
                         .foregroundStyle(Color.arcBg)
-                        .clipShape(Capsule())
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .padding(.top, 4)
                 .accessibilityLabel(actionTitle)
@@ -73,7 +159,7 @@ struct PublisherBadge: View {
             .padding(.vertical, 2)
             .background(badgeColor)
             .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .clipShape(RoundedRectangle(cornerRadius: .arcBadgeRadius))
     }
 
     private var badgeColor: Color {

@@ -4,21 +4,15 @@ struct ComicCard: View {
     let comic: Comic
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Cover — full-bleed, clipped by parent arcCard cornerRadius at the top.
+            // Matches macOS .comic-card layout: cover fills card, info section below.
             ZStack(alignment: .topTrailing) {
                 CoverImage(comicId: comic.id)
                     .aspectRatio(2/3, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(alignment: .bottom) {
-                        if comic.pageCount > 0 && comic.progress > 0 {
-                            Rectangle()
-                                .fill(comic.isFinished ? Color.green : Color.arcGold)
-                                .frame(height: 4)
-                                .scaleEffect(x: min(1, comic.progressPercent), y: 1, anchor: .leading)
-                        }
-                    }
+                    .clipped()
 
-                // Status badges (top-right stack)
+                // Status badge (top-right): finished > favorite
                 VStack(spacing: 4) {
                     if comic.isFinished {
                         Image(systemName: "checkmark.circle.fill")
@@ -35,31 +29,39 @@ struct ComicCard: View {
                     }
                 }
             }
+            // Progress bar sits at bottom of cover area
+            .overlay(alignment: .bottom) {
+                if comic.pageCount > 0 && comic.progress > 0 {
+                    Rectangle()
+                        .fill(comic.isFinished ? Color.green : Color.arcGold)
+                        .frame(height: 3)
+                        .scaleEffect(x: min(1, comic.progressPercent), y: 1, anchor: .leading)
+                }
+            }
 
-            Text(comic.title)
-                .font(.caption).fontWeight(.medium)
-                .foregroundStyle(.white)
-                .lineLimit(2)
+            // Info section — matches macOS .card-info padding
+            VStack(alignment: .leading, spacing: 4) {
+                Text(comic.title)
+                    .font(.caption).fontWeight(.medium)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
 
-            PublisherBadge(publisher: comic.publisher)
+                PublisherBadge(publisher: comic.publisher)
 
-            if comic.rating > 0 {
-                HStack(spacing: 2) {
-                    ForEach(1...5, id: \.self) { i in
-                        Image(systemName: i <= comic.rating ? "star.fill" : "star")
-                            .font(.system(size: 8))
-                            .foregroundStyle(i <= comic.rating ? Color.arcGold : Color.arcMuted)
+                if comic.rating > 0 {
+                    HStack(spacing: 2) {
+                        ForEach(1...5, id: \.self) { i in
+                            Image(systemName: i <= comic.rating ? "star.fill" : "star")
+                                .font(.system(size: 8))
+                                .foregroundStyle(i <= comic.rating ? Color.arcGold : Color.arcMuted)
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
-        .padding(8)
-        .background(Color.arcCard)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.arcBorder, lineWidth: 1)
-        )
+        .arcCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDescription)
     }
@@ -92,7 +94,7 @@ struct CoverImage: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: .arcInnerRadius)
                     .fill(Color.arcCard)
                     .overlay {
                         Image(systemName: "book.closed")

@@ -363,26 +363,41 @@ final class LibraryViewModel: ObservableObject {
     }
 
     func delete(_ comic: Comic) {
-        _deleteOne(comic)
+        let filePath = comic.filePath
+        let comicId  = comic.id
+        // Caches + DB: fast, synchronous — comic disappears from UI immediately.
+        ThumbnailCache.shared.invalidate(comicId: comicId)
+        CBZReaderCache.shared.invalidate(path: filePath)
+        DirectoryReaderCache.shared.invalidate(path: filePath)
+        db.deleteComic(comicId)
         load()
+        // File removal: potentially slow (100MB+ files) — never block the main thread.
+        removeFileIfOwned(filePath)
     }
 
     func deleteBatch(_ comics: [Comic]) {
-        comics.forEach { _deleteOne($0) }
+        let docsPath = Self.comicsDir.path
+        let paths = comics.map(\.filePath)
+        comics.forEach { comic in
+            ThumbnailCache.shared.invalidate(comicId: comic.id)
+            CBZReaderCache.shared.invalidate(path: comic.filePath)
+            DirectoryReaderCache.shared.invalidate(path: comic.filePath)
+            db.deleteComic(comic.id)
+        }
         load()
+        Task.detached(priority: .background) {
+            for path in paths where path.hasPrefix(docsPath) {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
     }
 
-    private func _deleteOne(_ comic: Comic) {
-        let docsPath = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics").path
-        if comic.filePath.hasPrefix(docsPath) {
-            try? FileManager.default.removeItem(atPath: comic.filePath)
+    private func removeFileIfOwned(_ filePath: String) {
+        let docsPath = Self.comicsDir.path
+        guard filePath.hasPrefix(docsPath) else { return }
+        Task.detached(priority: .background) {
+            try? FileManager.default.removeItem(atPath: filePath)
         }
-        ThumbnailCache.shared.invalidate(comicId: comic.id)
-        CBZReaderCache.shared.invalidate(path: comic.filePath)
-        DirectoryReaderCache.shared.invalidate(path: comic.filePath)
-        db.deleteComic(comic.id)
     }
 
     func updateProgress(_ comic: Comic, page: Int) {

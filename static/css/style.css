@@ -1942,6 +1942,12 @@ kbd {
 }
 .settings-hint.err { color: var(--red2); }
 .settings-link { color: var(--gold); text-decoration: underline; }
+
+.settings-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
 .settings-link:hover { opacity: 0.8; }
 .settings-actions {
   display: flex;

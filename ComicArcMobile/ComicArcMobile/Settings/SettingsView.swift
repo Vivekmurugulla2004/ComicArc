@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showImportBackup = false
     @State private var exportURL: URL?
     @State private var storageSize: String = "…"
+    @State private var comicCount: Int = 0
     @State private var restoreResult: String?
     @State private var isRestoring = false
 
@@ -66,7 +67,7 @@ struct SettingsView: View {
                     }
                     .accessibilityLabel("View library stats")
 
-                    LabeledContent("Comics", value: "\(db.scalarInt("SELECT COUNT(*) FROM comics"))")
+                    LabeledContent("Comics", value: "\(comicCount)")
                     LabeledContent("Storage Used", value: storageSize)
 
                     Button("Export Backup (JSON)") { exportBackup() }
@@ -111,7 +112,13 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .scrollContentBackground(.hidden)
             .background(Color.arcBg)
-            .onAppear { computeStorageSize() }
+            .onAppear {
+                computeStorageSize()
+                Task.detached(priority: .utility) {
+                    let n = DatabaseManager.shared.scalarInt("SELECT COUNT(*) FROM comics")
+                    await MainActor.run { comicCount = n }
+                }
+            }
             .onChange(of: defaultReadMode)  { _, _ in PreferenceSync.shared.push(key: "defaultReadMode") }
             .onChange(of: rtlMode)          { _, _ in PreferenceSync.shared.push(key: "rtlMode") }
             .onChange(of: appColorScheme)   { _, _ in PreferenceSync.shared.push(key: "appColorScheme") }
@@ -152,8 +159,9 @@ struct SettingsView: View {
     // MARK: - Export
 
     private func exportBackup() {
-        let comics = db.allComics()
-        let runs   = db.allRuns()
+        let comics      = db.allComics()
+        let runs        = db.allRuns()
+        let tagsByComic = db.allTagsByComicId()
 
         let comicEntries: [[String: Any]] = comics.map { c in
             // Store path relative to Comics folder so it's device-independent
@@ -175,7 +183,7 @@ struct SettingsView: View {
                 "rating": c.rating,
                 "is_favorite": c.isFavorite,
                 "in_reading_list": c.inReadingList,
-                "tags": db.tags(for: c.id).map(\.name)
+                "tags": tagsByComic[c.id] ?? []
             ]
         }
 

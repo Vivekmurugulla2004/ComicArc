@@ -80,11 +80,13 @@ final class CBZReaderCache: @unchecked Sendable {
 
     func reader(for path: String) -> CBZReader? {
         lock.lock(); defer { lock.unlock() }
-        if let hit = readers.first(where: { $0.path == path }) {
+        if let idx = readers.firstIndex(where: { $0.path == path }) {
+            let hit = readers.remove(at: idx)
+            readers.append(hit)   // move to back = most-recently used
             return hit.reader
         }
         guard let reader = try? CBZReader(url: URL(fileURLWithPath: path)) else { return nil }
-        if readers.count >= capacity { readers.removeFirst() }
+        if readers.count >= capacity { readers.removeFirst() }   // evict least-recently used
         readers.append((path: path, reader: reader))
         return reader
     }

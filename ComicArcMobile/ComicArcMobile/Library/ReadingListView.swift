@@ -47,7 +47,12 @@ struct ReadingListView: View {
     }
 
     private func load() {
-        comics = db.allComics(readingListOnly: true)
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.allComics(readingListOnly: true)
+            }.value
+            comics = result
+        }
     }
 }
 

@@ -32,3 +32,7 @@ def get_library_path():
 
 def get_reader_mode():
     return load_config().get('reader_mode', 'page')
+
+
+def get_autoplay_interval():
+    return int(load_config().get('autoplay_interval', 10))

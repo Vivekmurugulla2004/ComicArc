@@ -7,6 +7,7 @@ let isPanning = false, panStartX, panStartY;
 let autoplayMode     = false;
 let autoplayTimer    = null;
 let progressDebounce = null;
+let scrollObserver   = null;
 
 // ── Auto-hide chrome ─────────────────────────────────────────────────────────
 let chromeHideTimer  = null;
@@ -47,6 +48,7 @@ function initReader(id, page, total) {
 
   updateUI();
   preloadPage(currentPage + 1);
+  preloadPage(currentPage + 2);
   resetChromeTimer();
 
   document.addEventListener('mousemove', () => {
@@ -155,6 +157,7 @@ function nextPage() {
     if (zoomLevel > 1) setZoom(1); // reset zoom when turning page
     updateUI();
     preloadPage(currentPage + step);
+    preloadPage(currentPage + step + 1);
     resetAutoplayTimer();
   } else {
     // Fall back to reading the DOM link href in case the JS variable is stale
@@ -241,9 +244,10 @@ function startAutoplayTimer() {
     void fill.offsetWidth; // force reflow so animation restarts
     fill.classList.add('ticking');
   }
+  const ms = (typeof autoplaySeconds !== 'undefined' ? autoplaySeconds : 10) * 1000;
   autoplayTimer = setTimeout(() => {
     if (autoplayMode) nextPage();
-  }, 10000);
+  }, ms);
 }
 
 function stopAutoplayTimer() {
@@ -290,6 +294,7 @@ function toggleVertical() {
     setZoom(1);
     buildScrollView();
   } else {
+    if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
     scrollEl.style.display  = 'none';
     pageDisp.style.display  = '';
     prevZone.style.display  = '';
@@ -301,6 +306,8 @@ function toggleVertical() {
 }
 
 function buildScrollView() {
+  if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+
   const container = document.getElementById('scroll-container');
   container.innerHTML = '';
 
@@ -320,7 +327,7 @@ function buildScrollView() {
   const current = container.querySelectorAll('.scroll-page')[currentPage];
   if (current) current.scrollIntoView();
 
-  const io = new IntersectionObserver(entries => {
+  scrollObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const img = entry.target.querySelector('img');
       if (entry.isIntersecting) {
@@ -342,7 +349,7 @@ function buildScrollView() {
     });
   }, { threshold: 0.5, root: container });
 
-  container.querySelectorAll('.scroll-page').forEach(p => io.observe(p));
+  container.querySelectorAll('.scroll-page').forEach(p => scrollObserver.observe(p));
 }
 
 // ── Zoom / pan ────────────────────────────────────────────────────────────────
@@ -370,7 +377,6 @@ function applyZoom() {
     display.style.transformOrigin = 'center center';
   }
 }
-
 
 // ── Rating modal ──────────────────────────────────────────────────────────────
 

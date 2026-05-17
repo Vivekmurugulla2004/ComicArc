@@ -59,7 +59,12 @@ struct RunsView: View {
     }
 
     private func load() {
-        runs = db.allRuns()
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.allRuns()
+            }.value
+            runs = result
+        }
     }
 }
 

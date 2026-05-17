@@ -55,8 +55,11 @@ def _run(library_path):
         _state['total'] = len(all_files)
 
     db = get_db()
+    # Load all known paths and signatures in one query — avoids N per-file lookups.
+    known_paths = set()
     known_sigs = set()
     for row in db.execute("SELECT file_path FROM comics").fetchall():
+        known_paths.add(row['file_path'])
         s = _file_sig(row['file_path'])
         if s:
             known_sigs.add(s)
@@ -65,8 +68,7 @@ def _run(library_path):
     for i, fp in enumerate(all_files):
         try:
             sig = _file_sig(fp)
-            row = db.execute("SELECT id FROM comics WHERE file_path = ?", (fp,)).fetchone()
-            if row:
+            if fp in known_paths:
                 pass  # already in library — don't overwrite user-edited metadata
             elif sig and sig in known_sigs:
                 pass  # same name+size already in library under a different path
@@ -80,14 +82,17 @@ def _run(library_path):
                     (m['title'], fp, m['publisher'], m['character'], m['series'], m['issue_number'], pc)
                 )
                 added += 1
+                known_paths.add(fp)
                 if sig:
                     known_sigs.add(sig)
         except Exception as e:
             print(f"[scanner] skip {fp}: {e}")
 
-        with _lock:
-            _state['done'] = i + 1
-            _state['added'] = added
+        # Batch progress updates every 25 files to reduce lock contention.
+        if i % 25 == 0 or i == len(all_files) - 1:
+            with _lock:
+                _state['done'] = i + 1
+                _state['added'] = added
 
     db.commit()
     db.close()

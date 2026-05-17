@@ -1,12 +1,17 @@
+import json as _json
 import os
+import platform as _platform
 import re
+import shutil
+import subprocess
+import threading
 import time
 from flask import Flask, render_template, redirect, url_for, request, jsonify, Response, abort
 from werkzeug.utils import secure_filename
 from database import get_db
-from comic_reader import get_page, get_page_count, cbr_tool_available
+from comic_reader import get_page, get_page_count, cbr_tool_available, _find_bin
 from config import get_data_dir, get_resource_dir
-from onboarding import is_onboarding_done, get_library_path, save_config
+from onboarding import is_onboarding_done, get_library_path, save_config, load_config, get_reader_mode, get_autoplay_interval
 from scanner import scan_library, get_status as get_scan_status
 
 _resource = get_resource_dir()
@@ -450,7 +455,6 @@ def reader(comic_id):
                 break
 
     db.close()
-    from onboarding import get_reader_mode
     return render_template('reader.html',
                            comic=comic,
                            current_page=current_page,
@@ -459,7 +463,8 @@ def reader(comic_id):
                            prev_comic=prev_comic,
                            next_comic=next_comic,
                            run_id=run_id,
-                           reader_mode=get_reader_mode())
+                           reader_mode=get_reader_mode(),
+                           autoplay_interval=get_autoplay_interval())
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
@@ -889,15 +894,12 @@ _cbr_install_state = {'running': False, 'log': '', 'done': False, 'ok': False}
 
 @app.route('/settings')
 def settings():
-    import platform as _platform
-    from onboarding import load_config
-    from comic_reader import cbr_tool_available, _find_bin
-    import shutil
     cfg = load_config()
     system = _platform.system()
     return render_template('settings.html',
                            library_path=cfg.get('library_path', ''),
                            reader_mode=cfg.get('reader_mode', 'page'),
+                           autoplay_interval=int(cfg.get('autoplay_interval', 10)),
                            cbr_ok=cbr_tool_available(),
                            brew_ok=bool(shutil.which('brew') or _find_bin('brew')),
                            platform=system,
@@ -916,6 +918,12 @@ def settings_save():
         scan_library(path)
     if 'reader_mode' in data:
         updates['reader_mode'] = data['reader_mode']
+    if 'autoplay_interval' in data:
+        val = data['autoplay_interval']
+        try:
+            updates['autoplay_interval'] = max(3, min(30, int(val)))
+        except (TypeError, ValueError):
+            pass
     if updates:
         save_config(updates)
     return jsonify({'ok': True})
@@ -923,9 +931,6 @@ def settings_save():
 
 @app.route('/api/settings/install-cbr', methods=['POST'])
 def install_cbr():
-    import platform as _platform
-    import threading, subprocess, shutil
-    from comic_reader import _find_bin
     if _cbr_install_state['running']:
         return jsonify({'ok': False, 'error': 'Already running'})
 
@@ -1030,38 +1035,43 @@ def toggle_reading_list(comic_id):
 @app.route('/api/bulk/delete', methods=['POST'])
 def bulk_delete():
     ids = (request.get_json(silent=True) or {}).get('ids', [])
+    if not ids:
+        return jsonify({'ok': True})
     db = get_db()
-    for comic_id in ids:
-        row = db.execute("SELECT file_path FROM comics WHERE id = ?", (comic_id,)).fetchone()
-        db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
-        db.execute("DELETE FROM ratings WHERE comic_id = ?", (comic_id,))
-        db.execute("DELETE FROM comics WHERE id = ?", (comic_id,))
-        if row:
-            for ext in ('jpg', 'png'):
-                cp = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
-                if os.path.exists(cp): os.remove(cp)
-            if row['file_path'].startswith(UPLOAD_DIR):
-                try: os.remove(row['file_path'])
-                except OSError: pass
+    ph  = ','.join('?' * len(ids))
+    rows = db.execute(f"SELECT id, file_path FROM comics WHERE id IN ({ph})", ids).fetchall()
+    db.execute(f"DELETE FROM reading_progress WHERE comic_id IN ({ph})", ids)
+    db.execute(f"DELETE FROM ratings WHERE comic_id IN ({ph})", ids)
+    db.execute(f"DELETE FROM comics WHERE id IN ({ph})", ids)
     db.commit()
     db.close()
+    for row in rows:
+        for ext in ('jpg', 'png'):
+            cp = os.path.join(COVER_CACHE_DIR, f'{row["id"]}.{ext}')
+            if os.path.exists(cp):
+                try: os.remove(cp)
+                except OSError: pass
+        if row['file_path'].startswith(UPLOAD_DIR):
+            try: os.remove(row['file_path'])
+            except OSError: pass
     return jsonify({'ok': True})
 
 
 @app.route('/api/bulk/mark-read', methods=['POST'])
 def bulk_mark_read():
     ids = (request.get_json(silent=True) or {}).get('ids', [])
+    if not ids:
+        return jsonify({'ok': True})
     db = get_db()
-    for comic_id in ids:
-        row = db.execute("SELECT page_count FROM comics WHERE id = ?", (comic_id,)).fetchone()
-        if row:
-            last = max(row['page_count'] - 1, 0)
-            db.execute(
-                """INSERT INTO reading_progress (comic_id, current_page, last_read)
-                   VALUES (?, ?, CURRENT_TIMESTAMP)
-                   ON CONFLICT(comic_id) DO UPDATE SET current_page=?, last_read=CURRENT_TIMESTAMP""",
-                (comic_id, last, last)
-            )
+    ph = ','.join('?' * len(ids))
+    db.execute(f"""
+        INSERT INTO reading_progress (comic_id, current_page, last_read)
+        SELECT id, MAX(page_count - 1, 0), CURRENT_TIMESTAMP
+        FROM comics WHERE id IN ({ph}) AND page_count > 0
+        ON CONFLICT(comic_id) DO UPDATE
+          SET current_page = excluded.current_page,
+              last_read    = CURRENT_TIMESTAMP
+    """, ids)
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1098,7 +1108,6 @@ def bulk_reading_list():
 
 @app.route('/api/export')
 def export_library():
-    import json as _json
     db = get_db()
     data = {
         'exported_at':    time.strftime('%Y-%m-%dT%H:%M:%S'),

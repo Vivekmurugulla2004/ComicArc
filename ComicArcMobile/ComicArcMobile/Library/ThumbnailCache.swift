@@ -27,7 +27,9 @@ final class ThumbnailCache: @unchecked Sendable {
         ) { [weak self] _ in self?.cache.removeAllObjects() }
     }
 
-    /// Returns a cover image, generating and caching it on a background thread if needed.
+    private static let thumbnailSize = CGSize(width: 300, height: 450)
+
+    /// Returns a downsampled cover thumbnail, generating and disk-caching it on a background thread if needed.
     func thumbnail(comicId: Int64) async -> UIImage? {
         let key = NSNumber(value: comicId)
         if let hit = cache.object(forKey: key) { return hit }
@@ -35,18 +37,36 @@ final class ThumbnailCache: @unchecked Sendable {
         return await Task.detached(priority: .utility) { [self] in
             let diskURL = self.coversDir.appendingPathComponent("\(comicId).jpg")
             if let data = try? Data(contentsOf: diskURL), let img = UIImage(data: data) {
-                self.cache.setObject(img, forKey: key)
+                self.cache.setObject(img, forKey: key,
+                                     cost: Int(img.size.width * img.scale * img.size.height * img.scale * 4))
                 return img
             }
 
             guard let comic = self.db.comic(id: comicId) else { return nil }
-            guard let img = self.generateCover(for: comic) else { return nil }
+            guard let raw = self.generateCover(for: comic) else { return nil }
+            let img = self.downsample(raw, to: Self.thumbnailSize)
             if let data = img.jpegData(compressionQuality: 0.85) {
                 try? data.write(to: diskURL)
             }
-            self.cache.setObject(img, forKey: key)
+            let cost = Int(img.size.width * img.scale * img.size.height * img.scale * 4)
+            self.cache.setObject(img, forKey: key, cost: cost)
             return img
         }.value
+    }
+
+    private func downsample(_ image: UIImage, to targetSize: CGSize) -> UIImage {
+        let scale = UIScreen.main.scale
+        let targetPx = CGSize(width: targetSize.width * scale, height: targetSize.height * scale)
+        let srcSize = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        guard srcSize.width > targetPx.width || srcSize.height > targetPx.height else { return image }
+        let ratio = min(targetPx.width / srcSize.width, targetPx.height / srcSize.height)
+        let drawSize = CGSize(width: (srcSize.width * ratio) / scale, height: (srcSize.height * ratio) / scale)
+        return UIGraphicsImageRenderer(size: drawSize, format: {
+            let f = UIGraphicsImageRendererFormat()
+            f.scale = scale
+            f.opaque = true
+            return f
+        }()).image { _ in image.draw(in: CGRect(origin: .zero, size: drawSize)) }
     }
 
     func invalidate(comicId: Int64) {

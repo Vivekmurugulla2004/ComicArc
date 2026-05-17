@@ -47,8 +47,7 @@ struct ComicDetailView: View {
                     }
                     .sheet(isPresented: $showMetadataEditor, onDismiss: reload) {
                         MetadataEditorView(comicId: comicId) {
-                            reload()
-                            library.load()
+                            refresh()
                         }
                     }
                     .sheet(isPresented: $showAddToRun) {
@@ -241,7 +240,7 @@ struct ComicDetailView: View {
                         .onTapGesture {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             db.setRating(comic.id, i == comic.rating ? 0 : i)
-                            reload(); library.load()
+                            refresh()
                         }
                         .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")\(i == comic.rating ? ", selected. Tap to clear." : "")")
                 }
@@ -266,6 +265,7 @@ struct ComicDetailView: View {
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                             }
+                            .accessibilityLabel("Remove \(tag.name) tag")
                         }
                         .font(.caption)
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -339,7 +339,7 @@ struct ComicDetailView: View {
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 db.setFavorite(comic.id, !comic.isFavorite)
-                reload(); library.load()
+                refresh()
             }
 
             actionButton(
@@ -349,7 +349,7 @@ struct ComicDetailView: View {
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 db.setInReadingList(comic.id, !comic.inReadingList)
-                reload(); library.load()
+                refresh()
             }
 
             actionButton(title: "Add to Reading Run",
@@ -367,7 +367,7 @@ struct ComicDetailView: View {
                              icon: "checkmark.circle", tint: .green) {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     db.updateProgress(comicId: comic.id, page: comic.pageCount - 1)
-                    reload(); library.load()
+                    refresh()
                 }
             }
 
@@ -375,7 +375,7 @@ struct ComicDetailView: View {
                 actionButton(title: "Mark Unread",
                              icon: "arrow.counterclockwise", tint: .gray) {
                     db.updateProgress(comicId: comic.id, page: 0)
-                    reload(); library.load()
+                    refresh()
                 }
             }
 
@@ -394,7 +394,7 @@ struct ComicDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 db.setFavorite(comic.id, !comic.isFavorite)
-                reload(); library.load()
+                refresh()
             } label: {
                 Image(systemName: comic.isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(comic.isFavorite ? .red : .primary)
@@ -425,10 +425,15 @@ struct ComicDetailView: View {
         .tint(tint)
     }
 
+    private func refresh() {
+        reload()
+        library.load()
+    }
+
     private func reload() {
         comic = db.comic(id: comicId)
         tags  = db.tags(for: comicId)
-        if let c = comic {
+        if coverImage == nil, let c = comic {
             Task { coverImage = await ThumbnailCache.shared.thumbnail(comicId: c.id) }
         }
     }

@@ -267,7 +267,7 @@ struct ReaderView: View {
                         .font(.subheadline.bold())
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Color.arcGold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.arcBg)
                         .clipShape(Capsule())
                 }
 

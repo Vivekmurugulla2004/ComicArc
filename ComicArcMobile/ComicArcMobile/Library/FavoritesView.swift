@@ -47,7 +47,12 @@ struct FavoritesView: View {
     }
 
     private func load() {
-        comics = db.allComics(favoritesOnly: true)
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.allComics(favoritesOnly: true)
+            }.value
+            comics = result
+        }
     }
 }
 
