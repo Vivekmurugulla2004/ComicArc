@@ -12,8 +12,6 @@ struct RunDetailView: View {
     @State private var detailComicId: Int64?
     @State private var missingFileComic: Comic?
 
-    private let db = DatabaseManager.shared
-
     private func openComic(_ comic: Comic, context: [Comic]) {
         if FileManager.default.fileExists(atPath: comic.filePath) {
             readerRunContext = context
@@ -73,21 +71,37 @@ struct RunDetailView: View {
                                            },
                                            onDetail: { detailComicId = item.comic.id },
                                            onNotesChanged: { notes in
-                                               db.updateRunItemNotes(itemId: item.id, notes: notes)
+                                               let itemId = item.id
+                                               Task {
+                                                   await Task.detached(priority: .utility) {
+                                                       DatabaseManager.shared.updateRunItemNotes(itemId: itemId, notes: notes)
+                                                   }.value
+                                               }
                                            })
                             }
                             .onMove { from, to in
                                 var reordered = items
                                 reordered.move(fromOffsets: from, toOffset: to)
-                                db.reorderRunItems(runId: run.id,
-                                                   orderedItemIds: reordered.map(\.id))
                                 items = reordered
+                                let runId = run.id
+                                let orderedIds = reordered.map(\.id)
+                                Task {
+                                    await Task.detached(priority: .userInitiated) {
+                                        DatabaseManager.shared.reorderRunItems(runId: runId, orderedItemIds: orderedIds)
+                                    }.value
+                                }
                             }
                             .onDelete { offsets in
-                                for i in offsets {
-                                    db.removeFromRun(runId: run.id, comicId: items[i].comic.id)
-                                }
+                                let runId = run.id
+                                let comicIds = offsets.map { items[$0].comic.id }
                                 load()
+                                Task {
+                                    await Task.detached(priority: .userInitiated) {
+                                        for cid in comicIds {
+                                            DatabaseManager.shared.removeFromRun(runId: runId, comicId: cid)
+                                        }
+                                    }.value
+                                }
                             }
                         }
                     }
@@ -152,7 +166,13 @@ struct RunDetailView: View {
     }
 
     private func load() {
-        items = db.runItems(runId: run.id)
+        let runId = run.id
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.runItems(runId: runId)
+            }.value
+            items = result
+        }
     }
 }
 

@@ -26,8 +26,6 @@ struct LibraryView: View {
 
     @State private var missingFileComic: Comic?
 
-    private let db = DatabaseManager.shared
-
     enum BrowseMode { case characters, flat }
 
     enum SmartFilter: String, CaseIterable {
@@ -721,23 +719,37 @@ struct LibraryView: View {
                     }
                     Divider()
                     Button {
-                        if comic.pageCount > 0 {
-                            db.updateProgress(comicId: comic.id, page: comic.pageCount - 1)
+                        let id = comic.id; let n = comic.pageCount
+                        guard n > 0 else { return }
+                        Task {
+                            await Task.detached(priority: .userInitiated) {
+                                DatabaseManager.shared.updateProgress(comicId: id, page: n - 1)
+                            }.value
                             library.load()
                         }
                     } label: {
                         Label("Mark as Read", systemImage: "checkmark.circle.fill")
                     }
                     Button {
-                        db.setFavorite(comic.id, !comic.isFavorite)
-                        library.load()
+                        let id = comic.id; let val = !comic.isFavorite
+                        Task {
+                            await Task.detached(priority: .userInitiated) {
+                                DatabaseManager.shared.setFavorite(id, val)
+                            }.value
+                            library.load()
+                        }
                     } label: {
                         Label(comic.isFavorite ? "Remove Favorite" : "Add to Favorites",
                               systemImage: comic.isFavorite ? "heart.slash" : "heart")
                     }
                     Button {
-                        db.setInReadingList(comic.id, !comic.inReadingList)
-                        library.load()
+                        let id = comic.id; let val = !comic.inReadingList
+                        Task {
+                            await Task.detached(priority: .userInitiated) {
+                                DatabaseManager.shared.setInReadingList(id, val)
+                            }.value
+                            library.load()
+                        }
                     } label: {
                         Label(comic.inReadingList ? "Remove from Reading List" : "Want to Read",
                               systemImage: comic.inReadingList ? "bookmark.slash" : "bookmark")
@@ -954,36 +966,59 @@ struct LibraryView: View {
     }
 
     private func loadActiveRun() {
-        activeRun = db.firstActiveRun()
+        Task {
+            let run = await Task.detached(priority: .utility) {
+                DatabaseManager.shared.firstActiveRun()
+            }.value
+            activeRun = run
+        }
     }
 
     private func bulkMarkRead() {
-        let ids      = Array(selectedIds)
-        let counts   = db.pageCountsForIds(ids)
-        let updates  = ids.compactMap { id -> (comicId: Int64, page: Int)? in
+        let ids    = Array(selectedIds)
+        let counts = library.comics.filter { ids.contains($0.id) }
+            .reduce(into: [Int64: Int]()) { $0[$1.id] = $1.pageCount }
+        let updates = ids.compactMap { id -> (comicId: Int64, page: Int)? in
             guard let n = counts[id], n > 0 else { return nil }
             return (comicId: id, page: n - 1)
         }
-        db.updateProgressBatch(updates)
-        library.load(); exitSelection()
+        exitSelection()
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.updateProgressBatch(updates)
+            }.value
+            library.load()
+        }
     }
 
     private func bulkToggleFavorite() {
-        let ids = Array(selectedIds)
-        let allFav = ids.compactMap { db.comic(id: $0) }.allSatisfy(\.isFavorite)
-        db.setFavoriteForIds(ids, isFavorite: !allFav)
-        library.load(); exitSelection()
+        let ids    = Array(selectedIds)
+        let allFav = library.comics.filter { selectedIds.contains($0.id) }.allSatisfy(\.isFavorite)
+        let newVal = !allFav
+        exitSelection()
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.setFavoriteForIds(ids, isFavorite: newVal)
+            }.value
+            library.load()
+        }
     }
 
     private func bulkToggleReadingList() {
-        let ids = Array(selectedIds)
-        let allIn = ids.compactMap { db.comic(id: $0) }.allSatisfy(\.inReadingList)
-        db.setInReadingListForIds(ids, inList: !allIn)
-        library.load(); exitSelection()
+        let ids   = Array(selectedIds)
+        let allIn = library.comics.filter { selectedIds.contains($0.id) }.allSatisfy(\.inReadingList)
+        let newVal = !allIn
+        exitSelection()
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.setInReadingListForIds(ids, inList: newVal)
+            }.value
+            library.load()
+        }
     }
 
     private func bulkDelete() {
-        library.deleteBatch(selectedIds.compactMap { db.comic(id: $0) })
+        library.deleteBatch(library.comics.filter { selectedIds.contains($0.id) })
         loadActiveRun()
         exitSelection()
     }
@@ -1009,7 +1044,7 @@ struct ContinueCard: View {
                 .font(.caption2).lineLimit(2)
                 .frame(width: 90, alignment: .leading)
             if comic.pageCount > 0 {
-                Text("p.\(comic.progress)/\(comic.pageCount)")
+                Text("p.\(comic.progress + 1)/\(comic.pageCount)")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -1033,7 +1068,7 @@ struct SeriesCard: View {
                 if group.isFinished {
                     badge("Done", color: .green)
                 } else if group.isReading {
-                    badge("Reading", color: .arcGold)
+                    badge("Reading", color: .arcBlue)
                 }
             }
 

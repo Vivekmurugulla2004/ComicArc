@@ -72,23 +72,28 @@ struct MetadataEditorView: View {
         let charVal = character.trimmingCharacters(in: ws)
         let serVal  = series.trimmingCharacters(in: ws)
         let numVal  = issueNumber.trimmingCharacters(in: ws)
-        db.updateMetadata(
-            comicId,
-            title:       title.trimmingCharacters(in: ws),
-            publisher:   publisher.trimmingCharacters(in: ws),
-            character:   charVal.isEmpty ? nil      : charVal,
-            series:      serVal.isEmpty  ? "General": serVal,
-            issueNumber: numVal.isEmpty  ? nil      : numVal
-        )
-
+        let titleVal     = title.trimmingCharacters(in: ws)
+        let publisherVal = publisher.trimmingCharacters(in: ws)
         let tagNames = tagsText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        db.setTags(for: comicId, names: tagNames)
-
-        onSave()
-        dismiss()
+        let id = comicId
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.updateMetadata(
+                    id,
+                    title:       titleVal,
+                    publisher:   publisherVal,
+                    character:   charVal.isEmpty ? nil       : charVal,
+                    series:      serVal.isEmpty  ? "General" : serVal,
+                    issueNumber: numVal.isEmpty  ? nil       : numVal
+                )
+                DatabaseManager.shared.setTags(for: id, names: tagNames)
+            }.value
+            onSave()
+            dismiss()
+        }
     }
 }
 

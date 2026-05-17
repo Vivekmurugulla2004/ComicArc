@@ -16,8 +16,6 @@ struct ComicDetailView: View {
     @State private var coverImage: UIImage?
     @State private var newTagText: String = ""
 
-    private let db = DatabaseManager.shared
-
     private func openComic(_ comic: Comic) {
         if FileManager.default.fileExists(atPath: comic.filePath) {
             showReader = true
@@ -216,7 +214,7 @@ struct ComicDetailView: View {
             HStack {
                 Text("Progress").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Text("Page \(comic.progress) of \(comic.pageCount)")
+                Text("Page \(comic.progress + 1) of \(comic.pageCount)")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ProgressView(value: comic.progressPercent).tint(.arcGold)
@@ -234,13 +232,19 @@ struct ComicDetailView: View {
                 .padding(.horizontal)
             HStack(spacing: 12) {
                 ForEach(1...5, id: \.self) { i in
+                    let newRating = i == comic.rating ? 0 : i
                     Image(systemName: i <= comic.rating ? "star.fill" : "star")
                         .font(.title2)
                         .foregroundStyle(i <= comic.rating ? Color.arcGold : Color.arcMuted)
                         .onTapGesture {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            db.setRating(comic.id, i == comic.rating ? 0 : i)
-                            refresh()
+                            let id = comic.id
+                            Task {
+                                await Task.detached(priority: .userInitiated) {
+                                    DatabaseManager.shared.setRating(id, newRating)
+                                }.value
+                                refresh()
+                            }
                         }
                         .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")\(i == comic.rating ? ", selected. Tap to clear." : "")")
                 }
@@ -260,8 +264,13 @@ struct ComicDetailView: View {
                             Text(tag.name)
                             Button {
                                 let remaining = tags.filter { $0.id != tag.id }.map(\.name)
-                                db.setTags(for: comicId, names: remaining)
-                                reload()
+                                let id = comicId
+                                Task {
+                                    await Task.detached(priority: .userInitiated) {
+                                        DatabaseManager.shared.setTags(for: id, names: remaining)
+                                    }.value
+                                    reload()
+                                }
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                             }
@@ -302,9 +311,15 @@ struct ComicDetailView: View {
         guard !name.isEmpty else { return }
         let existing = tags.map(\.name)
         guard !existing.contains(name) else { newTagText = ""; return }
-        db.setTags(for: comicId, names: existing + [name])
+        let id = comicId
+        let allNames = existing + [name]
         newTagText = ""
-        reload()
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                DatabaseManager.shared.setTags(for: id, names: allNames)
+            }.value
+            reload()
+        }
     }
 
     private func metaSection(_ comic: Comic) -> some View {
@@ -331,15 +346,21 @@ struct ComicDetailView: View {
     }
 
     private func actionsSection(_ comic: Comic) -> some View {
-        VStack(spacing: 10) {
+        let id = comic.id
+        return VStack(spacing: 10) {
             actionButton(
                 title: comic.isFavorite ? "Remove Favorite" : "Add to Favorites",
                 icon: comic.isFavorite ? "heart.slash" : "heart",
                 tint: .red
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                db.setFavorite(comic.id, !comic.isFavorite)
-                refresh()
+                let val = !comic.isFavorite
+                Task {
+                    await Task.detached(priority: .userInitiated) {
+                        DatabaseManager.shared.setFavorite(id, val)
+                    }.value
+                    refresh()
+                }
             }
 
             actionButton(
@@ -348,8 +369,13 @@ struct ComicDetailView: View {
                 tint: .blue
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                db.setInReadingList(comic.id, !comic.inReadingList)
-                refresh()
+                let val = !comic.inReadingList
+                Task {
+                    await Task.detached(priority: .userInitiated) {
+                        DatabaseManager.shared.setInReadingList(id, val)
+                    }.value
+                    refresh()
+                }
             }
 
             actionButton(title: "Add to Reading Run",
@@ -363,19 +389,28 @@ struct ComicDetailView: View {
             }
 
             if comic.pageCount > 0 && !comic.isFinished {
+                let lastPage = comic.pageCount - 1
                 actionButton(title: "Mark as Read",
                              icon: "checkmark.circle", tint: .green) {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    db.updateProgress(comicId: comic.id, page: comic.pageCount - 1)
-                    refresh()
+                    Task {
+                        await Task.detached(priority: .userInitiated) {
+                            DatabaseManager.shared.updateProgress(comicId: id, page: lastPage)
+                        }.value
+                        refresh()
+                    }
                 }
             }
 
             if comic.isFinished || comic.isStarted {
                 actionButton(title: "Mark Unread",
                              icon: "arrow.counterclockwise", tint: .gray) {
-                    db.updateProgress(comicId: comic.id, page: 0)
-                    refresh()
+                    Task {
+                        await Task.detached(priority: .userInitiated) {
+                            DatabaseManager.shared.updateProgress(comicId: id, page: 0)
+                        }.value
+                        refresh()
+                    }
                 }
             }
 
@@ -392,9 +427,14 @@ struct ComicDetailView: View {
     @ToolbarContentBuilder
     private func toolbar(_ comic: Comic) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
+            let id = comic.id; let val = !comic.isFavorite
             Button {
-                db.setFavorite(comic.id, !comic.isFavorite)
-                refresh()
+                Task {
+                    await Task.detached(priority: .userInitiated) {
+                        DatabaseManager.shared.setFavorite(id, val)
+                    }.value
+                    refresh()
+                }
             } label: {
                 Image(systemName: comic.isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(comic.isFavorite ? .red : .primary)
@@ -431,10 +471,16 @@ struct ComicDetailView: View {
     }
 
     private func reload() {
-        comic = db.comic(id: comicId)
-        tags  = db.tags(for: comicId)
-        if coverImage == nil, let c = comic {
-            Task { coverImage = await ThumbnailCache.shared.thumbnail(comicId: c.id) }
+        let id = comicId
+        Task {
+            let (c, t) = await Task.detached(priority: .userInitiated) {
+                (DatabaseManager.shared.comic(id: id), DatabaseManager.shared.tags(for: id))
+            }.value
+            comic = c
+            tags  = t
+            if coverImage == nil, let c {
+                coverImage = await ThumbnailCache.shared.thumbnail(comicId: c.id)
+            }
         }
     }
 }

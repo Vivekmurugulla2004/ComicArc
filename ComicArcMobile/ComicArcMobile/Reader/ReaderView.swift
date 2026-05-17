@@ -16,7 +16,8 @@ struct ReaderView: View {
     @State private var showThumbnailStrip = false
     @State private var showAddToRunSheet = false
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @AppStorage("autoplayInterval") private var storedInterval: Double = 10
+    @AppStorage("autoplayInterval")  private var storedInterval:    Double  = 10
+    @AppStorage("defaultReadMode")   private var defaultReadMode:  String  = "paged"
     @FocusState private var readerFocused: Bool
 
     // Autoplay
@@ -87,7 +88,7 @@ struct ReaderView: View {
         }
         .onAppear {
             currentPage = comic.progress
-            readMode = UserDefaults.standard.string(forKey: "defaultReadMode") == "scroll" ? .scroll : .paged
+            readMode = defaultReadMode == "scroll" ? .scroll : .paged
             if let idx = runQueue.firstIndex(where: { $0.id == comic.id }),
                idx + 1 < runQueue.count {
                 nextComic = runQueue[idx + 1]

@@ -14,9 +14,9 @@ struct StatsView: View {
                         Section {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 statTile("Comics", value: "\(s.totalComics)", icon: "books.vertical", color: .arcGold)
-                                statTile("Pages Read", value: "\(s.pagesRead)", icon: "doc.text", color: .blue)
-                                statTile("Favorites", value: "\(s.favorites)", icon: "heart.fill", color: .red)
-                                statTile("In Progress", value: "\(s.inProgress)", icon: "clock", color: .purple)
+                                statTile("Pages Read", value: "\(s.pagesRead)", icon: "doc.text", color: .arcBlue)
+                                statTile("Favorites", value: "\(s.favorites)", icon: "heart.fill", color: .arcRed)
+                                statTile("In Progress", value: "\(s.inProgress)", icon: "clock", color: .arcGold)
                             }
                             .listRowInsets(.init())
                             .listRowBackground(Color.clear)
@@ -99,7 +99,7 @@ struct StatsView: View {
                                                 .font(.subheadline)
                                                 .lineLimit(1)
                                             if comic.pageCount > 0 {
-                                                Text("p. \(comic.progress) / \(comic.pageCount)")
+                                                Text("p. \(comic.progress + 1) / \(comic.pageCount)")
                                                     .font(.caption).foregroundStyle(.secondary)
                                             }
                                         }
@@ -149,8 +149,7 @@ struct StatsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color.arcCard)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .arcCard()
     }
 
     private func completionRow(_ label: String, count: Int, total: Int, color: Color) -> some View {

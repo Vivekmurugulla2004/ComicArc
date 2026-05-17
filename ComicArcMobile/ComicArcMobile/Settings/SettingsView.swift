@@ -60,13 +60,6 @@ struct SettingsView: View {
                 }
 
                 Section("Library") {
-                    NavigationLink {
-                        StatsView().environmentObject(library)
-                    } label: {
-                        Label("Library Stats", systemImage: "chart.bar")
-                    }
-                    .accessibilityLabel("View library stats")
-
                     LabeledContent("Comics", value: "\(comicCount)")
                     LabeledContent("Storage Used", value: storageSize)
 

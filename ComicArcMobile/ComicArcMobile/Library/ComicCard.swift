@@ -72,7 +72,7 @@ struct ComicCard: View {
         if comic.isFinished {
             parts.append("Finished")
         } else if comic.isStarted, comic.pageCount > 0 {
-            parts.append("Page \(comic.progress) of \(comic.pageCount)")
+            parts.append("Page \(comic.progress + 1) of \(comic.pageCount)")
         } else {
             parts.append("Unread")
         }
@@ -94,8 +94,7 @@ struct CoverImage: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: .arcInnerRadius)
-                    .fill(Color.arcCard)
+                Color.arcCard
                     .overlay {
                         Image(systemName: "book.closed")
                             .font(.title2)

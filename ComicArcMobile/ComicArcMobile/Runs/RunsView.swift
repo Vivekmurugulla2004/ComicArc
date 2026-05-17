@@ -6,8 +6,6 @@ struct RunsView: View {
     @State private var showCreate = false
     @State private var selectedRun: Run?
 
-    private let db = DatabaseManager.shared
-
     var body: some View {
         NavigationStack {
             Group {
@@ -26,8 +24,13 @@ struct RunsView: View {
                             .buttonStyle(.plain)
                         }
                         .onDelete { offsets in
-                            for i in offsets { db.deleteRun(runs[i].id) }
+                            let ids = offsets.map { runs[$0].id }
                             load()
+                            Task {
+                                await Task.detached(priority: .userInitiated) {
+                                    ids.forEach { DatabaseManager.shared.deleteRun($0) }
+                                }.value
+                            }
                         }
                     }
                 }
