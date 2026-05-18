@@ -91,7 +91,7 @@ struct StatsView: View {
                             Section("Recently Read") {
                                 ForEach(s.recentlyRead) { comic in
                                     HStack(spacing: 12) {
-                                        CoverImage(comicId: comic.id)
+                                        CoverImage(comic: comic)
                                             .frame(width: 36, height: 52)
                                             .clipShape(RoundedRectangle(cornerRadius: 4))
                                         VStack(alignment: .leading, spacing: 2) {

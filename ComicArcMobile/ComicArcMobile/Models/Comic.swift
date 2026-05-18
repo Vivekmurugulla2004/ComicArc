@@ -35,7 +35,7 @@ struct Comic: Identifiable, Hashable {
 }
 
 struct SeriesGroup: Identifiable {
-    var id: String { "\(publisher)|\(groupName)" }
+    let id: String
     let groupName: String
     let character: String?
     let publisher: String

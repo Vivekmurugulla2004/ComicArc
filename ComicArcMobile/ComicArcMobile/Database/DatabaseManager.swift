@@ -880,10 +880,13 @@ final class DatabaseManager {
                 sqlite3_bind_text(stmt, Int32(i + 1), v, -1, SQLITE_TRANSIENT)
             }
             while sqlite3_step(stmt) == SQLITE_ROW {
+                let pub = colText(stmt, 0) ?? ""
+                let name = colText(stmt, 1) ?? ""
                 out.append(SeriesGroup(
-                    groupName:    colText(stmt, 1) ?? "",
+                    id:           "\(pub)|\(name)",
+                    groupName:    name,
                     character:    colText(stmt, 2),
-                    publisher:    colText(stmt, 0) ?? "",
+                    publisher:    pub,
                     coverComicId: sqlite3_column_int64(stmt, 4),
                     issueCount:   Int(sqlite3_column_int(stmt, 3)),
                     started:      Int(sqlite3_column_int(stmt, 5)),

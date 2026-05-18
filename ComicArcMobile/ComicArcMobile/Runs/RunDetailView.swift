@@ -94,13 +94,14 @@ struct RunDetailView: View {
                             .onDelete { offsets in
                                 let runId = run.id
                                 let comicIds = offsets.map { items[$0].comic.id }
-                                load()
+                                items.remove(atOffsets: offsets)  // optimistic UI update
                                 Task {
                                     await Task.detached(priority: .userInitiated) {
                                         for cid in comicIds {
                                             DatabaseManager.shared.removeFromRun(runId: runId, comicId: cid)
                                         }
                                     }.value
+                                    load()  // reconcile after DB confirms deletion
                                 }
                             }
                         }
@@ -207,7 +208,7 @@ struct RunItemRow: View {
             }
 
             // Cover thumbnail
-            CoverImage(comicId: item.comic.id)
+            CoverImage(comic: item.comic)
                 .frame(width: 36, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 

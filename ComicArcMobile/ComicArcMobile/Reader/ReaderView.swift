@@ -97,7 +97,7 @@ struct ReaderView: View {
         }
         .onDisappear {
             stopAutoplay()
-            library.refreshInProgress()
+            library.apply(.setProgress(id: comic.id, page: currentPage))
         }
         .sheet(isPresented: $showRatingSheet) {
             RatingSheet(comic: comic)
@@ -242,7 +242,7 @@ struct ReaderView: View {
         VStack {
             Spacer()
             HStack(spacing: 12) {
-                CoverImage(comicId: next.id)
+                CoverImage(comic: next)
                     .frame(width: 44, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
@@ -600,7 +600,7 @@ struct RatingSheet: View {
                 }
             }
             Button("Save") {
-                library.setRating(comic, rating: rating)
+                library.apply(.setRating(id: comic.id, value: rating))
                 dismiss()
             }
             .buttonStyle(.borderedProminent)

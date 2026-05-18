@@ -9,16 +9,25 @@ struct LibraryView: View {
     @State private var browseMode: BrowseMode = .characters
     @State private var selectedCharacter: SeriesGroup?
     @State private var selectedSeries: SeriesGroup?
-    @State private var detailComicId: Int64?
-    @State private var continueComicId: Int64?
+    @State private var detailComic: Comic?
+    @State private var continueComic: Comic?
 
     // Selection
     @State private var isSelecting = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showBulkDeleteConfirm = false
 
+    // Filter state — @State here so changes ONLY invalidate LibraryView, not other tabs
+    @State private var selectedPublisher: String = "All"
+    @State private var sortOrder: DatabaseManager.SortOrder = .publisher
+    @State private var searchText: String = ""
+    @State private var selectedTag: String?
+
     // Smart filters
     @State private var selectedSmartFilter: SmartFilter? = nil
+
+    // Cached filtered comics — updated via onChange instead of recomputed on every body pass
+    @State private var filteredComics: [Comic] = []
 
     // Continue Run
     @State private var activeRun: Run?
@@ -48,20 +57,20 @@ struct LibraryView: View {
     }
 
     // True when user is actively searching — bypass the hierarchy
-    private var isSearching: Bool { !library.searchText.isEmpty }
+    private var isSearching: Bool { !searchText.isEmpty }
 
-    private var filteredComics: [Comic] {
-        guard let filter = selectedSmartFilter else { return library.comics }
+    private func updateFilteredComics(_ comics: [Comic]) {
+        guard let filter = selectedSmartFilter else { filteredComics = comics; return }
         switch filter {
         case .recentlyAdded:
             let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-            return library.comics.filter { $0.dateAdded >= cutoff }
+            filteredComics = comics.filter { $0.dateAdded >= cutoff }
         case .inProgress:
-            return library.comics.filter { $0.isStarted && !$0.isFinished }
+            filteredComics = comics.filter { $0.isStarted && !$0.isFinished }
         case .unread:
-            return library.comics.filter { !$0.isStarted }
+            filteredComics = comics.filter { !$0.isStarted }
         case .finished:
-            return library.comics.filter { $0.isFinished }
+            filteredComics = comics.filter { $0.isFinished }
         }
     }
 
@@ -78,25 +87,24 @@ struct LibraryView: View {
             .navigationTitle(isSelecting ? "\(selectedIds.count) Selected" : navigationTitle)
             .background(Color.arcBg)
             .navigationBarTitleDisplayMode(sizeClass == .regular ? .inline : .large)
-            .searchable(text: $library.searchText, prompt: "Search comics")
-            .onChange(of: library.searchText) { _, _ in
+            .searchable(text: $searchText, prompt: "Search comics")
+            .onChange(of: searchText) { _, _ in
                 if isSelecting { exitSelection() }
                 selectedSmartFilter = nil
+                updateFilteredComics(library.comics)
             }
-            .task(id: library.searchText) {
-                if library.searchText.isEmpty {
-                    library.load()
-                } else if isSearching {
+            .task(id: searchText) {
+                if !searchText.isEmpty {
                     try? await Task.sleep(nanoseconds: 200_000_000)
                     guard !Task.isCancelled else { return }
-                    library.loadSearchResults()
                 }
+                reload()
             }
             .onChange(of: browseMode) { _, _ in
                 selectedSmartFilter = nil
                 selectedCharacter = nil
                 selectedSeries = nil
-                library.load()
+                reload()
             }
             .toolbar { toolbarContent }
             .safeAreaInset(edge: .bottom) {
@@ -118,24 +126,16 @@ struct LibraryView: View {
                     library.importFolder(url)
                 }
             }
-            .onAppear { library.load(); loadActiveRun() }
-            .sheet(item: Binding(
-                get: { detailComicId.map { ComicSheetID(id: $0) } },
-                set: { detailComicId = $0?.id }
-            )) { w in
-                ComicDetailView(comicId: w.id)
+            .onAppear { reload(); loadActiveRun(); updateFilteredComics(library.comics) }
+            .onChange(of: library.comics) { _, newComics in updateFilteredComics(newComics) }
+            .onChange(of: selectedSmartFilter) { _, _ in updateFilteredComics(library.comics) }
+            .sheet(item: $detailComic) { comic in
+                ComicDetailView(comic: comic)
                     .environmentObject(library)
-                    .onDisappear { library.load() }
             }
-            .sheet(item: Binding(
-                get: { continueComicId.map { ComicSheetID(id: $0) } },
-                set: { continueComicId = $0?.id }
-            )) { w in
-                if let comic = DatabaseManager.shared.comic(id: w.id) {
-                    ReaderView(comic: comic)
-                        .environmentObject(library)
-                        .onDisappear { library.load() }
-                }
+            .sheet(item: $continueComic) { comic in
+                ReaderView(comic: comic)
+                    .environmentObject(library)
             }
             .sheet(item: $selectedRun) { run in
                 RunDetailView(run: run)
@@ -382,7 +382,7 @@ struct LibraryView: View {
                         characterGrid
                     }
                 } else {
-                    if !library.inProgress.isEmpty && library.selectedTag == nil {
+                    if !library.inProgress.isEmpty && selectedTag == nil {
                         continueReadingSection
                     }
                     continueRunSection
@@ -435,12 +435,12 @@ struct LibraryView: View {
     private var publisherFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                FilterChip(label: "All", isActive: library.selectedPublisher == "All") {
+                FilterChip(label: "All", isActive: selectedPublisher == "All") {
                     selectPublisher("All")
                 }
                 ForEach(library.publishers, id: \.self) { pub in
-                    FilterChip(label: pub, isActive: library.selectedPublisher == pub) {
-                        selectPublisher(library.selectedPublisher == pub ? "All" : pub)
+                    FilterChip(label: pub, isActive: selectedPublisher == pub) {
+                        selectPublisher(selectedPublisher == pub ? "All" : pub)
                     }
                 }
             }
@@ -453,14 +453,14 @@ struct LibraryView: View {
     private var tagFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                FilterChip(label: "All", isActive: library.selectedTag == nil) {
-                    library.selectedTag = nil
-                    library.load()
+                FilterChip(label: "All", isActive: selectedTag == nil) {
+                    selectedTag = nil
+                    reload()
                 }
                 ForEach(library.allTags) { tag in
-                    FilterChip(label: tag.name, isActive: library.selectedTag == tag.name) {
-                        library.selectedTag = (library.selectedTag == tag.name) ? nil : tag.name
-                        library.load()
+                    FilterChip(label: tag.name, isActive: selectedTag == tag.name) {
+                        selectedTag = (selectedTag == tag.name) ? nil : tag.name
+                        reload()
                     }
                 }
             }
@@ -500,11 +500,11 @@ struct LibraryView: View {
                     Menu {
                         ForEach(DatabaseManager.SortOrder.allCases, id: \.self) { order in
                             Button {
-                                library.sortOrder = order
-                                library.load()
+                                sortOrder = order
+                                reload()
                             } label: {
                                 Label(order.rawValue,
-                                      systemImage: library.sortOrder == order ? "checkmark" : "")
+                                      systemImage: sortOrder == order ? "checkmark" : "")
                             }
                         }
                     } label: {
@@ -561,7 +561,7 @@ struct LibraryView: View {
                         ContinueCard(comic: comic)
                             .onTapGesture {
                                 if FileManager.default.fileExists(atPath: comic.filePath) {
-                                    continueComicId = comic.id
+                                    continueComic = comic
                                 } else {
                                     missingFileComic = comic
                                 }
@@ -635,7 +635,7 @@ struct LibraryView: View {
     private var flatGrid: some View {
         Group {
             if filteredComics.isEmpty {
-                if library.searchText.isEmpty && selectedSmartFilter == nil {
+                if searchText.isEmpty && selectedSmartFilter == nil {
                     EmptyStateView(
                         icon: "books.vertical",
                         title: "No Comics Yet",
@@ -655,7 +655,7 @@ struct LibraryView: View {
                     EmptyStateView(
                         icon: "magnifyingglass",
                         title: "No Results",
-                        message: "Nothing matched \"\(library.searchText)\". Try a different title or series."
+                        message: "Nothing matched \"\(searchText)\". Try a different title or series."
                     )
                     .padding(.top, 60)
                 }
@@ -674,7 +674,7 @@ struct LibraryView: View {
         if isSearching                        { return "Search Results" }
         if let s = selectedSeries             { return s.groupName }
         if let c = selectedCharacter          { return c.groupName }
-        if let t = library.selectedTag        { return t }
+        if let t = selectedTag                 { return t }
         return "Library"
     }
 
@@ -707,7 +707,7 @@ struct LibraryView: View {
                 if isSelecting {
                     withAnimation(.easeInOut(duration: 0.15)) { toggleSelection(comic.id) }
                 } else {
-                    detailComicId = comic.id
+                    detailComic = comic
                 }
             }
             .contextMenu {
@@ -719,42 +719,24 @@ struct LibraryView: View {
                     }
                     Divider()
                     Button {
-                        let id = comic.id; let n = comic.pageCount
-                        guard n > 0 else { return }
-                        Task {
-                            await Task.detached(priority: .userInitiated) {
-                                DatabaseManager.shared.updateProgress(comicId: id, page: n - 1)
-                            }.value
-                            library.load()
-                        }
+                        guard comic.pageCount > 0 else { return }
+                        library.apply(.setProgress(id: comic.id, page: comic.pageCount - 1))
                     } label: {
                         Label("Mark as Read", systemImage: "checkmark.circle.fill")
                     }
                     Button {
-                        let id = comic.id; let val = !comic.isFavorite
-                        Task {
-                            await Task.detached(priority: .userInitiated) {
-                                DatabaseManager.shared.setFavorite(id, val)
-                            }.value
-                            library.load()
-                        }
+                        library.apply(.setFavorite(id: comic.id, value: !comic.isFavorite))
                     } label: {
                         Label(comic.isFavorite ? "Remove Favorite" : "Add to Favorites",
                               systemImage: comic.isFavorite ? "heart.slash" : "heart")
                     }
                     Button {
-                        let id = comic.id; let val = !comic.inReadingList
-                        Task {
-                            await Task.detached(priority: .userInitiated) {
-                                DatabaseManager.shared.setInReadingList(id, val)
-                            }.value
-                            library.load()
-                        }
+                        library.apply(.setInReadingList(id: comic.id, value: !comic.inReadingList))
                     } label: {
                         Label(comic.inReadingList ? "Remove from Reading List" : "Want to Read",
                               systemImage: comic.inReadingList ? "bookmark.slash" : "bookmark")
                     }
-                    Button { detailComicId = comic.id } label: {
+                    Button { detailComic = comic } label: {
                         Label("View Details", systemImage: "info.circle")
                     }
                     Divider()
@@ -780,7 +762,8 @@ struct LibraryView: View {
                         breadcrumbSegment(char.groupName) {
                             withAnimation {
                                 selectedSeries = nil
-                                library.loadSeries(for: char.groupName)
+                                library.loadSeries(for: char.groupName,
+                                                   publisher: selectedPublisher == "All" ? nil : selectedPublisher)
                             }
                         }
                         if let series = selectedSeries {
@@ -930,29 +913,33 @@ struct LibraryView: View {
         selectedSmartFilter = nil
         selectedCharacter = group
         selectedSeries = nil
+        let pub = selectedPublisher == "All" ? nil : selectedPublisher
         if group.character != nil {
-            library.loadSeries(for: group.groupName)
+            library.loadSeries(for: group.groupName, publisher: pub)
         } else {
             selectedSeries = group
-            library.loadIssues(character: nil, series: group.groupName)
+            library.loadIssues(character: nil, series: group.groupName, publisher: pub, sortOrder: sortOrder)
         }
     }
 
     private func selectSeries(_ group: SeriesGroup) {
         selectedSmartFilter = nil
         selectedSeries = group
+        let pub = selectedPublisher == "All" ? nil : selectedPublisher
         library.loadIssues(
             character: selectedCharacter?.character,
-            series: group.groupName
+            series: group.groupName,
+            publisher: pub,
+            sortOrder: sortOrder
         )
     }
 
     private func selectPublisher(_ publisher: String) {
-        library.selectedPublisher = publisher
+        selectedPublisher = publisher
         selectedCharacter = nil
         selectedSeries = nil
         selectedSmartFilter = nil
-        library.load()
+        reload()
     }
 
     // MARK: - Bulk Action Helpers
@@ -965,6 +952,18 @@ struct LibraryView: View {
         withAnimation(.easeInOut(duration: 0.2)) { isSelecting = false; selectedIds.removeAll() }
     }
 
+    // Passes current @State filter values to the ViewModel load.
+    // This is the single call site for triggering a DB query — all filter interactions funnel here.
+    private func reload() {
+        let pub = selectedPublisher == "All" ? nil : selectedPublisher
+        library.load(
+            publisher: pub,
+            tag: selectedTag,
+            search: searchText.isEmpty ? nil : searchText,
+            sortOrder: sortOrder
+        )
+    }
+
     private func loadActiveRun() {
         Task {
             let run = await Task.detached(priority: .utility) {
@@ -975,46 +974,27 @@ struct LibraryView: View {
     }
 
     private func bulkMarkRead() {
-        let ids    = Array(selectedIds)
-        let counts = library.comics.filter { ids.contains($0.id) }
-            .reduce(into: [Int64: Int]()) { $0[$1.id] = $1.pageCount }
-        let updates = ids.compactMap { id -> (comicId: Int64, page: Int)? in
-            guard let n = counts[id], n > 0 else { return nil }
-            return (comicId: id, page: n - 1)
-        }
+        let mutations: [LibraryMutation] = library.comics
+            .filter { selectedIds.contains($0.id) && $0.pageCount > 0 }
+            .map { .setProgress(id: $0.id, page: $0.pageCount - 1) }
         exitSelection()
-        Task {
-            await Task.detached(priority: .userInitiated) {
-                DatabaseManager.shared.updateProgressBatch(updates)
-            }.value
-            library.load()
-        }
+        library.applyBatch(mutations)
     }
 
     private func bulkToggleFavorite() {
-        let ids    = Array(selectedIds)
-        let allFav = library.comics.filter { selectedIds.contains($0.id) }.allSatisfy(\.isFavorite)
-        let newVal = !allFav
+        let affected  = library.comics.filter { selectedIds.contains($0.id) }
+        let newVal    = !affected.allSatisfy(\.isFavorite)
+        let mutations = affected.map { LibraryMutation.setFavorite(id: $0.id, value: newVal) }
         exitSelection()
-        Task {
-            await Task.detached(priority: .userInitiated) {
-                DatabaseManager.shared.setFavoriteForIds(ids, isFavorite: newVal)
-            }.value
-            library.load()
-        }
+        library.applyBatch(mutations)
     }
 
     private func bulkToggleReadingList() {
-        let ids   = Array(selectedIds)
-        let allIn = library.comics.filter { selectedIds.contains($0.id) }.allSatisfy(\.inReadingList)
-        let newVal = !allIn
+        let affected  = library.comics.filter { selectedIds.contains($0.id) }
+        let newVal    = !affected.allSatisfy(\.inReadingList)
+        let mutations = affected.map { LibraryMutation.setInReadingList(id: $0.id, value: newVal) }
         exitSelection()
-        Task {
-            await Task.detached(priority: .userInitiated) {
-                DatabaseManager.shared.setInReadingListForIds(ids, inList: newVal)
-            }.value
-            library.load()
-        }
+        library.applyBatch(mutations)
     }
 
     private func bulkDelete() {
@@ -1031,7 +1011,7 @@ struct ContinueCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            CoverImage(comicId: comic.id)
+            CoverImage(comic: comic)
                 .frame(width: 90, height: 130)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(alignment: .bottom) {

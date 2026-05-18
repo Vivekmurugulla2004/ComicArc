@@ -29,7 +29,31 @@ final class ThumbnailCache: @unchecked Sendable {
 
     private static let thumbnailSize = CGSize(width: 300, height: 450)
 
-    /// Returns a downsampled cover thumbnail, generating and disk-caching it on a background thread if needed.
+    /// Fast path — caller already has the Comic struct, so no DB lookup needed.
+    /// Use this from all grid/list contexts where the Comic is already in memory.
+    func thumbnail(comic: Comic) async -> UIImage? {
+        let key = NSNumber(value: comic.id)
+        if let hit = cache.object(forKey: key) { return hit }
+
+        return await Task.detached(priority: .utility) { [self] in
+            let diskURL = self.coversDir.appendingPathComponent("\(comic.id).jpg")
+            if let data = try? Data(contentsOf: diskURL), let img = UIImage(data: data) {
+                self.cache.setObject(img, forKey: key,
+                                     cost: Int(img.size.width * img.scale * img.size.height * img.scale * 4))
+                return img
+            }
+            guard let raw = self.generateCover(for: comic) else { return nil }
+            let img = self.downsample(raw, to: Self.thumbnailSize)
+            if let data = img.jpegData(compressionQuality: 0.85) {
+                try? data.write(to: diskURL)
+            }
+            let cost = Int(img.size.width * img.scale * img.size.height * img.scale * 4)
+            self.cache.setObject(img, forKey: key, cost: cost)
+            return img
+        }.value
+    }
+
+    /// Fallback path — only use when the full Comic struct isn't available (e.g. series cover by id).
     func thumbnail(comicId: Int64) async -> UIImage? {
         let key = NSNumber(value: comicId)
         if let hit = cache.object(forKey: key) { return hit }
@@ -41,7 +65,6 @@ final class ThumbnailCache: @unchecked Sendable {
                                      cost: Int(img.size.width * img.scale * img.size.height * img.scale * 4))
                 return img
             }
-
             guard let comic = self.db.comic(id: comicId) else { return nil }
             guard let raw = self.generateCover(for: comic) else { return nil }
             let img = self.downsample(raw, to: Self.thumbnailSize)

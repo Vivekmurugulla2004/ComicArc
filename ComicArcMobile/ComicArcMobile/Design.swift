@@ -47,12 +47,25 @@ private struct ArcCardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.arcBorder, lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.28), radius: 4, x: 0, y: 2)
     }
 }
 
 extension View {
     func arcCard(cornerRadius: CGFloat = .arcCardRadius) -> some View {
         modifier(ArcCardModifier(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Card Button Style
+// Press feedback for tappable cards: subtle scale + brightness lift matches macOS hover feel.
+
+struct ArcCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .brightness(configuration.isPressed ? 0.04 : 0)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -163,7 +176,7 @@ struct ComicCollectionView: View {
     let loader: @Sendable () -> [Comic]
 
     @State private var comics: [Comic] = []
-    @State private var detailComicId: Int64?
+    @State private var detailComic: Comic?
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: sizeClass == .regular ? 160 : 140), spacing: 12)]
@@ -179,7 +192,7 @@ struct ComicCollectionView: View {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(comics) { comic in
                                 ComicCard(comic: comic)
-                                    .onTapGesture { detailComicId = comic.id }
+                                    .onTapGesture { detailComic = comic }
                             }
                         }
                         .padding()
@@ -189,13 +202,9 @@ struct ComicCollectionView: View {
             .navigationTitle(title)
             .background(Color.arcBg)
             .onAppear { load() }
-            .sheet(item: Binding(
-                get: { detailComicId.map { ComicSheetID(id: $0) } },
-                set: { detailComicId = $0?.id }
-            )) { wrapper in
-                ComicDetailView(comicId: wrapper.id)
+            .sheet(item: $detailComic) { comic in
+                ComicDetailView(comic: comic)
                     .environmentObject(library)
-                    .onDisappear { load() }
             }
         }
     }

@@ -8,7 +8,7 @@ struct ComicCard: View {
             // Cover — full-bleed, clipped by parent arcCard cornerRadius at the top.
             // Matches macOS .comic-card layout: cover fills card, info section below.
             ZStack(alignment: .topTrailing) {
-                CoverImage(comicId: comic.id)
+                CoverImage(comic: comic)
                     .aspectRatio(2/3, contentMode: .fill)
                     .clipped()
 
@@ -84,8 +84,19 @@ struct ComicCard: View {
 // MARK: - Cover Image
 
 struct CoverImage: View {
-    let comicId: Int64
+    private enum Source { case comic(Comic); case id(Int64) }
+    private let source: Source
+
+    /// Fast path — use when the full Comic struct is available. Skips the DB lookup.
+    init(comic: Comic) { source = .comic(comic) }
+    /// Fallback path — use only when no Comic struct is available (e.g. series cover by id).
+    init(comicId: Int64) { source = .id(comicId) }
+
     @State private var image: UIImage?
+
+    private var stableId: Int64 {
+        switch source { case .comic(let c): return c.id; case .id(let i): return i }
+    }
 
     var body: some View {
         Group {
@@ -103,6 +114,11 @@ struct CoverImage: View {
             }
         }
         .accessibilityHidden(true)
-        .task(id: comicId) { image = await ThumbnailCache.shared.thumbnail(comicId: comicId) }
+        .task(id: stableId) {
+            switch source {
+            case .comic(let c): image = await ThumbnailCache.shared.thumbnail(comic: c)
+            case .id(let i):    image = await ThumbnailCache.shared.thumbnail(comicId: i)
+            }
+        }
     }
 }

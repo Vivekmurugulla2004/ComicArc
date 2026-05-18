@@ -5,9 +5,8 @@ struct ComicDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @Environment(\.horizontalSizeClass) private var sizeClass
-    let comicId: Int64
-    @State private var comic: Comic?
-    @State private var tags: [Tag] = []
+
+    @State private var comic: Comic
     @State private var showReader = false
     @State private var showMissingFileAlert = false
     @State private var showDeleteConfirm = false
@@ -15,6 +14,10 @@ struct ComicDetailView: View {
     @State private var showAddToRun = false
     @State private var coverImage: UIImage?
     @State private var newTagText: String = ""
+
+    init(comic: Comic) {
+        _comic = State(initialValue: comic)
+    }
 
     private func openComic(_ comic: Comic) {
         if FileManager.default.fileExists(atPath: comic.filePath) {
@@ -27,56 +30,59 @@ struct ComicDetailView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let comic {
-                    Group {
-                        if sizeClass == .regular {
-                            iPadLayout(comic)
-                        } else {
-                            iPhoneLayout(comic)
-                        }
-                    }
-                    .background(Color.arcBg)
-                    .navigationTitle(comic.title)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { toolbar(comic) }
-                    .sheet(isPresented: $showReader, onDismiss: reload) {
-                        ReaderView(comic: comic)
-                            .environmentObject(library)
-                    }
-                    .sheet(isPresented: $showMetadataEditor, onDismiss: reload) {
-                        MetadataEditorView(comicId: comicId) {
-                            refresh()
-                        }
-                    }
-                    .sheet(isPresented: $showAddToRun) {
-                        AddToRunView(comicId: comicId)
-                    }
-                    .confirmationDialog(
-                        "Delete this comic? The file will also be removed from your Comics folder.",
-                        isPresented: $showDeleteConfirm,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Delete Comic", role: .destructive) {
-                            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                            library.delete(comic)
-                            dismiss()
-                        }
-                    }
-                    .alert("File Not Found", isPresented: $showMissingFileAlert) {
-                        Button("Remove from Library", role: .destructive) {
-                            library.delete(comic)
-                            dismiss()
-                        }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This comic's file can't be found on your device. It may have been moved or deleted.")
-                    }
+                if sizeClass == .regular {
+                    iPadLayout(comic)
                 } else {
-                    ProgressView()
+                    iPhoneLayout(comic)
+                }
+            }
+            .background(Color.arcBg)
+            .navigationTitle(comic.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbar(comic) }
+            .sheet(isPresented: $showReader) {
+                ReaderView(comic: comic)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showMetadataEditor) {
+                MetadataEditorView(comicId: comic.id) {
+                    library.reloadAfterExternalWrite()
+                }
+            }
+            .sheet(isPresented: $showAddToRun) {
+                AddToRunView(comicId: comic.id)
+            }
+            .confirmationDialog(
+                "Delete this comic? The file will also be removed from your Comics folder.",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Comic", role: .destructive) {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    library.delete(comic)
+                    dismiss()
+                }
+            }
+            .alert("File Not Found", isPresented: $showMissingFileAlert) {
+                Button("Remove from Library", role: .destructive) {
+                    library.delete(comic)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This comic's file can't be found on your device. It may have been moved or deleted.")
+            }
+            .onChange(of: library.comics) { _, newComics in
+                if let updated = newComics.first(where: { $0.id == comic.id }) {
+                    comic = updated
                 }
             }
         }
-        .onAppear { reload() }
+        .task(id: comic.id) {
+            if coverImage == nil {
+                coverImage = await ThumbnailCache.shared.thumbnail(comic: comic)
+            }
+        }
     }
 
     // MARK: - Layout Variants
@@ -238,13 +244,8 @@ struct ComicDetailView: View {
                         .foregroundStyle(i <= comic.rating ? Color.arcGold : Color.arcMuted)
                         .onTapGesture {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            let id = comic.id
-                            Task {
-                                await Task.detached(priority: .userInitiated) {
-                                    DatabaseManager.shared.setRating(id, newRating)
-                                }.value
-                                refresh()
-                            }
+                            library.apply(.setRating(id: comic.id, value: newRating))
+                            self.comic.rating = newRating
                         }
                         .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")\(i == comic.rating ? ", selected. Tap to clear." : "")")
                 }
@@ -259,22 +260,17 @@ struct ComicDetailView: View {
                 .padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(tags) { tag in
+                    ForEach(comic.tags, id: \.self) { tag in
                         HStack(spacing: 4) {
-                            Text(tag.name)
+                            Text(tag)
                             Button {
-                                let remaining = tags.filter { $0.id != tag.id }.map(\.name)
-                                let id = comicId
-                                Task {
-                                    await Task.detached(priority: .userInitiated) {
-                                        DatabaseManager.shared.setTags(for: id, names: remaining)
-                                    }.value
-                                    reload()
-                                }
+                                let remaining = comic.tags.filter { $0 != tag }
+                                comic.tags = remaining
+                                library.apply(.setTags(id: comic.id, tags: remaining))
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                             }
-                            .accessibilityLabel("Remove \(tag.name) tag")
+                            .accessibilityLabel("Remove \(tag) tag")
                         }
                         .font(.caption)
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -309,17 +305,10 @@ struct ComicDetailView: View {
     private func addTag() {
         let name = newTagText.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let existing = tags.map(\.name)
-        guard !existing.contains(name) else { newTagText = ""; return }
-        let id = comicId
-        let allNames = existing + [name]
+        guard !comic.tags.contains(name) else { newTagText = ""; return }
         newTagText = ""
-        Task {
-            await Task.detached(priority: .userInitiated) {
-                DatabaseManager.shared.setTags(for: id, names: allNames)
-            }.value
-            reload()
-        }
+        comic.tags.append(name)
+        library.apply(.setTags(id: comic.id, tags: comic.tags))
     }
 
     private func metaSection(_ comic: Comic) -> some View {
@@ -355,12 +344,8 @@ struct ComicDetailView: View {
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 let val = !comic.isFavorite
-                Task {
-                    await Task.detached(priority: .userInitiated) {
-                        DatabaseManager.shared.setFavorite(id, val)
-                    }.value
-                    refresh()
-                }
+                library.apply(.setFavorite(id: id, value: val))
+                self.comic.isFavorite = val
             }
 
             actionButton(
@@ -370,12 +355,8 @@ struct ComicDetailView: View {
             ) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 let val = !comic.inReadingList
-                Task {
-                    await Task.detached(priority: .userInitiated) {
-                        DatabaseManager.shared.setInReadingList(id, val)
-                    }.value
-                    refresh()
-                }
+                library.apply(.setInReadingList(id: id, value: val))
+                self.comic.inReadingList = val
             }
 
             actionButton(title: "Add to Reading Run",
@@ -393,24 +374,16 @@ struct ComicDetailView: View {
                 actionButton(title: "Mark as Read",
                              icon: "checkmark.circle", tint: .green) {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    Task {
-                        await Task.detached(priority: .userInitiated) {
-                            DatabaseManager.shared.updateProgress(comicId: id, page: lastPage)
-                        }.value
-                        refresh()
-                    }
+                    library.apply(.setProgress(id: id, page: lastPage))
+                    self.comic.progress = lastPage
                 }
             }
 
             if comic.isFinished || comic.isStarted {
                 actionButton(title: "Mark Unread",
                              icon: "arrow.counterclockwise", tint: .gray) {
-                    Task {
-                        await Task.detached(priority: .userInitiated) {
-                            DatabaseManager.shared.updateProgress(comicId: id, page: 0)
-                        }.value
-                        refresh()
-                    }
+                    library.apply(.setProgress(id: id, page: 0))
+                    self.comic.progress = 0
                 }
             }
 
@@ -429,12 +402,8 @@ struct ComicDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             let id = comic.id; let val = !comic.isFavorite
             Button {
-                Task {
-                    await Task.detached(priority: .userInitiated) {
-                        DatabaseManager.shared.setFavorite(id, val)
-                    }.value
-                    refresh()
-                }
+                library.apply(.setFavorite(id: id, value: val))
+                self.comic.isFavorite = val
             } label: {
                 Image(systemName: comic.isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(comic.isFavorite ? .red : .primary)
@@ -463,24 +432,5 @@ struct ComicDetailView: View {
         }
         .buttonStyle(.bordered)
         .tint(tint)
-    }
-
-    private func refresh() {
-        reload()
-        library.load()
-    }
-
-    private func reload() {
-        let id = comicId
-        Task {
-            let (c, t) = await Task.detached(priority: .userInitiated) {
-                (DatabaseManager.shared.comic(id: id), DatabaseManager.shared.tags(for: id))
-            }.value
-            comic = c
-            tags  = t
-            if coverImage == nil, let c {
-                coverImage = await ThumbnailCache.shared.thumbnail(comicId: c.id)
-            }
-        }
     }
 }
