@@ -121,6 +121,12 @@ def index():
                 WHERE COALESCE(c.character, c.series) = ? AND c.series = ? {pub_cond} {status_cond}
                 ORDER BY {order_sql}
             """, [char_filter, series_filter] + pub_params).fetchall()
+            actual_pub = publisher_filter if publisher_filter != 'All' else (rows[0]['publisher'] if rows else '')
+            sm = db.execute(
+                "SELECT description, custom_cover_id FROM series_meta WHERE publisher = ? AND series = ?",
+                (actual_pub, series_filter)
+            ).fetchone()
+            all_runs = db.execute("SELECT id, title FROM runs ORDER BY title").fetchall()
             db.close()
             return render_template('index.html',
                                    view='series', series_level='issues',
@@ -131,6 +137,9 @@ def index():
                                    reading_list_count=reading_list_count,
                                    status_filter=status_filter,
                                    continuing=[],
+                                   series_description=sm['description'] if sm else '',
+                                   series_publisher=actual_pub,
+                                   all_runs=all_runs,
                                    unrar_missing=has_cbr,
                                    library_path=_comics_dir(),
                                    scan_status=get_scan_status())
@@ -142,11 +151,19 @@ def index():
             rows = db.execute(f"""
                 SELECT c.publisher, c.character, c.series,
                        COUNT(*) as issue_count,
-                       MIN(c.id) as cover_id,
+                       COALESCE(sm.custom_cover_id, MIN(c.id)) as cover_id,
                        SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
-                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed,
+                       COALESCE(sm.description, '') as description,
+                       (SELECT c2.id FROM comics c2
+                        LEFT JOIN reading_progress rp2 ON c2.id = rp2.comic_id
+                        WHERE c2.series = c.series AND c2.publisher = c.publisher
+                          AND (c2.character IS c.character)
+                          AND NOT (c2.page_count > 0 AND COALESCE(rp2.current_page, 0) >= c2.page_count - 2)
+                        ORDER BY COALESCE(c2.position, 0), c2.title LIMIT 1) as resume_id
                 FROM comics c
                 LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+                LEFT JOIN series_meta sm ON sm.publisher = c.publisher AND sm.series = c.series
                 WHERE COALESCE(c.character, c.series) = ? {pub_cond}
                 GROUP BY c.publisher, c.character, c.series
                 ORDER BY c.series
@@ -173,7 +190,13 @@ def index():
                        COUNT(*) as issue_count,
                        MIN(c.id) as cover_id,
                        SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
-                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed,
+                       (SELECT c2.id FROM comics c2
+                        LEFT JOIN reading_progress rp2 ON c2.id = rp2.comic_id
+                        WHERE COALESCE(c2.character, c2.series) = COALESCE(c.character, c.series)
+                          AND c2.publisher = c.publisher
+                          AND NOT (c2.page_count > 0 AND COALESCE(rp2.current_page, 0) >= c2.page_count - 2)
+                        ORDER BY c2.series, COALESCE(c2.position, 0), c2.title LIMIT 1) as resume_id
                 FROM comics c
                 LEFT JOIN reading_progress rp ON c.id = rp.comic_id
                 WHERE 1=1 {pub_cond}
@@ -1126,6 +1149,167 @@ def bulk_reading_list():
             db.execute("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", (comic_id,))
         else:
             db.execute("DELETE FROM reading_list WHERE comic_id = ?", (comic_id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+# ── Series Metadata ───────────────────────────────────────────────────────────
+
+@app.route('/api/series-meta', methods=['GET', 'POST'])
+def series_meta():
+    if request.method == 'GET':
+        publisher = request.args.get('publisher', '').strip()
+        series    = request.args.get('series', '').strip()
+        db = get_db()
+        # Resolve 'All' to the actual publisher for this series
+        if not publisher or publisher == 'All':
+            row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
+            publisher = row['publisher'] if row else ''
+        sm = db.execute(
+            "SELECT description, custom_cover_id FROM series_meta WHERE publisher = ? AND series = ?",
+            (publisher, series)
+        ).fetchone()
+        covers = db.execute(
+            "SELECT id, title FROM comics WHERE publisher = ? AND series = ? ORDER BY COALESCE(position, 0), title",
+            (publisher, series)
+        ).fetchall()
+        db.close()
+        return jsonify({
+            'description':     sm['description'] if sm else '',
+            'custom_cover_id': sm['custom_cover_id'] if sm else None,
+            'covers':          [{'id': c['id'], 'title': c['title']} for c in covers],
+            'resolved_publisher': publisher,
+        })
+    data      = request.get_json(silent=True) or {}
+    publisher = data.get('publisher', '').strip()
+    series    = data.get('series', '').strip()
+    desc      = data.get('description', '').strip()
+    cover_id  = data.get('custom_cover_id')
+    if not publisher or not series:
+        return jsonify({'ok': False, 'error': 'publisher and series required'}), 400
+    db = get_db()
+    db.execute(
+        """INSERT INTO series_meta (publisher, series, description, custom_cover_id)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(publisher, series) DO UPDATE
+             SET description = excluded.description,
+                 custom_cover_id = excluded.custom_cover_id""",
+        (publisher, series, desc, cover_id or None)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+# ── Quick-look ────────────────────────────────────────────────────────────────
+
+@app.route('/api/comic/<int:comic_id>/quicklook')
+def comic_quicklook(comic_id):
+    db = get_db()
+    comic = db.execute("""
+        SELECT c.id, c.title, c.series, c.publisher, c.issue_number, c.page_count, c.character,
+               COALESCE(rp.current_page, 0) as progress,
+               COALESCE(r.rating, 0) as rating,
+               CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
+               CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
+        FROM comics c
+        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        LEFT JOIN ratings r           ON c.id = r.comic_id
+        LEFT JOIN favorites f         ON c.id = f.comic_id
+        LEFT JOIN reading_list rl     ON c.id = rl.comic_id
+        WHERE c.id = ?
+    """, (comic_id,)).fetchone()
+    if not comic:
+        return jsonify({'error': 'Not found'}), 404
+    tags = db.execute("""
+        SELECT t.name FROM tags t
+        JOIN comic_tags ct ON t.id = ct.tag_id
+        WHERE ct.comic_id = ? ORDER BY t.name
+    """, (comic_id,)).fetchall()
+    runs_in = db.execute("""
+        SELECT r.id, r.title FROM runs r
+        JOIN run_items ri ON r.id = ri.run_id
+        WHERE ri.comic_id = ? ORDER BY r.title
+    """, (comic_id,)).fetchall()
+    all_runs = db.execute("SELECT id, title FROM runs ORDER BY title").fetchall()
+    db.close()
+    return jsonify({
+        'id':            comic['id'],
+        'title':         comic['title'],
+        'series':        comic['series'],
+        'publisher':     comic['publisher'],
+        'issue_number':  comic['issue_number'],
+        'page_count':    comic['page_count'],
+        'progress':      comic['progress'],
+        'rating':        comic['rating'],
+        'is_favorite':   comic['is_favorite'],
+        'in_reading_list': comic['in_reading_list'],
+        'tags':          [t['name'] for t in tags],
+        'runs_in':       [{'id': r['id'], 'title': r['title']} for r in runs_in],
+        'all_runs':      [{'id': r['id'], 'title': r['title']} for r in all_runs],
+    })
+
+
+# ── Series add-to-run ─────────────────────────────────────────────────────────
+
+@app.route('/api/series/add-to-run', methods=['POST'])
+def series_add_to_run():
+    data      = request.get_json(silent=True) or {}
+    run_id    = data.get('run_id')
+    publisher = data.get('publisher', '').strip()
+    series    = data.get('series', '').strip()
+    char      = data.get('character')
+    if not run_id or not series:
+        return jsonify({'ok': False, 'error': 'run_id and series required'}), 400
+    db = get_db()
+    # Resolve 'All' to the actual publisher
+    if not publisher or publisher == 'All':
+        row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
+        publisher = row['publisher'] if row else ''
+    if char:
+        comics = db.execute(
+            """SELECT id FROM comics WHERE series = ? AND publisher = ? AND character = ?
+               ORDER BY COALESCE(position, 0), title""",
+            (series, publisher, char)
+        ).fetchall()
+    else:
+        comics = db.execute(
+            """SELECT id FROM comics WHERE series = ? AND publisher = ?
+               ORDER BY COALESCE(position, 0), title""",
+            (series, publisher)
+        ).fetchall()
+    max_pos = db.execute(
+        "SELECT COALESCE(MAX(position), 0) FROM run_items WHERE run_id = ?", (run_id,)
+    ).fetchone()[0]
+    for i, c in enumerate(comics, max_pos + 1):
+        db.execute(
+            "INSERT OR IGNORE INTO run_items (run_id, comic_id, position) VALUES (?, ?, ?)",
+            (run_id, c['id'], i)
+        )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'added': len(comics)})
+
+
+# ── Bulk add-to-run ───────────────────────────────────────────────────────────
+
+@app.route('/api/bulk/add-to-run', methods=['POST'])
+def bulk_add_to_run():
+    data   = request.get_json(silent=True) or {}
+    ids    = data.get('ids', [])
+    run_id = data.get('run_id')
+    if not run_id or not ids:
+        return jsonify({'ok': False, 'error': 'run_id and ids required'}), 400
+    db = get_db()
+    max_pos = db.execute(
+        "SELECT COALESCE(MAX(position), 0) FROM run_items WHERE run_id = ?", (run_id,)
+    ).fetchone()[0]
+    for i, comic_id in enumerate(ids, max_pos + 1):
+        db.execute(
+            "INSERT OR IGNORE INTO run_items (run_id, comic_id, position) VALUES (?, ?, ?)",
+            (run_id, comic_id, i)
+        )
     db.commit()
     db.close()
     return jsonify({'ok': True})

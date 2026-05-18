@@ -44,6 +44,13 @@ def migrate_db():
                added_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
            )""",
         "CREATE INDEX IF NOT EXISTS idx_reading_list ON reading_list(comic_id)",
+        """CREATE TABLE IF NOT EXISTS series_meta (
+               publisher       TEXT NOT NULL,
+               series          TEXT NOT NULL,
+               description     TEXT DEFAULT '',
+               custom_cover_id INTEGER REFERENCES comics(id) ON DELETE SET NULL,
+               PRIMARY KEY (publisher, series)
+           )""",
     ]:
         try:
             conn.execute(sql)
