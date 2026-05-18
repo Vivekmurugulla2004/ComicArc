@@ -29,27 +29,25 @@ final class ThumbnailCache: @unchecked Sendable {
 
     private static let thumbnailSize = CGSize(width: 300, height: 450)
 
-    /// Fast path — caller has the full Comic struct.
-    /// Checks customCoverPath first, then disk cache, then generates from file.
     func thumbnail(comic: Comic) async -> UIImage? {
         let key = NSNumber(value: comic.id)
         if let hit = cache.object(forKey: key) { return hit }
 
         return await Task.detached(priority: .utility) { [self] in
-            // 1. User-set custom cover takes priority
+
             if let customPath = comic.customCoverPath,
                let img = UIImage(contentsOfFile: customPath) {
                 let thumb = self.downsample(img, to: Self.thumbnailSize)
                 self.cache.setObject(thumb, forKey: key, cost: self.cost(of: thumb))
                 return thumb
             }
-            // 2. Disk-cached thumbnail
+
             let diskURL = self.coversDir.appendingPathComponent("\(comic.id).jpg")
             if let data = try? Data(contentsOf: diskURL), let img = UIImage(data: data) {
                 self.cache.setObject(img, forKey: key, cost: self.cost(of: img))
                 return img
             }
-            // 3. Generate from comic file
+
             guard let raw = self.generateCover(for: comic) else { return nil }
             let img = self.downsample(raw, to: Self.thumbnailSize)
             if let data = img.jpegData(compressionQuality: 0.85) {
@@ -60,7 +58,6 @@ final class ThumbnailCache: @unchecked Sendable {
         }.value
     }
 
-    /// Fallback path — only use when the full Comic struct isn't available.
     func thumbnail(comicId: Int64) async -> UIImage? {
         let key = NSNumber(value: comicId)
         if let hit = cache.object(forKey: key) { return hit }
@@ -72,7 +69,7 @@ final class ThumbnailCache: @unchecked Sendable {
                 return img
             }
             guard let comic = self.db.comic(id: comicId) else { return nil }
-            // Check custom cover even on the fallback path
+
             if let customPath = comic.customCoverPath,
                let img = UIImage(contentsOfFile: customPath) {
                 let thumb = self.downsample(img, to: Self.thumbnailSize)
@@ -89,7 +86,6 @@ final class ThumbnailCache: @unchecked Sendable {
         }.value
     }
 
-    /// Saves a custom cover image for a comic and updates the DB and cache.
     func setCustomCover(comicId: Int64, image: UIImage) async {
         await Task.detached(priority: .userInitiated) { [self] in
             let customDir = self.coversDir.appendingPathComponent("custom")
@@ -99,7 +95,7 @@ final class ThumbnailCache: @unchecked Sendable {
                 try? data.write(to: URL(fileURLWithPath: path))
             }
             self.db.setCustomCoverPath(id: comicId, path: path)
-            // Invalidate cached thumbnail so next load picks up the new cover
+
             self.invalidate(comicId: comicId)
         }.value
     }

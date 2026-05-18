@@ -66,15 +66,12 @@ struct ComicCard: View {
     }
 }
 
-// MARK: - Cover Image
-
 struct CoverImage: View {
     private enum Source { case comic(Comic); case id(Int64) }
     private let source: Source
 
-    /// Fast path — use when the full Comic struct is available. Skips the DB lookup.
     init(comic: Comic) { source = .comic(comic) }
-    /// Fallback path — use only when no Comic struct is available (e.g. series cover by id).
+
     init(comicId: Int64) { source = .id(comicId) }
 
     @State private var image: UIImage?

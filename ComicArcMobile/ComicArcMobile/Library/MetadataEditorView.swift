@@ -13,7 +13,6 @@ struct MetadataEditorView: View {
     @State private var issueNumber: String = ""
     @State private var tagsText: String    = ""
 
-    // Series management
     @State private var showRenameSeriesSheet = false
     @State private var showMergeSeriesSheet  = false
 
@@ -129,8 +128,6 @@ struct MetadataEditorView: View {
     }
 }
 
-// MARK: - Rename Series Sheet
-
 private struct RenameSeriesSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -200,8 +197,6 @@ private struct RenameSeriesSheet: View {
         }
     }
 }
-
-// MARK: - Merge Series Sheet
 
 private struct MergeSeriesSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -301,8 +296,6 @@ private struct MergeSeriesSheet: View {
         }
     }
 }
-
-// MARK: - Helper
 
 private struct LabeledField: View {
     let label: String

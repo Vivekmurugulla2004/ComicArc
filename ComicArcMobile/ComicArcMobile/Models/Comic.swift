@@ -9,15 +9,15 @@ struct Comic: Identifiable, Hashable {
     var series: String
     var issueNumber: String?
     var pageCount: Int
-    var progress: Int       // 0-indexed current page
-    var rating: Int         // 0–5
+    var progress: Int
+    var rating: Int
     var isFavorite: Bool
     var inReadingList: Bool
     var tags: [String]
     var dateAdded: Date
     var writer: String?
     var summary: String?
-    var customCoverPath: String?  // user-set thumbnail override
+    var customCoverPath: String?
 
     var progressPercent: Double {
         guard pageCount > 0 else { return 0 }
@@ -49,15 +49,11 @@ struct SeriesGroup: Identifiable {
     var isReading: Bool  { started > 0 && !isFinished }
 }
 
-// MARK: - Collections
-
 struct Collection: Identifiable {
     let id: Int64
     var name: String
     var comicCount: Int
 }
-
-// MARK: - Filter Presets
 
 struct FilterPreset: Identifiable {
     let id: Int64

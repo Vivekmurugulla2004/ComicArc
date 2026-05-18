@@ -32,7 +32,7 @@ struct RunDetailView: View {
                     )
                 } else {
                     List {
-                        // Resume banner
+
                         if let firstUnfinished = items.first(where: { !$0.isFinished }) {
                             Section {
                                 Button {
@@ -61,7 +61,6 @@ struct RunDetailView: View {
                             }
                         }
 
-                        // Issues list
                         Section {
                             ForEach(items) { item in
                                 RunItemRow(item: item,
@@ -94,14 +93,14 @@ struct RunDetailView: View {
                             .onDelete { offsets in
                                 let runId = run.id
                                 let comicIds = offsets.map { items[$0].comic.id }
-                                items.remove(atOffsets: offsets)  // optimistic UI update
+                                items.remove(atOffsets: offsets)
                                 Task {
                                     await Task.detached(priority: .userInitiated) {
                                         for cid in comicIds {
                                             DatabaseManager.shared.removeFromRun(runId: runId, comicId: cid)
                                         }
                                     }.value
-                                    load()  // reconcile after DB confirms deletion
+                                    load()
                                 }
                             }
                         }
@@ -131,7 +130,7 @@ struct RunDetailView: View {
                     .environmentObject(library)
                     .onDisappear {
                         load()
-                        // Pick up auto-advance request set by ReaderView "Read Next" banner
+
                         if let pending = library.pendingRunComic {
                             library.pendingRunComic = nil
                             readerRunContext = items.map(\.comic)
@@ -173,8 +172,6 @@ struct RunDetailView: View {
     }
 }
 
-// MARK: - Run Item Row
-
 struct RunItemRow: View {
     let item: RunItem
     let allComics: [Comic]
@@ -187,7 +184,7 @@ struct RunItemRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Position indicator / status
+
             ZStack {
                 Circle()
                     .fill(statusColor)
@@ -203,12 +200,10 @@ struct RunItemRow: View {
                 }
             }
 
-            // Cover thumbnail
             CoverImage(comic: item.comic)
                 .frame(width: 36, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            // Info
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.comic.title)
                     .font(.subheadline)
@@ -231,7 +226,6 @@ struct RunItemRow: View {
 
             Spacer()
 
-            // Actions
             Menu {
                 Button {
                     onRead(item.comic, allComics)
@@ -269,5 +263,4 @@ struct RunItemRow: View {
         return Color.arcMuted
     }
 }
-
 

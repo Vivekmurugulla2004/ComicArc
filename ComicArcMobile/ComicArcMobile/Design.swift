@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - Color Palette
-
 extension Color {
     static let arcGold    = Color(red: 247/255, green: 201/255, blue: 72/255)
     static let arcRed     = Color(red: 239/255, green: 35/255,  blue: 60/255)
@@ -19,14 +17,11 @@ extension Color {
     static let pubIndie   = Color(red: 0.1,  green: 0.42, blue: 0.23)
 }
 
-// MARK: - Design Tokens
-
 extension CGFloat {
     static let arcCardRadius: CGFloat  = 12
     static let arcInnerRadius: CGFloat = 8
     static let arcBadgeRadius: CGFloat = 4
 
-    // Spacing scale
     static let arcS2:  CGFloat = 2
     static let arcS4:  CGFloat = 4
     static let arcS6:  CGFloat = 6
@@ -45,8 +40,6 @@ extension Animation {
     static let arcSpring = Animation.spring(response: 0.3, dampingFraction: 0.8)
 }
 
-// MARK: - AppStorage Keys
-
 enum AppStorageKey {
     static let onboardingDone    = "onboardingDone"
     static let appColorScheme    = "appColorScheme"
@@ -55,8 +48,6 @@ enum AppStorageKey {
     static let autoplayInterval  = "autoplayInterval"
     static let iCloudSync        = "iCloudSync"
 }
-
-// MARK: - Arc Card Modifier
 
 private struct ArcCardModifier: ViewModifier {
     let cornerRadius: CGFloat
@@ -76,8 +67,6 @@ extension View {
     }
 }
 
-// MARK: - Card Button Style
-
 struct ArcCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -87,11 +76,8 @@ struct ArcCardButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Progress Bar
-// Single shared implementation used everywhere: ComicCard, ContinueCard, SeriesCard, RunDetailView.
-
 struct ArcProgressBar: View {
-    let value: Double   // 0.0–1.0
+    let value: Double
     var height: CGFloat = 3
     var color: Color = .arcGold
 
@@ -109,9 +95,6 @@ struct ArcProgressBar: View {
     }
 }
 
-// MARK: - Card Badge
-// Status indicators on cover images (finished checkmark, favorite heart, reading badge).
-
 struct CardBadge: View {
     let systemImage: String
     let color: Color
@@ -124,8 +107,6 @@ struct CardBadge: View {
             .background(.ultraThinMaterial, in: Circle())
     }
 }
-
-// MARK: - Filter Chip
 
 struct FilterChip: View {
     enum Style { case filled, outlined }
@@ -173,8 +154,6 @@ struct FilterChip: View {
     }
 }
 
-// MARK: - Empty State
-
 struct EmptyStateView: View {
     let icon: String
     let title: String
@@ -212,9 +191,6 @@ struct EmptyStateView: View {
         .padding(.vertical, 60)
     }
 }
-
-// MARK: - Comic Collection View
-// Shared template for Favorites and Reading List tabs.
 
 struct ComicCollectionView: View {
     @EnvironmentObject var library: LibraryViewModel
@@ -268,8 +244,6 @@ struct ComicCollectionView: View {
         }
     }
 }
-
-// MARK: - Publisher Badge
 
 struct PublisherBadge: View {
     let publisher: String

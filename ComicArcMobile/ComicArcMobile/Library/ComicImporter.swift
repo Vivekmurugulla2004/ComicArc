@@ -16,13 +16,9 @@ enum ComicImporter {
         options: .caseInsensitive
     )
 
-    /// Derive metadata from the file URL.
-    /// Expected folder layout: Publisher/Character/Series/file.cbz
-    /// For CBZ files, ComicInfo.xml inside the archive overrides filename-guessed fields.
     static func parse(url: URL) -> ComicMeta {
         var meta = pathMeta(url: url)
 
-        // ComicInfo.xml is the ground truth — override filename guesses when present
         if url.pathExtension.lowercased() == "cbz",
            let info = ComicInfoParser.parse(cbzURL: url) {
             if let s = info.series,    !s.isEmpty { meta.series = s }
@@ -36,14 +32,13 @@ enum ComicImporter {
         return meta
     }
 
-    /// Returns page count — reuses CBZReaderCache to avoid reopening archives. Call off main thread.
     static func pageCount(url: URL) async -> Int {
         let ext = url.pathExtension.lowercased()
         switch ext {
         case "cbz":
             return CBZReaderCache.shared.reader(for: url.path)?.pageCount ?? 0
         case "cbr":
-            // For CBR the path is the extracted directory; count image files directly.
+
             return DirectoryReaderCache.shared.reader(for: url.path)?.pageCount ?? 0
         case "pdf":
             return PDFPageCounter.count(url: url)
@@ -53,8 +48,6 @@ enum ComicImporter {
             return 0
         }
     }
-
-    // MARK: - Path-based metadata (fallback)
 
     private static func pathMeta(url: URL) -> ComicMeta {
         let filename = url.deletingPathExtension().lastPathComponent
@@ -73,7 +66,6 @@ enum ComicImporter {
         let character: String?
         let series: String
 
-        // parts = [Publisher, Character, Series, file] or fewer
         if parts.count >= 4 {
             publisher = parts[0]
             character = parts[parts.count - 3]

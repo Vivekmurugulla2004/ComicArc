@@ -1,8 +1,6 @@
 import SwiftUI
 import Combine
 
-// MARK: - Mutation Types
-
 enum LibraryMutation {
     case setFavorite(id: Int64, value: Bool)
     case setInReadingList(id: Int64, value: Bool)
@@ -20,8 +18,6 @@ struct ImportProgress {
     var isActive: Bool { total > 0 || isScanning }
 }
 
-// MARK: - LibraryViewModel
-
 @MainActor
 final class LibraryViewModel: ObservableObject {
     @Published var comics: [Comic] = []
@@ -35,19 +31,15 @@ final class LibraryViewModel: ObservableObject {
     @Published var importProgress = ImportProgress()
     @Published var importError: String?
 
-    /// Set by ReaderView when user taps "Read Next" in a run — observed by RunDetailView
     @Published var pendingRunComic: Comic?
 
     private let db = DatabaseManager.shared
     private var importTask: Task<Void, Never>?
 
-    // Last query params — used by reload() so delete/import can re-run with the same filter
     private var _lastPub: String?
     private var _lastTag: String?
     private var _lastSearch: String?
     private var _lastSort: DatabaseManager.SortOrder = .publisher
-
-    // MARK: - Single Mutation
 
     func apply(_ mutation: LibraryMutation) {
         let db = db
@@ -74,8 +66,6 @@ final class LibraryViewModel: ObservableObject {
             if let idx = comics.firstIndex(where: { $0.id == id }) { comics[idx].tags = tags }
         }
     }
-
-    // MARK: - Batch Mutation (bulk actions: mark all read, bulk favorite, etc.)
 
     func applyBatch(_ mutations: [LibraryMutation]) {
         guard !mutations.isEmpty else { return }
@@ -105,7 +95,7 @@ final class LibraryViewModel: ObservableObject {
             }
         }
 
-        comics = updated  // ONE @Published notify
+        comics = updated
 
         let db = db
         if !favUpdates.isEmpty {
@@ -130,8 +120,6 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    // MARK: - inProgress (DB-backed, simple and reliable)
-
     func refreshInProgress() {
         let db = db
         Task.detached(priority: .utility) { [weak self] in
@@ -139,8 +127,6 @@ final class LibraryViewModel: ObservableObject {
             await MainActor.run { self?.inProgress = result }
         }
     }
-
-    // MARK: - Load
 
     func load(publisher: String? = nil, tag: String? = nil,
               search: String? = nil, sortOrder: DatabaseManager.SortOrder = .publisher) {
@@ -169,8 +155,6 @@ final class LibraryViewModel: ObservableObject {
         load(publisher: _lastPub, tag: _lastTag, search: _lastSearch, sortOrder: _lastSort)
     }
 
-    /// Call after an external write (e.g. MetadataEditorView) that changes fields
-    /// not covered by LibraryMutation — triggers a full structural reload.
     func reloadAfterExternalWrite() {
         reload()
     }
@@ -196,8 +180,6 @@ final class LibraryViewModel: ObservableObject {
             await MainActor.run { self.comics = result }
         }
     }
-
-    // MARK: - Collections
 
     func loadCollections() {
         let db = db
@@ -232,14 +214,10 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Sort Order (persistent drag-to-reorder within a series)
-
     func updateSortOrders(_ items: [(id: Int64, sortOrder: Int)]) {
         let db = db
         Task.detached(priority: .utility) { db.updateSortOrders(items) }
     }
-
-    // MARK: - Import
 
     func cancelImport() {
         importTask?.cancel()
@@ -381,8 +359,6 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Private import helpers
-
     private nonisolated static var comicsDir: URL {
         FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -458,8 +434,6 @@ final class LibraryViewModel: ObservableObject {
         return true
     }
 
-    // MARK: - Delete
-
     func delete(_ comic: Comic) {
         ThumbnailCache.shared.invalidate(comicId: comic.id)
         CBZReaderCache.shared.invalidate(path: comic.filePath)
@@ -492,7 +466,6 @@ final class LibraryViewModel: ObservableObject {
         Task.detached(priority: .background) { try? FileManager.default.removeItem(atPath: filePath) }
     }
 
-    /// Debounced progress save from the reader — cancels and re-schedules on each page turn.
     func updateProgress(_ comic: Comic, page: Int) {
         let comicId = comic.id
         let db = db

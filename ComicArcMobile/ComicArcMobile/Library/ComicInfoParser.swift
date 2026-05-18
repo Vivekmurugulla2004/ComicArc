@@ -10,8 +10,6 @@ struct ComicInfo {
     var characters: [String] = []
 }
 
-/// Reads ComicInfo.xml from CBZ archives (standard comic metadata format).
-/// The file may be at the archive root or one level deep.
 enum ComicInfoParser {
     static func parse(cbzURL: URL) -> ComicInfo? {
         guard let archive = try? Archive(url: cbzURL, accessMode: .read, pathEncoding: nil) else { return nil }

@@ -12,8 +12,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - iPhone (tab bar)
-
     private var iPhoneLayout: some View {
         TabView {
             LibraryView()
@@ -35,8 +33,6 @@ struct ContentView: View {
         .background(Color.arcBg.ignoresSafeArea())
         .onAppear { library.loadCollections() }
     }
-
-    // MARK: - iPad (sidebar)
 
     @State private var iPadSelection: SidebarTab? = .library
 
@@ -65,8 +61,6 @@ struct ContentView: View {
         .onAppear { library.loadCollections() }
     }
 }
-
-// MARK: - Sidebar tabs
 
 enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
     case library, runs, collections, favorites, readingList, stats, settings

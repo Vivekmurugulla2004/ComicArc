@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// A zoomable, pannable image view — pinch to zoom, double-tap to fit/fill, drag to pan.
-/// `scale` is owned by the parent so it can reset on page navigation and drive double-tap zoom.
 struct ZoomableImage: View {
     let image: UIImage
     @Binding var scale: CGFloat
@@ -21,7 +19,7 @@ struct ZoomableImage: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .scaleEffect(scale)
                 .offset(offset)
-                // Pinch-to-zoom — always active
+
                 .gesture(
                     MagnificationGesture()
                         .onChanged { value in
@@ -36,8 +34,7 @@ struct ZoomableImage: View {
                             }
                         }
                 )
-                // Pan — only active when zoomed in; when scale == 1 the mask is .none
-                // so this gesture is never recognised and TabView's swipe fires freely.
+
                 .gesture(
                     DragGesture()
                         .onChanged { value in
@@ -52,7 +49,7 @@ struct ZoomableImage: View {
                         },
                     including: scale > minScale ? .all : .none
                 )
-                // Reset pan offset when scale is driven back to 1 from outside
+
                 .onChange(of: scale) { _, newScale in
                     if newScale <= minScale {
                         withAnimation { offset = .zero; lastOffset = .zero }

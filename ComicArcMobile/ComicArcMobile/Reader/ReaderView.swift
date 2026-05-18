@@ -5,64 +5,78 @@ struct ReaderView: View {
     @EnvironmentObject var library: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
-    var comic: Comic
-    /// When reading inside a run, pass all comics so the reader can auto-advance.
+    let comic: Comic
     var runQueue: [Comic] = []
 
+    @State private var activeComic: Comic
     @State private var currentPage: Int = 0
     @State private var readMode: ReadMode = .paged
     @State private var showToolbar = true
     @State private var showRatingSheet = false
     @State private var showThumbnailStrip = false
+    @State private var showRunNavigator = false
     @State private var showAddToRunSheet = false
+    @State private var zoomScale: CGFloat = 1
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @AppStorage("autoplayInterval")  private var storedInterval:    Double  = 10
-    @AppStorage("defaultReadMode")   private var defaultReadMode:  String  = "paged"
+    @AppStorage("autoplayInterval") private var storedInterval: Double = 10
+    @AppStorage("defaultReadMode")  private var defaultReadMode: String = "paged"
     @FocusState private var readerFocused: Bool
 
-    // Autoplay
     @State private var autoplayOn = false
     @State private var autoplayCountdown: Double = 10
     @State private var autoplayTimer: Timer?
 
-    // Run auto-advance
     @State private var nextComic: Comic?
     @State private var showNextComicBanner = false
 
     enum ReadMode { case paged, scroll }
+
+    init(comic: Comic, runQueue: [Comic] = []) {
+        self.comic    = comic
+        self.runQueue = runQueue
+        self._activeComic = State(initialValue: comic)
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             Group {
-                if comic.fileExtension == "pdf" {
-                    // simultaneousGesture lets PDFView's UIKit recognizers receive touches
-                    // unblocked while still toggling the toolbar on tap.
-                    PDFReaderView(url: URL(fileURLWithPath: comic.filePath),
+                if activeComic.fileExtension == "pdf" {
+                    PDFReaderView(url: URL(fileURLWithPath: activeComic.filePath),
                                   currentPage: $currentPage)
                         .simultaneousGesture(TapGesture().onEnded { withAnimation { showToolbar.toggle() } })
                 } else if readMode == .scroll {
-                    ScrollReaderView(comic: comic, currentPage: $currentPage)
+                    ScrollReaderView(comic: activeComic, currentPage: $currentPage)
                         .onTapGesture { withAnimation { showToolbar.toggle() } }
                 } else {
                     PagedReaderView(
-                        comic: comic,
+                        comic: activeComic,
                         currentPage: $currentPage,
+                        zoomScale: $zoomScale,
                         onTapCenter: { withAnimation { showToolbar.toggle() } }
                     )
                 }
             }
+            .id(activeComic.id)
             .onChange(of: currentPage) { _, page in
-                library.updateProgress(comic, page: page)
+                library.updateProgress(activeComic, page: page)
                 if autoplayOn { resetAutoplayTimer() }
                 checkRunAdvance(page: page)
             }
 
+            if showRunNavigator && !runQueue.isEmpty {
+                VStack {
+                    runNavigatorStrip
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.25), value: showRunNavigator)
+            }
+
             if showToolbar { toolbar }
 
-            // Thumbnail strip — independent of toolbar visibility
-            if showThumbnailStrip && comic.pageCount > 0 {
+            if showThumbnailStrip && activeComic.pageCount > 0 {
                 VStack {
                     Spacer()
                     thumbnailStrip
@@ -87,30 +101,25 @@ struct ReaderView: View {
             withAnimation { showToolbar.toggle() }; return .handled
         }
         .onAppear {
-            currentPage = comic.progress
+            currentPage = activeComic.progress
             readMode = defaultReadMode == "scroll" ? .scroll : .paged
-            if let idx = runQueue.firstIndex(where: { $0.id == comic.id }),
-               idx + 1 < runQueue.count {
-                nextComic = runQueue[idx + 1]
-            }
+            updateRunContext(for: activeComic)
             readerFocused = true
         }
         .onDisappear {
             stopAutoplay()
-            library.apply(.setProgress(id: comic.id, page: currentPage))
+            library.apply(.setProgress(id: activeComic.id, page: currentPage))
         }
         .sheet(isPresented: $showRatingSheet) {
-            RatingSheet(comic: comic)
+            RatingSheet(comic: activeComic)
                 .environmentObject(library)
                 .presentationDetents([.height(220)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddToRunSheet) {
-            AddToRunView(comicId: comic.id)
+            AddToRunView(comicId: activeComic.id)
         }
     }
-
-    // MARK: - Toolbar
 
     private var isLandscapePhone: Bool { verticalSizeClass == .compact }
 
@@ -119,7 +128,7 @@ struct ReaderView: View {
             if isLandscapePhone {
                 HStack {
                     toolbarContent
-                    if comic.pageCount > 0 {
+                    if activeComic.pageCount > 0 {
                         pageSlider.frame(maxWidth: 200)
                     }
                 }
@@ -145,12 +154,22 @@ struct ReaderView: View {
             }
             .accessibilityLabel("Close reader")
 
+            if !runQueue.isEmpty {
+                Button {
+                    withAnimation { showRunNavigator.toggle() }
+                } label: {
+                    Image(systemName: showRunNavigator ? "list.bullet.circle.fill" : "list.bullet.circle")
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel(showRunNavigator ? "Hide run navigator" : "Show run navigator")
+            }
+
             Spacer()
 
             if autoplayOn {
                 ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                    Circle().stroke(Color.white.opacity(0.3), lineWidth: 2)
                     Circle()
                         .trim(from: 0, to: storedInterval > 0 ? autoplayCountdown / storedInterval : 0)
                         .stroke(Color.arcGold, style: StrokeStyle(lineWidth: 2, lineCap: .round))
@@ -161,13 +180,24 @@ struct ReaderView: View {
                 .accessibilityLabel("Autoplay countdown, \(Int(autoplayCountdown)) seconds remaining")
             }
 
-            if comic.pageCount > 0 {
-                Text("\(currentPage + 1) / \(comic.pageCount)")
+            if zoomScale > 1.05 {
+                Button {
+                    withAnimation(.spring(response: 0.3)) { zoomScale = 1 }
+                } label: {
+                    Text(String(format: "%.1f×", zoomScale))
+                        .font(.caption.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.arcGold.opacity(0.25), in: Capsule())
+                        .foregroundStyle(Color.arcGold)
+                }
+                .accessibilityLabel("Reset zoom, currently at \(String(format: "%.1f", zoomScale)) times")
+            } else if activeComic.pageCount > 0 {
+                Text("\(currentPage + 1) / \(activeComic.pageCount)")
                     .font(.caption)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(.ultraThinMaterial, in: Capsule())
-                    .accessibilityLabel("Page \(currentPage + 1) of \(comic.pageCount)")
+                    .accessibilityLabel("Page \(currentPage + 1) of \(activeComic.pageCount)")
             }
 
             Spacer()
@@ -187,11 +217,11 @@ struct ReaderView: View {
                           systemImage: autoplayOn ? "stop.circle" : "play.circle")
                 }
 
-                if comic.pageCount > 0 {
+                if activeComic.pageCount > 0 {
                     Button {
                         withAnimation { showThumbnailStrip.toggle() }
                     } label: {
-                        Label(showThumbnailStrip ? "Hide Navigator" : "Page Navigator",
+                        Label(showThumbnailStrip ? "Hide Page Navigator" : "Page Navigator",
                               systemImage: showThumbnailStrip ? "rectangle.compress.vertical" : "square.grid.3x3")
                     }
                 }
@@ -216,18 +246,66 @@ struct ReaderView: View {
 
     @ViewBuilder
     private var pageSlider: some View {
-        if comic.pageCount > 0 {
+        if activeComic.pageCount > 0 {
             Slider(value: Binding(
                 get: { Double(currentPage) },
                 set: { currentPage = Int($0) }
-            ), in: 0...Double(max(comic.pageCount - 1, 0)), step: 1)
+            ), in: 0...Double(max(activeComic.pageCount - 1, 0)), step: 1)
             .tint(.arcGold)
             .padding(.horizontal)
             .padding(.bottom, isLandscapePhone ? 0 : 8)
         }
     }
 
-    // MARK: - Next Comic Banner
+    private var runNavigatorStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 10) {
+                    ForEach(runQueue) { comic in
+                        RunNavCell(
+                            comic: comic,
+                            isCurrent: comic.id == activeComic.id
+                        )
+                        .id(comic.id)
+                        .onTapGesture {
+                            guard comic.id != activeComic.id else { return }
+                            switchComic(to: comic)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+            }
+            .background(.ultraThinMaterial)
+            .onAppear { proxy.scrollTo(activeComic.id, anchor: .center) }
+            .onChange(of: activeComic.id) { _, id in
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
+            }
+        }
+    }
+
+    private var thumbnailStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 6) {
+                    ForEach(0..<max(1, activeComic.pageCount), id: \.self) { i in
+                        ThumbnailPageCell(comic: activeComic, index: i, isCurrent: i == currentPage)
+                            .id(i)
+                            .onTapGesture { withAnimation { currentPage = i } }
+                            .accessibilityLabel("Page \(i + 1)")
+                            .accessibilityAddTraits(i == currentPage ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+            .frame(height: 76)
+            .background(.ultraThinMaterial)
+            .onChange(of: currentPage) { _, page in
+                withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(page, anchor: .center) }
+            }
+            .onAppear { proxy.scrollTo(currentPage, anchor: .center) }
+        }
+    }
 
     private func nextComicBanner(_ next: Comic) -> some View {
         VStack {
@@ -250,10 +328,7 @@ struct ReaderView: View {
 
                 Button {
                     showNextComicBanner = false
-                    dismiss()
-                    // The parent run detail will re-present ReaderView with next comic
-                    // via the run queue — signal via library state
-                    library.pendingRunComic = next
+                    switchComic(to: next)
                 } label: {
                     Text("Read")
                         .font(.subheadline.bold())
@@ -278,16 +353,30 @@ struct ReaderView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    // MARK: - Run auto-advance
+    private func switchComic(to comic: Comic) {
+        library.apply(.setProgress(id: activeComic.id, page: currentPage))
+        withAnimation(.easeInOut(duration: 0.2)) {
+            activeComic = comic
+            currentPage = comic.progress
+            zoomScale   = 1
+            showNextComicBanner = false
+            updateRunContext(for: comic)
+        }
+    }
+
+    private func updateRunContext(for comic: Comic) {
+        guard let idx = runQueue.firstIndex(where: { $0.id == comic.id }) else {
+            nextComic = nil; return
+        }
+        nextComic = idx + 1 < runQueue.count ? runQueue[idx + 1] : nil
+    }
 
     private func checkRunAdvance(page: Int) {
         guard nextComic != nil,
-              comic.pageCount > 0,
-              page >= comic.pageCount - 1 else { return }
+              activeComic.pageCount > 0,
+              page >= activeComic.pageCount - 1 else { return }
         withAnimation { showNextComicBanner = true }
     }
-
-    // MARK: - Autoplay
 
     private func startAutoplay() {
         autoplayOn = true
@@ -305,7 +394,6 @@ struct ReaderView: View {
         autoplayTimer?.invalidate()
         let interval = storedInterval
         autoplayCountdown = interval
-        // Add to .common so it fires even while UIScrollView (thumbnail strip) is tracking
         let timer = Timer(timeInterval: 1, repeats: true) { _ in
             Task { @MainActor in
                 autoplayCountdown -= 1
@@ -320,7 +408,7 @@ struct ReaderView: View {
     }
 
     private func advancePage() {
-        if currentPage < comic.pageCount - 1 {
+        if currentPage < activeComic.pageCount - 1 {
             currentPage += 1
         } else {
             stopAutoplay()
@@ -329,45 +417,18 @@ struct ReaderView: View {
 
     private func movePage(_ delta: Int) {
         let target = currentPage + delta
-        guard target >= 0, target < comic.pageCount else { return }
+        guard target >= 0, target < activeComic.pageCount else { return }
         currentPage = target
     }
-
-    // MARK: - Thumbnail Strip
-
-    private var thumbnailStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 6) {
-                    ForEach(0..<max(1, comic.pageCount), id: \.self) { i in
-                        ThumbnailPageCell(comic: comic, index: i, isCurrent: i == currentPage)
-                            .id(i)
-                            .onTapGesture { withAnimation { currentPage = i } }
-                            .accessibilityLabel("Page \(i + 1)")
-                            .accessibilityAddTraits(i == currentPage ? .isSelected : [])
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-            .frame(height: 76)
-            .background(.ultraThinMaterial)
-            .onChange(of: currentPage) { _, page in
-                withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(page, anchor: .center) }
-            }
-            .onAppear { proxy.scrollTo(currentPage, anchor: .center) }
-        }
-    }
 }
-
-// MARK: - Paged Reader
 
 struct PagedReaderView: View {
     let comic: Comic
     @Binding var currentPage: Int
+    @Binding var zoomScale: CGFloat
     var onTapCenter: () -> Void = {}
 
     @AppStorage("rtlMode") private var rtlMode = false
-    @State private var zoomScale: CGFloat = 1
 
     var body: some View {
         GeometryReader { geo in
@@ -382,11 +443,11 @@ struct PagedReaderView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            // Double-tap: zoom. Must be on same view as single-tap for SwiftUI coordination.
+
             .onTapGesture(count: 2) {
                 withAnimation(.spring()) { zoomScale = zoomScale > 1 ? 1 : 2.5 }
             }
-            // Single-tap: left/right thirds navigate; RTL flips the direction.
+
             .onTapGesture { location in
                 guard zoomScale <= 1 else { return }
                 let isLeft  = location.x < geo.size.width / 3
@@ -402,11 +463,11 @@ struct PagedReaderView: View {
                 }
             }
         }
-        .onChange(of: currentPage) { _, _ in zoomScale = 1 }
+        .onChange(of: currentPage) { _, _ in
+            withAnimation(.spring(response: 0.3)) { zoomScale = 1 }
+        }
     }
 }
-
-// MARK: - Scroll Reader
 
 struct ScrollReaderView: View {
     let comic: Comic
@@ -456,8 +517,6 @@ private struct ScrollPageKey: PreferenceKey {
         value.append(contentsOf: nextValue())
     }
 }
-
-// MARK: - Async Page Image
 
 struct AsyncPageImage: View {
     let comic: Comic
@@ -521,20 +580,18 @@ struct AsyncPageImage: View {
     }
 }
 
-// MARK: - PDF Reader (native PDFView)
-
 struct PDFReaderView: UIViewRepresentable {
     let url: URL
     @Binding var currentPage: Int
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
-        view.autoScales      = true
-        view.displayMode     = .singlePage
+        view.autoScales       = true
+        view.displayMode      = .singlePage
         view.displayDirection = .horizontal
         view.usePageViewController(true, withViewOptions: nil)
-        view.backgroundColor = .black
-        view.document        = PDFDocument(url: url)
+        view.backgroundColor  = .black
+        view.document         = PDFDocument(url: url)
         NotificationCenter.default.addObserver(
             context.coordinator,
             selector: #selector(Coordinator.pageChanged(_:)),
@@ -556,7 +613,6 @@ struct PDFReaderView: UIViewRepresentable {
     class Coordinator: NSObject {
         var parent: PDFReaderView
         init(_ parent: PDFReaderView) { self.parent = parent }
-
         deinit { NotificationCenter.default.removeObserver(self) }
 
         @objc func pageChanged(_ note: Notification) {
@@ -570,8 +626,6 @@ struct PDFReaderView: UIViewRepresentable {
     }
 }
 
-// MARK: - Rating Sheet
-
 struct RatingSheet: View {
     @EnvironmentObject var library: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
@@ -580,8 +634,7 @@ struct RatingSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("Rate this comic")
-                .font(.headline)
+            Text("Rate this comic").font(.headline)
             HStack(spacing: 12) {
                 ForEach(1...5, id: \.self) { i in
                     Image(systemName: i <= rating ? "star.fill" : "star")
@@ -602,8 +655,6 @@ struct RatingSheet: View {
     }
 }
 
-// MARK: - Thumbnail Page Cell
-
 private struct ThumbnailPageCell: View {
     let comic: Comic
     let index: Int
@@ -613,9 +664,7 @@ private struct ThumbnailPageCell: View {
     var body: some View {
         Group {
             if let img = image {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
+                Image(uiImage: img).resizable().scaledToFit()
             } else {
                 Color.black.overlay {
                     ProgressView().scaleEffect(0.5).tint(.white)
@@ -626,14 +675,62 @@ private struct ThumbnailPageCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 3))
         .overlay(
             RoundedRectangle(cornerRadius: 3)
-                .stroke(isCurrent ? Color.arcGold : Color.white.opacity(0.15), lineWidth: isCurrent ? 2 : 1)
+                .stroke(isCurrent ? Color.arcGold : Color.white.opacity(0.15),
+                        lineWidth: isCurrent ? 2 : 1)
         )
         .scaleEffect(isCurrent ? 1.08 : 1)
         .animation(.easeInOut(duration: 0.15), value: isCurrent)
-        .task(id: index) { await load() }
+        .task(id: index) { image = await loadPageImage(comic: comic, index: index) }
     }
+}
 
-    private func load() async {
-        image = await loadPageImage(comic: comic, index: index)
+private struct RunNavCell: View {
+    let comic: Comic
+    let isCurrent: Bool
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Group {
+                if let img = image {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    Color.arcCard.overlay {
+                        Image(systemName: "book.closed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(width: 48, height: 68)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(isCurrent ? Color.arcGold : Color.white.opacity(0.2),
+                            lineWidth: isCurrent ? 2.5 : 1)
+            )
+            .overlay(alignment: .bottomTrailing) {
+                if comic.isFinished {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.green)
+                        .background(Circle().fill(Color.black).padding(-1))
+                        .padding(2)
+                }
+            }
+            .scaleEffect(isCurrent ? 1.08 : 1)
+            .animation(.easeInOut(duration: 0.15), value: isCurrent)
+
+            if isCurrent {
+                Capsule()
+                    .fill(Color.arcGold)
+                    .frame(width: 20, height: 3)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .task(id: comic.id) {
+            image = await ThumbnailCache.shared.thumbnail(comic: comic)
+        }
+        .accessibilityLabel("\(comic.title)\(isCurrent ? ", current" : "")\(comic.isFinished ? ", finished" : "")")
     }
 }

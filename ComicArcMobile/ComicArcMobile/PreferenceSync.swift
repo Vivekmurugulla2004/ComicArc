@@ -1,6 +1,5 @@
 import Foundation
 
-// Mirrors reader/appearance preferences to iCloud Key-Value store; no-ops if iCloud is unavailable.
 final class PreferenceSync {
     static let shared = PreferenceSync()
 

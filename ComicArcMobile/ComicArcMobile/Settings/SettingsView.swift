@@ -149,15 +149,13 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     }
 
-    // MARK: - Export
-
     private func exportBackup() {
         let comics      = db.allComics()
         let runs        = db.allRuns()
         let tagsByComic = db.allTagsByComicId()
 
         let comicEntries: [[String: Any]] = comics.map { c in
-            // Store path relative to Comics folder so it's device-independent
+
             var relPath = c.filePath
             if relPath.hasPrefix(comicsFolder) {
                 relPath = String(relPath.dropFirst(comicsFolder.count))
@@ -207,8 +205,6 @@ struct SettingsView: View {
         showExportSheet = true
     }
 
-    // MARK: - Restore
-
     private func restoreBackup(from url: URL) {
         isRestoring = true
         Task.detached { [db, comicsFolder] in
@@ -223,7 +219,7 @@ struct SettingsView: View {
             }
 
             var restoredComics = 0
-            var idMap: [Int64: Int64] = [:]  // backup ID → current DB ID
+            var idMap: [Int64: Int64] = [:]
 
             for c in comicList {
                 let relPath   = c["file_path"]    as? String ?? ""
@@ -257,7 +253,6 @@ struct SettingsView: View {
                 restoredComics += 1
             }
 
-            // Restore runs, mapping backup comic IDs to current IDs
             var restoredRuns = 0
             if let runList = json["runs"] as? [[String: Any]] {
                 for r in runList {
@@ -287,8 +282,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Clear
-
     private func clearLibrary() {
         let comicsDir = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -306,8 +299,6 @@ struct SettingsView: View {
         clearAllCaches()
         library.load()
     }
-
-    // MARK: - Storage
 
     private func computeStorageSize() {
         Task.detached {
@@ -334,8 +325,6 @@ struct SettingsView: View {
         return total
     }
 }
-
-// MARK: - Share Sheet
 
 struct ShareSheet: UIViewControllerRepresentable {
     let url: URL

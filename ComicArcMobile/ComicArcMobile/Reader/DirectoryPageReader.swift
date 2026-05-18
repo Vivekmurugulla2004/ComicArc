@@ -1,7 +1,5 @@
 import UIKit
 
-/// Reads comic pages from a flat directory of image files (extracted CBR content).
-/// Matches the image(at:)/pageCount interface used by CBZReader.
 final class DirectoryPageReader: @unchecked Sendable {
     private let imagePaths: [String]
     nonisolated var pageCount: Int { imagePaths.count }
@@ -27,9 +25,6 @@ final class DirectoryPageReader: @unchecked Sendable {
     }
 }
 
-// MARK: - Directory Reader Cache
-
-/// Keeps up to 3 open DirectoryPageReader instances to avoid rescanning directories on every page.
 final class DirectoryReaderCache: @unchecked Sendable {
     static let shared = DirectoryReaderCache()
 
@@ -48,12 +43,12 @@ final class DirectoryReaderCache: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         if let idx = readers.firstIndex(where: { $0.path == path }) {
             let hit = readers.remove(at: idx)
-            readers.append(hit)   // move to back = most-recently used
+            readers.append(hit)
             return hit.reader
         }
         let reader = DirectoryPageReader(directory: URL(fileURLWithPath: path))
         guard reader.pageCount > 0 else { return nil }
-        if readers.count >= capacity { readers.removeFirst() }   // evict least-recently used
+        if readers.count >= capacity { readers.removeFirst() }
         readers.append((path: path, reader: reader))
         return reader
     }

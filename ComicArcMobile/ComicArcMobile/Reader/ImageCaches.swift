@@ -1,9 +1,5 @@
 import UIKit
 
-// MARK: - Page Image Cache
-
-/// NSCache-backed store for decoded comic page images, keyed by "filePath:pageIndex".
-/// Auto-evicted under memory pressure; capped at 24 pages / 150 MB.
 final class PageImageCache: @unchecked Sendable {
     static let shared = PageImageCache()
 
@@ -34,11 +30,6 @@ final class PageImageCache: @unchecked Sendable {
     }
 }
 
-// MARK: - Shared page loader
-
-/// Loads a single decoded page image, checking PageImageCache first.
-/// Returns nil for out-of-range indices or unsupported formats.
-/// Must be called off the main thread (Task.detached / background).
 func loadPageImage(comic: Comic, index: Int) async -> UIImage? {
     let key = PageImageCache.key(filePath: comic.filePath, index: index)
     if let cached = PageImageCache.shared.image(for: key) { return cached }
@@ -61,9 +52,6 @@ func loadPageImage(comic: Comic, index: Int) async -> UIImage? {
     return result
 }
 
-// MARK: - CBZ Reader Cache
-
-/// Keeps up to 3 open CBZReader instances so sequential page loads don't re-open the ZIP archive.
 final class CBZReaderCache: @unchecked Sendable {
     static let shared = CBZReaderCache()
 
@@ -82,11 +70,11 @@ final class CBZReaderCache: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         if let idx = readers.firstIndex(where: { $0.path == path }) {
             let hit = readers.remove(at: idx)
-            readers.append(hit)   // move to back = most-recently used
+            readers.append(hit)
             return hit.reader
         }
         guard let reader = try? CBZReader(url: URL(fileURLWithPath: path)) else { return nil }
-        if readers.count >= capacity { readers.removeFirst() }   // evict least-recently used
+        if readers.count >= capacity { readers.removeFirst() }
         readers.append((path: path, reader: reader))
         return reader
     }

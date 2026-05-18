@@ -1,8 +1,5 @@
 import Foundation
 
-// Declare libarchive C API via Swift's @_silgen_name.
-// The library is present on all iOS devices as /usr/lib/libarchive.2.dylib.
-// Add -larchive to Build Settings > Other Linker Flags to link at compile time.
 private typealias ArchivePtr      = OpaquePointer
 private typealias ArchiveEntryPtr = OpaquePointer
 
@@ -50,9 +47,6 @@ struct RARExtractor {
     private static let imageExts: Set<String> = ["jpg", "jpeg", "png", "gif", "webp"]
     private static let chunkSize = 65_536
 
-    /// Extracts all image files from a RAR4 or RAR5 archive to `destination`.
-    /// Streams each file to disk in chunks — never loads the full archive into memory.
-    /// Returns sorted image URLs. Throws on archive open failure or if no images are found.
     static func extract(archiveURL: URL, destination: URL) throws -> [URL] {
         let fm = FileManager.default
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -91,7 +85,6 @@ struct RARExtractor {
                 continue
             }
 
-            // Prevent collisions when two entries share the same last path component.
             let baseName = URL(fileURLWithPath: entryName).lastPathComponent
             let destName: String
             if let count = seenNames[baseName] {
@@ -116,7 +109,6 @@ struct RARExtractor {
         }
     }
 
-    // Streams the current archive entry to `dest` in chunks. Returns true on success.
     private static func streamEntry(archive a: ArchivePtr, to dest: URL) -> Bool {
         FileManager.default.createFile(atPath: dest.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: dest) else {

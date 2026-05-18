@@ -6,6 +6,7 @@ struct OnboardingView: View {
     @AppStorage("onboardingDone") private var onboardingDone = false
     @State private var page = 0
     @State private var showImporter = false
+    @State private var showFolderImporter = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -19,7 +20,6 @@ struct OnboardingView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: page)
 
-            // Page dots + nav
             VStack(spacing: 20) {
                 pageDots
                 navButtons
@@ -29,17 +29,27 @@ struct OnboardingView: View {
         }
         .fileImporter(
             isPresented: $showImporter,
-            allowedContentTypes: [.init(filenameExtension: "cbz")!, .init(filenameExtension: "cbr")!, .pdf, .jpeg, .png],
+            allowedContentTypes: [
+                .init(filenameExtension: "cbz")!,
+                .init(filenameExtension: "cbr")!,
+                .pdf, .jpeg, .png
+            ],
             allowsMultipleSelection: true
         ) { result in
-            if case .success(let urls) = result {
-                library.importFiles(urls)
+            if case .success(let urls) = result { library.importFiles(urls) }
+            finish()
+        }
+        .fileImporter(
+            isPresented: $showFolderImporter,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                library.importFolder(url)
             }
             finish()
         }
     }
-
-    // MARK: - Pages
 
     private var welcomePage: some View {
         VStack(spacing: 24) {
@@ -71,18 +81,18 @@ struct OnboardingView: View {
                 .font(.title2.bold())
                 .foregroundStyle(.white)
 
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 featureRow(icon: "books.vertical.fill", color: Color.arcGold,
                            title: "Smart Library",
-                           body: "Browse by character, series, and publisher. Search, filter, and tag your collection.")
+                           body: "Browse by character, series, and publisher. Search, filter, tag, and build collections.")
 
                 featureRow(icon: "book.fill", color: .blue,
                            title: "Immersive Reader",
-                           body: "Page, scroll, and zoom modes. Autoplay, progress tracking, and ratings.")
+                           body: "Page, scroll, and zoom. Autoplay, run navigator, progress tracking, and ratings.")
 
                 featureRow(icon: "list.number", color: .purple,
                            title: "Reading Runs",
-                           body: "Build custom story arcs across series. Track your progress issue by issue.")
+                           body: "Build story arcs across series. Drag to reorder, track progress issue by issue.")
             }
             Spacer()
             Spacer()
@@ -91,50 +101,87 @@ struct OnboardingView: View {
     }
 
     private var importPage: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
             Spacer()
-            Image(systemName: "arrow.down.doc.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(Color.arcGold)
 
-            VStack(spacing: 8) {
+            Image(systemName: "arrow.down.doc.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(Color.arcGold)
+                .padding(.bottom, 20)
+
+            VStack(spacing: 6) {
                 Text("Add Your Comics")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
-                Text("Import CBZ, CBR, or PDF files, or tap + and choose Import Folder to bring in an entire collection at once.")
+                Text("Import individual files or an entire folder at once.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
+            .padding(.bottom, 28)
 
-            Button {
-                showImporter = true
-            } label: {
-                Label("Import Comics Now", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
+            VStack(spacing: 12) {
+                Button {
+                    showFolderImporter = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "folder.fill")
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Import Folder")
+                                .font(.headline)
+                            Text("Bring in your entire collection at once")
+                                .font(.caption)
+                                .opacity(0.85)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 14)
                     .background(Color.arcGold)
                     .foregroundStyle(Color.arcBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            .accessibilityLabel("Import comics now")
-            .accessibilityHint("Opens the file picker to select CBZ or PDF files")
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .accessibilityLabel("Import folder of comics")
 
-            Button("Skip for now") {
-                finish()
+                Button {
+                    showImporter = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Import Files")
+                                .font(.headline)
+                            Text("CBZ, CBR, PDF, JPG, PNG")
+                                .font(.caption)
+                                .opacity(0.85)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 14)
+                    .background(Color.arcSurface)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.arcBorder, lineWidth: 1))
+                }
+                .accessibilityLabel("Import individual comic files")
             }
-            .font(.subheadline)
-            .foregroundStyle(Color.arcMuted)
-            .accessibilityLabel("Skip import for now")
+            .padding(.bottom, 20)
+
+            Button("Skip for now") { finish() }
+                .font(.subheadline)
+                .foregroundStyle(Color.arcMuted)
+                .accessibilityLabel("Skip import for now")
 
             Spacer()
             Spacer()
         }
         .padding(.horizontal, 32)
     }
-
-    // MARK: - Helpers
 
     private func featureRow(icon: String, color: Color, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 16) {
@@ -203,7 +250,6 @@ struct OnboardingView: View {
                         .clipShape(Capsule())
                 }
                 .accessibilityLabel("Next")
-                .accessibilityHint("Go to the next onboarding page")
             }
         }
     }

@@ -25,11 +25,12 @@ struct RunsView: View {
                         }
                         .onDelete { offsets in
                             let ids = offsets.map { runs[$0].id }
-                            load()
+                            runs.remove(atOffsets: offsets)
                             Task {
                                 await Task.detached(priority: .userInitiated) {
                                     ids.forEach { DatabaseManager.shared.deleteRun($0) }
                                 }.value
+                                load()
                             }
                         }
                     }
@@ -70,8 +71,6 @@ struct RunsView: View {
         }
     }
 }
-
-// MARK: - Run Row
 
 struct RunRow: View {
     let run: Run

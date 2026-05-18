@@ -1,7 +1,6 @@
 import Foundation
 import SQLite3
 
-// SQLITE_TRANSIENT tells SQLite to copy the string — required in Swift
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 final class DatabaseManager {
@@ -16,8 +15,6 @@ final class DatabaseManager {
         openDatabase()
         migrate()
     }
-
-    // MARK: - Setup
 
     private func dbURL() -> URL {
         let dir = FileManager.default
@@ -58,7 +55,7 @@ final class DatabaseManager {
             sort_order        INTEGER DEFAULT 0
         )
         """)
-        // Additive columns — exec() silently ignores "duplicate column" errors on existing DBs
+
         exec("ALTER TABLE comics ADD COLUMN writer            TEXT")
         exec("ALTER TABLE comics ADD COLUMN summary           TEXT")
         exec("ALTER TABLE comics ADD COLUMN custom_cover_path TEXT")
@@ -139,8 +136,6 @@ final class DatabaseManager {
         """)
     }
 
-    // MARK: - Query: Comics
-
     enum SortOrder: String, CaseIterable {
         case publisher = "Publisher"
         case title     = "Title"
@@ -187,8 +182,6 @@ final class DatabaseManager {
         if favoritesOnly   { conds.append("c.is_favorite = 1") }
         if readingListOnly { conds.append("c.in_reading_list = 1") }
 
-        // '' as tags: comic.tags is not populated from list queries for performance.
-        // Use db.tags(for:) when per-comic tag data is needed (detail views, export).
         let sql = """
             SELECT c.id, c.title, c.file_path, c.publisher, c.character, c.series,
                    c.issue_number, c.page_count, c.rating, c.is_favorite, c.in_reading_list,
@@ -245,8 +238,6 @@ final class DatabaseManager {
         }
     }
 
-    // MARK: - Query: Groups
-
     func characterGroups(publisher: String? = nil) -> [SeriesGroup] {
         var conds = ["1=1"]
         var args: [String] = []
@@ -288,8 +279,6 @@ final class DatabaseManager {
         """
         return queryGroups(sql, args: args)
     }
-
-    // MARK: - Mutations
 
     @discardableResult
     func insertComic(title: String, filePath: String, publisher: String,
@@ -397,7 +386,7 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
             let rowid = sqlite3_last_insert_rowid(db)
             if rowid > 0 { return rowid }
-            // ON CONFLICT path — row already existed, fetch its id without re-entering queue
+
             var s2: OpaquePointer?
             guard sqlite3_prepare_v2(db, "SELECT id FROM comics WHERE file_path = ?",
                                      -1, &s2, nil) == SQLITE_OK else { return nil }
@@ -438,8 +427,6 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
         }
     }
-
-    // MARK: - Tags
 
     func allTags() -> [Tag] {
         let sql = """
@@ -506,8 +493,6 @@ final class DatabaseManager {
         }
     }
 
-    /// Returns all tags for all comics in a single JOIN query.
-    /// Use this instead of calling tags(for:) inside a loop.
     func allTagsByComicId() -> [Int64: [String]] {
         queue.sync {
             var result: [Int64: [String]] = [:]
@@ -544,8 +529,6 @@ final class DatabaseManager {
         return queryComics(sql, args: [tagName])
     }
 
-    // MARK: - Runs
-
     func allRuns() -> [Run] {
         let sql = """
             SELECT r.id, r.title, r.description, r.created_at,
@@ -562,7 +545,6 @@ final class DatabaseManager {
         return rows(sql) { mapRun(stmt: $0) }
     }
 
-    /// Returns the first run that has been started but not fully finished, without loading all runs.
     func firstActiveRun() -> Run? {
         let sql = """
             SELECT r.id, r.title, r.description, r.created_at,
@@ -654,7 +636,6 @@ final class DatabaseManager {
     func deleteAllComics() { prepared("DELETE FROM comics")  { _ in } }
     func deleteAllRuns()   { prepared("DELETE FROM runs")    { _ in } }
 
-    /// Returns id→pageCount for the given comic IDs in one query.
     func pageCountsForIds(_ ids: [Int64]) -> [Int64: Int] {
         guard !ids.isEmpty else { return [:] }
         return queue.sync {
@@ -672,7 +653,6 @@ final class DatabaseManager {
         }
     }
 
-    /// Updates reading progress for multiple comics in a single transaction.
     func updateProgressBatch(_ items: [(comicId: Int64, page: Int)]) {
         guard !items.isEmpty else { return }
         queue.sync {
@@ -752,7 +732,6 @@ final class DatabaseManager {
         }
     }
 
-    /// Sets is_favorite for all specified IDs in a single UPDATE … IN (…) statement.
     func setFavoriteForIds(_ ids: [Int64], isFavorite: Bool) {
         guard !ids.isEmpty else { return }
         queue.sync {
@@ -768,7 +747,6 @@ final class DatabaseManager {
         }
     }
 
-    /// Sets in_reading_list for all specified IDs in a single UPDATE … IN (…) statement.
     func setInReadingListForIds(_ ids: [Int64], inList: Bool) {
         guard !ids.isEmpty else { return }
         queue.sync {
@@ -784,7 +762,6 @@ final class DatabaseManager {
         }
     }
 
-    /// Returns the set of run IDs that contain the given comic — one query instead of N.
     func runsContainingComic(comicId: Int64) -> Set<Int64> {
         queue.sync {
             var result = Set<Int64>()
@@ -800,8 +777,6 @@ final class DatabaseManager {
         }
     }
 
-    // MARK: - Date parsing
-
     static let sqliteDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -809,8 +784,6 @@ final class DatabaseManager {
         f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
-
-    // MARK: - Ad-hoc query helpers
 
     func scalarInt(_ sql: String) -> Int {
         queue.sync {
@@ -838,13 +811,10 @@ final class DatabaseManager {
         return String(cString: p)
     }
 
-    // MARK: - Private helpers
-
     private func exec(_ sql: String) {
         sqlite3_exec(db, sql, nil, nil, nil)
     }
 
-    // Call only from within an existing queue.sync block (avoids re-entrant deadlock)
     private func prepared_unsafe(_ sql: String, bind: (OpaquePointer?) -> Void) {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -857,11 +827,6 @@ final class DatabaseManager {
         queue.sync { prepared_unsafe(sql, bind: bind) }
     }
 
-    // Standard 17-column SELECT layout:
-    // (id, title, file_path, publisher, character, series, issue_number, page_count,
-    //  rating, is_favorite, in_reading_list, '' as tags, date_added, progress, writer, summary,
-    //  custom_cover_path)
-    // offset=0 for queryComics; offset=4 for runItems (4 run_items columns precede)
     private func mapComic(stmt: OpaquePointer?, offset: Int32) -> Comic {
         let tagsStr = colText(stmt, offset + 11) ?? ""
         let tags    = tagsStr.isEmpty ? [] : tagsStr.split(separator: ",").map(String.init)
@@ -903,8 +868,6 @@ final class DatabaseManager {
         }
     }
 
-    // MARK: - Custom Cover
-
     func setCustomCoverPath(id: Int64, path: String?) {
         queue.sync {
             var stmt: OpaquePointer?
@@ -917,8 +880,6 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
         }
     }
-
-    // MARK: - Sort Order
 
     func updateSortOrders(_ items: [(id: Int64, sortOrder: Int)]) {
         guard !items.isEmpty else { return }
@@ -933,8 +894,6 @@ final class DatabaseManager {
             exec("COMMIT")
         }
     }
-
-    // MARK: - Series Rename / Merge
 
     func renameSeries(from oldName: String, to newName: String, publisher: String? = nil) {
         queue.sync {
@@ -1001,8 +960,6 @@ final class DatabaseManager {
             return out
         }
     }
-
-    // MARK: - Collections
 
     func allCollections() -> [Collection] {
         let sql = """
@@ -1105,8 +1062,6 @@ final class DatabaseManager {
             return result
         }
     }
-
-    // MARK: - Filter Presets
 
     func allFilterPresets() -> [FilterPreset] {
         let sql = "SELECT id, name, publisher, tag, smart_filter, sort_order FROM filter_presets ORDER BY created_at"

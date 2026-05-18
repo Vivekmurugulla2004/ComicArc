@@ -90,8 +90,6 @@ struct CollectionsView: View {
     }
 }
 
-// MARK: - Collection Detail
-
 struct CollectionDetailView: View {
     @EnvironmentObject var library: LibraryViewModel
     let collection: Collection
@@ -169,8 +167,6 @@ struct CollectionDetailView: View {
         }
     }
 }
-
-// MARK: - Add to Collection Sheet
 
 struct AddToCollectionSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -251,8 +247,6 @@ struct AddToCollectionSheet: View {
         }
     }
 }
-
-// MARK: - Comic → Collection Picker (used from ComicDetailView)
 
 struct ComicCollectionPickerSheet: View {
     @Environment(\.dismiss) private var dismiss

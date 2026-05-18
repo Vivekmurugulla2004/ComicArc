@@ -10,7 +10,7 @@ struct StatsView: View {
             Group {
                 if let s = stats {
                     List {
-                        // Summary cards
+
                         Section {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 statTile("Comics", value: "\(s.totalComics)", icon: "books.vertical", color: .arcGold)
@@ -22,14 +22,12 @@ struct StatsView: View {
                             .listRowBackground(Color.clear)
                         }
 
-                        // Completion breakdown
                         Section("Reading Status") {
                             completionRow("Finished", count: s.finished, total: s.totalComics, color: .green)
                             completionRow("In Progress", count: s.inProgress, total: s.totalComics, color: .arcGold)
                             completionRow("Unread", count: s.unread, total: s.totalComics, color: .secondary)
                         }
 
-                        // Reading streak
                         Section("Reading Activity") {
                             HStack(spacing: 14) {
                                 Image(systemName: s.readingStreak > 0 ? "flame.fill" : "flame")
@@ -54,7 +52,6 @@ struct StatsView: View {
                             .padding(.vertical, 4)
                         }
 
-                        // Publisher breakdown
                         if !s.publisherBreakdown.isEmpty {
                             Section("By Publisher") {
                                 ForEach(s.publisherBreakdown, id: \.publisher) { row in
@@ -63,7 +60,6 @@ struct StatsView: View {
                             }
                         }
 
-                        // Top series
                         if !s.topSeries.isEmpty {
                             Section("Top Series by Issue Count") {
                                 ForEach(Array(s.topSeries.enumerated()), id: \.offset) { i, row in
@@ -86,7 +82,6 @@ struct StatsView: View {
                             }
                         }
 
-                        // Recently read
                         if !s.recentlyRead.isEmpty {
                             Section("Recently Read") {
                                 ForEach(s.recentlyRead) { comic in
@@ -125,16 +120,12 @@ struct StatsView: View {
         }
     }
 
-    // MARK: - Data
-
     private func loadStats() async {
         let loaded = await Task.detached(priority: .utility) {
             LibraryStats.load()
         }.value
         stats = loaded
     }
-
-    // MARK: - Subviews
 
     private func statTile(_ label: String, value: String, icon: String, color: Color) -> some View {
         VStack(spacing: 6) {
@@ -194,8 +185,6 @@ struct StatsView: View {
         .padding(.vertical, 2)
     }
 }
-
-// MARK: - Stats model
 
 struct PublisherStat { let publisher: String; let count: Int }
 struct SeriesStat     { let series: String; let publisher: String; let count: Int }

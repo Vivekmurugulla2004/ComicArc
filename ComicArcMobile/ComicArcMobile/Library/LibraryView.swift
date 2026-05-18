@@ -12,23 +12,18 @@ struct LibraryView: View {
     @State private var detailComic: Comic?
     @State private var continueComic: Comic?
 
-    // Selection
     @State private var isSelecting = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showBulkDeleteConfirm = false
+    @State private var showBulkAddToRun = false
 
-    // Filter state — @State here so changes ONLY invalidate LibraryView, not other tabs
     @State private var selectedPublisher: String = "All"
     @State private var sortOrder: DatabaseManager.SortOrder = .publisher
     @State private var searchText: String = ""
     @State private var selectedTag: String?
 
-    // Smart filters
     @State private var selectedSmartFilter: SmartFilter? = nil
 
-    // filteredComics is derived directly — no @State mirror needed
-
-    // Continue Run
     @State private var activeRun: Run?
     @State private var selectedRun: Run?
 
@@ -55,7 +50,6 @@ struct LibraryView: View {
         sizeClass == .regular ? ipadColumns : phoneColumns
     }
 
-    // True when user is actively searching — bypass the hierarchy
     private var isSearching: Bool { !searchText.isEmpty }
 
     private var filteredComics: [Comic] {
@@ -76,7 +70,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             Group {
-                // iPad character browse: two-panel layout
+
                 if sizeClass == .regular && browseMode == .characters && !isSearching {
                     ipadCharacterBrowse
                 } else {
@@ -145,6 +139,9 @@ struct LibraryView: View {
             ) {
                 Button("Delete", role: .destructive) { bulkDelete() }
             }
+            .sheet(isPresented: $showBulkAddToRun) {
+                BulkAddToRunSheet(comicIds: Array(selectedIds)) { exitSelection() }
+            }
             .alert("Import Error", isPresented: Binding(
                 get: { library.importError != nil },
                 set: { if !$0 { library.importError = nil } }
@@ -168,11 +165,9 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - iPad Two-Panel Layout
-
     private var ipadCharacterBrowse: some View {
         HStack(alignment: .top, spacing: 0) {
-            // Left panel: character list + contextual sections
+
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -210,7 +205,6 @@ struct LibraryView: View {
 
             Divider().ignoresSafeArea()
 
-            // Right panel: series or issues
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if let series = selectedSeries {
@@ -310,7 +304,7 @@ struct LibraryView: View {
 
     private func ipadIssuePanel(series: SeriesGroup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Back to series (only when character has sub-series)
+
             if selectedCharacter?.character != nil {
                 Button {
                     withAnimation { selectedSeries = nil }
@@ -345,8 +339,6 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Phone Scroll Content
-
     private var phoneScrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -375,6 +367,7 @@ struct LibraryView: View {
                     } else if let char = selectedCharacter {
                         seriesGrid(character: char)
                     } else {
+                        smartFilterRow
                         if !library.inProgress.isEmpty { continueReadingSection }
                         continueRunSection
                         characterGrid
@@ -390,8 +383,6 @@ struct LibraryView: View {
             .padding(.horizontal)
         }
     }
-
-    // MARK: - Import Banner
 
     private var importBanner: some View {
         HStack(spacing: 10) {
@@ -428,8 +419,6 @@ struct LibraryView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Publisher Filter Row
-
     private var publisherFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -445,8 +434,6 @@ struct LibraryView: View {
             .padding(.vertical, 8)
         }
     }
-
-    // MARK: - Tag Filter Row
 
     private var tagFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -465,8 +452,6 @@ struct LibraryView: View {
             .padding(.vertical, 8)
         }
     }
-
-    // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -511,7 +496,6 @@ struct LibraryView: View {
                     }
                 }
 
-                // Import menu: files or folder
                 Menu {
                     Button { showImporter = true } label: {
                         Label("Import Files", systemImage: "doc.badge.plus")
@@ -548,8 +532,6 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Continue Reading
-
     private var continueReadingSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Continue Reading").font(.headline).padding(.top, 16)
@@ -570,8 +552,6 @@ struct LibraryView: View {
         }
         .padding(.bottom, 16)
     }
-
-    // MARK: - Grids
 
     private var characterGrid: some View {
         Group {
@@ -634,6 +614,8 @@ struct LibraryView: View {
         Group {
             if filteredComics.isEmpty {
                 contextAwareEmptyState.padding(.top, 60)
+            } else if sortOrder == .manual && !isSelecting {
+                manualSortList
             } else {
                 LazyVGrid(columns: columns, spacing: .arcS16) {
                     ForEach(filteredComics) { comic in
@@ -643,6 +625,28 @@ struct LibraryView: View {
                 .padding(.top, 8)
             }
         }
+    }
+
+    private var manualSortList: some View {
+        List {
+            ForEach(library.comics) { comic in
+                ManualSortRow(comic: comic)
+                    .contentShape(Rectangle())
+                    .onTapGesture { detailComic = comic }
+                    .listRowBackground(Color.arcCard)
+                    .listRowSeparatorTint(Color.arcBorder)
+            }
+            .onMove { from, to in
+                var reordered = library.comics
+                reordered.move(fromOffsets: from, toOffset: to)
+                let updates = reordered.enumerated().map { (id: $0.element.id, sortOrder: $0.offset) }
+                library.updateSortOrders(updates)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .frame(minHeight: CGFloat(library.comics.count) * 72)
     }
 
     @ViewBuilder
@@ -691,8 +695,6 @@ struct LibraryView: View {
         if let t = selectedTag                 { return t }
         return "Library"
     }
-
-    // MARK: - Selectable Card
 
     @ViewBuilder
     private func selectableComicCard(_ comic: Comic) -> some View {
@@ -761,8 +763,6 @@ struct LibraryView: View {
             }
     }
 
-    // MARK: - Breadcrumb
-
     private var breadcrumbBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
@@ -805,8 +805,6 @@ struct LibraryView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Smart Filter Row
-
     private var smartFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -823,8 +821,6 @@ struct LibraryView: View {
             .padding(.vertical, 8)
         }
     }
-
-    // MARK: - Continue Run Section
 
     private var continueRunSection: some View {
         Group {
@@ -869,8 +865,6 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Bulk Actions Toolbar
-
     private var bulkActionsToolbar: some View {
         VStack(spacing: 0) {
             Divider()
@@ -905,6 +899,14 @@ struct LibraryView: View {
                     }
                     .accessibilityLabel("Toggle reading list for selected")
 
+                    Button { showBulkAddToRun = true } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "list.number").font(.title3)
+                            Text("Run").font(.system(size: 9))
+                        }
+                    }
+                    .accessibilityLabel("Add selected to reading run")
+
                     Button { showBulkDeleteConfirm = true } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "trash").font(.title3).foregroundStyle(Color.arcRed)
@@ -920,8 +922,6 @@ struct LibraryView: View {
             .background(.ultraThinMaterial)
         }
     }
-
-    // MARK: - Navigation Helpers
 
     private func selectCharacter(_ group: SeriesGroup) {
         selectedSmartFilter = nil
@@ -956,8 +956,6 @@ struct LibraryView: View {
         reload()
     }
 
-    // MARK: - Bulk Action Helpers
-
     private func toggleSelection(_ id: Int64) {
         if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
     }
@@ -966,8 +964,6 @@ struct LibraryView: View {
         withAnimation(.easeInOut(duration: 0.2)) { isSelecting = false; selectedIds.removeAll() }
     }
 
-    // Passes current @State filter values to the ViewModel load.
-    // This is the single call site for triggering a DB query — all filter interactions funnel here.
     private func reload() {
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
         library.load(
@@ -1018,8 +1014,6 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Continue Card
-
 struct ContinueCard: View {
     let comic: Comic
 
@@ -1045,16 +1039,13 @@ struct ContinueCard: View {
     }
 }
 
-// MARK: - Series Card
-
 struct SeriesCard: View {
     let group: SeriesGroup
     var characterName: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Cover — full-bleed, top corners clipped by parent arcCard.
-            // Matches macOS .series-cover-wrap layout.
+
             ZStack(alignment: .topTrailing) {
                 CoverImage(comicId: group.coverComicId)
                     .aspectRatio(2/3, contentMode: .fill)
@@ -1066,7 +1057,6 @@ struct SeriesCard: View {
                 }
             }
 
-            // Info section — matches macOS .series-info padding
             VStack(alignment: .leading, spacing: 4) {
                 if let charName = characterName {
                     Text(charName.uppercased())
@@ -1104,5 +1094,114 @@ struct SeriesCard: View {
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color).foregroundStyle(.white)
             .clipShape(Capsule()).padding(4)
+    }
+}
+
+struct ManualSortRow: View {
+    let comic: Comic
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CoverImage(comic: comic)
+                .frame(width: 40, height: 57)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(comic.title)
+                    .font(.subheadline)
+                    .lineLimit(2)
+                Text(comic.series)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if comic.pageCount > 0 && comic.isStarted {
+                    ArcProgressBar(value: comic.progressPercent)
+                        .frame(maxWidth: 100)
+                }
+            }
+
+            Spacer()
+
+            if comic.isFinished {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.subheadline)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct BulkAddToRunSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let comicIds: [Int64]
+    let onDone: () -> Void
+
+    @State private var runs: [Run] = []
+    @State private var showCreate = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if runs.isEmpty {
+                    Text("No runs yet. Create one first.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(runs) { run in
+                        Button {
+                            addAll(to: run)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(run.title).font(.subheadline).foregroundStyle(.white)
+                                    Text("\(run.itemCount) issue\(run.itemCount == 1 ? "" : "s")")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(Color.arcGold)
+                            }
+                        }
+                        .listRowBackground(Color.arcCard)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.arcBg)
+            .navigationTitle("Add \(comicIds.count) Comic\(comicIds.count == 1 ? "" : "s") to Run")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showCreate = true } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showCreate, onDismiss: load) {
+                CreateRunView()
+            }
+            .onAppear { load() }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func load() {
+        runs = DatabaseManager.shared.allRuns()
+    }
+
+    private func addAll(to run: Run) {
+        let runId = run.id
+        let ids = comicIds
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                for id in ids { DatabaseManager.shared.addToRun(runId: runId, comicId: id) }
+            }.value
+        }
+        onDone()
+        dismiss()
     }
 }

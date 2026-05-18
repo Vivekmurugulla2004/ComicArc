@@ -27,7 +27,7 @@
         <button id="vertical-btn"  title="Vertical scroll mode (V)" onclick="toggleVertical()">☰</button>
         <button id="spread-btn"    title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
         <button id="zoom-btn"      title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
-        <button id="autoplay-btn"  title="Autoplay — advance page every 10 s (A)" onclick="toggleAutoplay()">▶▶</button>
+        <button id="autoplay-btn"  title="Autoplay — advance page every {{ autoplay_interval }} s (A)" onclick="toggleAutoplay()">▶▶</button>
         <button id="rate-btn"      title="Rate this comic"         onclick="openRating()">★</button>
         <button id="help-btn"      title="Keyboard shortcuts (?)"  onclick="openHelp()">?</button>
       </div>

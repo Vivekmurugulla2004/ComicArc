@@ -87,8 +87,6 @@ struct ComicDetailView: View {
         }
     }
 
-    // MARK: - Layouts
-
     private func iPhoneLayout(_ comic: Comic) -> some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -120,9 +118,6 @@ struct ComicDetailView: View {
             }
         }
     }
-
-    // MARK: - Compact Hero (iPhone)
-    // Reduced from 320pt full-bleed to a clean side-by-side cover + action layout.
 
     private func compactHero(_ comic: Comic) -> some View {
         HStack(alignment: .top, spacing: .arcS16) {
@@ -196,8 +191,6 @@ struct ComicDetailView: View {
         .tint(.arcGold)
         .accessibilityLabel(comic.isStarted ? "Continue reading \(comic.title)" : "Read \(comic.title)")
     }
-
-    // MARK: - Details
 
     private func details(_ comic: Comic) -> some View {
         VStack(alignment: .leading, spacing: .arcS20) {
@@ -393,8 +386,6 @@ struct ComicDetailView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Toolbar
-
     @ToolbarContentBuilder
     private func toolbar(_ comic: Comic) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
@@ -409,8 +400,6 @@ struct ComicDetailView: View {
             .accessibilityLabel(comic.isFavorite ? "Remove from favorites" : "Add to favorites")
         }
     }
-
-    // MARK: - Helpers
 
     private func metaRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .top) {
@@ -430,8 +419,6 @@ struct ComicDetailView: View {
         .tint(tint)
     }
 }
-
-// MARK: - Custom Cover Picker
 
 struct CustomCoverPickerView: View {
     @Environment(\.dismiss) private var dismiss
@@ -485,8 +472,6 @@ struct CustomCoverPickerView: View {
         }
     }
 }
-
-// MARK: - Page Cover Picker (pick any page as cover)
 
 struct PageCoverPickerView: View {
     @Environment(\.dismiss) private var dismiss
