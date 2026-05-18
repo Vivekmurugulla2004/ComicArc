@@ -25,19 +25,15 @@ final class LibraryViewModel: ObservableObject {
     @Published var characterGroups: [SeriesGroup] = []
     @Published var seriesGroups: [SeriesGroup] = []
     @Published var publishers: [String] = []
-    @Published var allTags: [Tag] = []
     @Published var collections: [Collection] = []
 
     @Published var importProgress = ImportProgress()
     @Published var importError: String?
 
-    @Published var pendingRunComic: Comic?
-
     private let db = DatabaseManager.shared
     private var importTask: Task<Void, Never>?
 
     private var _lastPub: String?
-    private var _lastTag: String?
     private var _lastSearch: String?
     private var _lastSort: DatabaseManager.SortOrder = .publisher
 
@@ -128,23 +124,19 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    func load(publisher: String? = nil, tag: String? = nil,
+    func load(publisher: String? = nil,
               search: String? = nil, sortOrder: DatabaseManager.SortOrder = .publisher) {
-        _lastPub = publisher; _lastTag = tag; _lastSearch = search; _lastSort = sortOrder
+        _lastPub = publisher; _lastSearch = search; _lastSort = sortOrder
         let db = db
         Task.detached(priority: .userInitiated) { [weak self] in
             let publishers      = db.publishers()
             let inProgress      = db.inProgress()
-            let allTags         = db.allTags()
             let characterGroups = db.characterGroups(publisher: publisher)
-            let comics: [Comic] = tag != nil
-                ? db.comics(withTag: tag!)
-                : db.allComics(publisher: publisher, search: search, sortOrder: sortOrder)
+            let comics          = db.allComics(publisher: publisher, search: search, sortOrder: sortOrder)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.publishers      = publishers
                 self.inProgress      = inProgress
-                self.allTags         = allTags
                 self.characterGroups = characterGroups
                 self.comics          = comics
             }
@@ -152,7 +144,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func reload() {
-        load(publisher: _lastPub, tag: _lastTag, search: _lastSearch, sortOrder: _lastSort)
+        load(publisher: _lastPub, search: _lastSearch, sortOrder: _lastSort)
     }
 
     func reloadAfterExternalWrite() {

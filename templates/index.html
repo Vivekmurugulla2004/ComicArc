@@ -15,7 +15,6 @@
   </div>
   <form class="search-form" method="get" action="/" id="search-form">
     <input type="hidden" name="publisher" value="{{ current_publisher }}">
-    <input type="hidden" name="tag" value="{{ tag_filter }}">
     {% if view == 'reading-list' %}<input type="hidden" name="view" value="reading-list">{% endif %}
     <div class="search-row">
       <input class="search-input" type="text" name="q" value="{{ search }}" placeholder="Search…" aria-label="Search comics">
@@ -48,17 +47,6 @@
   </form>
 </div>
 
-{% if all_tags %}
-<div class="tag-filter-row">
-  <span class="tag-filter-label">Tags:</span>
-  <a href="/?publisher={{ current_publisher }}{% if search %}&q={{ search }}{% endif %}"
-     class="tag-chip-filter {% if not tag_filter %}active{% endif %}">All</a>
-  {% for t in all_tags %}
-  <a href="/?publisher={{ current_publisher }}{% if search %}&q={{ search }}{% endif %}&tag={{ t.name }}"
-     class="tag-chip-filter {% if tag_filter == t.name %}active{% endif %}">{{ t.name }} <span class="tag-count">{{ t.count }}</span></a>
-  {% endfor %}
-</div>
-{% endif %}
 
 <div class="publisher-tabs">
   {% if reading_list_count > 0 %}
