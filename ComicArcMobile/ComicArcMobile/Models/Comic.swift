@@ -55,11 +55,3 @@ struct Collection: Identifiable {
     var comicCount: Int
 }
 
-struct FilterPreset: Identifiable {
-    let id: Int64
-    var name: String
-    var publisher: String?
-    var tag: String?
-    var smartFilter: String?
-    var sortOrder: String
-}

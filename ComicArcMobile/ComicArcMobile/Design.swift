@@ -40,15 +40,6 @@ extension Animation {
     static let arcSpring = Animation.spring(response: 0.3, dampingFraction: 0.8)
 }
 
-enum AppStorageKey {
-    static let onboardingDone    = "onboardingDone"
-    static let appColorScheme    = "appColorScheme"
-    static let defaultReadMode   = "defaultReadMode"
-    static let rtlMode           = "rtlMode"
-    static let autoplayInterval  = "autoplayInterval"
-    static let iCloudSync        = "iCloudSync"
-}
-
 private struct ArcCardModifier: ViewModifier {
     let cornerRadius: CGFloat
     func body(content: Content) -> some View {

@@ -128,15 +128,7 @@ struct RunDetailView: View {
             .sheet(item: $readerComic) { comic in
                 ReaderView(comic: comic, runQueue: readerRunContext)
                     .environmentObject(library)
-                    .onDisappear {
-                        load()
-
-                        if let pending = library.pendingRunComic {
-                            library.pendingRunComic = nil
-                            readerRunContext = items.map(\.comic)
-                            readerComic = pending
-                        }
-                    }
+                    .onDisappear { load() }
             }
             .sheet(item: $detailComic) { comic in
                 ComicDetailView(comic: comic)

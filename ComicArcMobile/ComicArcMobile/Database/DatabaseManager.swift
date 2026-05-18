@@ -123,17 +123,6 @@ final class DatabaseManager {
             PRIMARY KEY (collection_id, comic_id)
         )
         """)
-        exec("""
-        CREATE TABLE IF NOT EXISTS filter_presets (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            name         TEXT NOT NULL,
-            publisher    TEXT,
-            tag          TEXT,
-            smart_filter TEXT,
-            sort_order   TEXT DEFAULT 'Publisher',
-            created_at   TEXT DEFAULT (datetime('now'))
-        )
-        """)
     }
 
     enum SortOrder: String, CaseIterable {
@@ -428,19 +417,6 @@ final class DatabaseManager {
         }
     }
 
-    func allTags() -> [Tag] {
-        let sql = """
-            SELECT t.id, t.name, COUNT(ct.comic_id) as cnt
-            FROM tags t LEFT JOIN comic_tags ct ON t.id = ct.tag_id
-            GROUP BY t.id ORDER BY cnt DESC, t.name
-        """
-        return rows(sql) { stmt in
-            Tag(id: sqlite3_column_int64(stmt, 0),
-                name: colText(stmt, 1) ?? "",
-                comicCount: Int(sqlite3_column_int(stmt, 2)))
-        }
-    }
-
     func tags(for comicId: Int64) -> [Tag] {
         queue.sync {
             let sql = """
@@ -511,22 +487,6 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
             return result
         }
-    }
-
-    func comics(withTag tagName: String) -> [Comic] {
-        let sql = """
-            SELECT c.id, c.title, c.file_path, c.publisher, c.character, c.series,
-                   c.issue_number, c.page_count, c.rating, c.is_favorite, c.in_reading_list,
-                   '' as tags, c.date_added, COALESCE(rp.current_page, 0) as progress,
-                   c.writer, c.summary, c.custom_cover_path
-            FROM comics c
-            LEFT JOIN reading_progress rp ON c.id = rp.comic_id
-            JOIN comic_tags ct ON c.id = ct.comic_id
-            JOIN tags t        ON ct.tag_id = t.id
-            WHERE t.name = ?
-            ORDER BY c.publisher, c.series, c.title
-        """
-        return queryComics(sql, args: [tagName])
     }
 
     func allRuns() -> [Run] {
@@ -1061,43 +1021,6 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
             return result
         }
-    }
-
-    func allFilterPresets() -> [FilterPreset] {
-        let sql = "SELECT id, name, publisher, tag, smart_filter, sort_order FROM filter_presets ORDER BY created_at"
-        return rows(sql) { stmt in
-            FilterPreset(
-                id:           sqlite3_column_int64(stmt, 0),
-                name:         colText(stmt, 1) ?? "",
-                publisher:    colText(stmt, 2),
-                tag:          colText(stmt, 3),
-                smartFilter:  colText(stmt, 4),
-                sortOrder:    colText(stmt, 5) ?? "Publisher"
-            )
-        }
-    }
-
-    @discardableResult
-    func saveFilterPreset(name: String, publisher: String?, tag: String?,
-                          smartFilter: String?, sortOrder: String) -> Int64? {
-        queue.sync { () -> Int64? in
-            let sql = "INSERT INTO filter_presets (name, publisher, tag, smart_filter, sort_order) VALUES (?, ?, ?, ?, ?)"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-            sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT)
-            if let v = publisher { sqlite3_bind_text(stmt, 2, v, -1, SQLITE_TRANSIENT) } else { sqlite3_bind_null(stmt, 2) }
-            if let v = tag       { sqlite3_bind_text(stmt, 3, v, -1, SQLITE_TRANSIENT) } else { sqlite3_bind_null(stmt, 3) }
-            if let v = smartFilter { sqlite3_bind_text(stmt, 4, v, -1, SQLITE_TRANSIENT) } else { sqlite3_bind_null(stmt, 4) }
-            sqlite3_bind_text(stmt, 5, sortOrder, -1, SQLITE_TRANSIENT)
-            sqlite3_step(stmt)
-            sqlite3_finalize(stmt)
-            let id = sqlite3_last_insert_rowid(db)
-            return id > 0 ? id : nil
-        }
-    }
-
-    func deleteFilterPreset(_ id: Int64) {
-        prepared("DELETE FROM filter_presets WHERE id = ?") { sqlite3_bind_int64($0, 1, id) }
     }
 
     private func queryGroups(_ sql: String, args: [String]) -> [SeriesGroup] {

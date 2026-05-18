@@ -73,18 +73,12 @@ def index():
     view         = request.args.get('view', 'series')
     char_filter  = request.args.get('character', '').strip()
     series_filter = request.args.get('series', '').strip()
-    tag_filter   = request.args.get('tag', '').strip()
 
     publishers = [r['publisher'] for r in db.execute(
         "SELECT DISTINCT publisher FROM comics ORDER BY publisher"
     ).fetchall()]
     total = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
     reading_list_count = db.execute("SELECT COUNT(*) FROM reading_list").fetchone()[0]
-    all_tags = db.execute("""
-        SELECT t.name, COUNT(ct.comic_id) as count
-        FROM tags t JOIN comic_tags ct ON t.id = ct.tag_id
-        GROUP BY t.name ORDER BY count DESC, t.name
-    """).fetchall()
     continuing = db.execute("""
         SELECT c.id, c.title, c.series, c.publisher, c.page_count,
                rp.current_page as progress
@@ -99,7 +93,7 @@ def index():
     )
 
     # ── Character / Series view ───────────────────────────────────────────────
-    if view == 'series' and not search and not tag_filter:
+    if view == 'series' and not search:
         pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
         pub_params = [publisher_filter] if publisher_filter != 'All' else []
 
@@ -136,8 +130,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter=status_filter,
-                                   continuing=[], all_tags=all_tags,
-                                   tag_filter='',
+                                   continuing=[],
                                    unrar_missing=has_cbr,
                                    library_path=_comics_dir(),
                                    scan_status=get_scan_status())
@@ -167,8 +160,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='',
-                                   continuing=[], all_tags=all_tags,
-                                   tag_filter=tag_filter, series_filter='',
+                                   continuing=[], series_filter='',
                                    unrar_missing=has_cbr,
                                    library_path=_comics_dir(),
                                    scan_status=get_scan_status())
@@ -197,8 +189,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='',
-                                   continuing=continuing, all_tags=all_tags,
-                                   tag_filter=tag_filter, series_filter='',
+                                   continuing=continuing, series_filter='',
                                    unrar_missing=has_cbr,
                                    library_path=_comics_dir(),
                                    scan_status=get_scan_status())
@@ -232,11 +223,6 @@ def index():
     if search:
         conditions.append("(c.title LIKE ? OR c.series LIKE ?)")
         params.extend([f'%{search}%', f'%{search}%'])
-    if tag_filter:
-        conditions.append("""c.id IN (
-            SELECT ct.comic_id FROM comic_tags ct
-            JOIN tags t ON ct.tag_id = t.id WHERE t.name = ?)""")
-        params.append(tag_filter)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     order = {
@@ -274,8 +260,6 @@ def index():
                            total=total,
                            reading_list_count=reading_list_count,
                            continuing=continuing,
-                           all_tags=all_tags,
-                           tag_filter=tag_filter,
                            unrar_missing=has_cbr,
                            library_path=_comics_dir(),
                            scan_status=get_scan_status())
