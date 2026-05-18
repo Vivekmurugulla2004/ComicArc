@@ -6,30 +6,26 @@ struct LibraryView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showImporter = false
     @State private var showFolderImporter = false
-    @State private var browseMode: BrowseMode = .characters
     @State private var selectedCharacter: SeriesGroup?
     @State private var selectedSeries: SeriesGroup?
     @State private var detailComic: Comic?
     @State private var continueComic: Comic?
 
     @State private var isSelecting = false
+    @State private var isReordering = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showBulkDeleteConfirm = false
     @State private var showBulkAddToRun = false
 
     @State private var selectedPublisher: String = "All"
-    @State private var sortOrder: DatabaseManager.SortOrder = .publisher
     @State private var searchText: String = ""
-    @State private var selectedTag: String?
 
-    @State private var selectedSmartFilter: SmartFilter? = nil
+    @State private var selectedSmartFilter: SmartFilter?
 
     @State private var activeRun: Run?
     @State private var selectedRun: Run?
 
     @State private var missingFileComic: Comic?
-
-    enum BrowseMode { case characters, flat }
 
     enum SmartFilter: String, CaseIterable {
         case recentlyAdded = "New"
@@ -52,7 +48,7 @@ struct LibraryView: View {
 
     private var isSearching: Bool { !searchText.isEmpty }
 
-    private var filteredComics: [Comic] {
+    private var displayedComics: [Comic] {
         guard let filter = selectedSmartFilter else { return library.comics }
         switch filter {
         case .recentlyAdded:
@@ -71,7 +67,7 @@ struct LibraryView: View {
         NavigationStack {
             Group {
 
-                if sizeClass == .regular && browseMode == .characters && !isSearching {
+                if sizeClass == .regular && !isSearching {
                     ipadCharacterBrowse
                 } else {
                     phoneScrollContent
@@ -90,12 +86,6 @@ struct LibraryView: View {
                     try? await Task.sleep(nanoseconds: 200_000_000)
                     guard !Task.isCancelled else { return }
                 }
-                reload()
-            }
-            .onChange(of: browseMode) { _, _ in
-                selectedSmartFilter = nil
-                selectedCharacter = nil
-                selectedSeries = nil
                 reload()
             }
             .toolbar { toolbarContent }
@@ -207,8 +197,8 @@ struct LibraryView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let series = selectedSeries {
-                        ipadIssuePanel(series: series)
+                    if selectedSeries != nil {
+                        ipadIssuePanel
                     } else if selectedCharacter != nil {
                         ipadSeriesPanel
                     } else {
@@ -302,7 +292,7 @@ struct LibraryView: View {
         }
     }
 
-    private func ipadIssuePanel(series: SeriesGroup) -> some View {
+    private var ipadIssuePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
 
             if selectedCharacter?.character != nil {
@@ -319,7 +309,7 @@ struct LibraryView: View {
                 .padding(.bottom, 4)
             }
 
-            if filteredComics.isEmpty {
+            if displayedComics.isEmpty {
                 EmptyStateView(
                     icon: "books.vertical",
                     title: "No Issues",
@@ -330,7 +320,7 @@ struct LibraryView: View {
                 .padding(.top, 40)
             } else {
                 LazyVGrid(columns: ipadColumns, spacing: .arcS16) {
-                    ForEach(filteredComics) { comic in
+                    ForEach(displayedComics) { comic in
                         selectableComicCard(comic)
                     }
                 }
@@ -348,20 +338,11 @@ struct LibraryView: View {
                     publisherFilterRow
                 }
 
-                if (browseMode == .flat || isSearching) && !library.allTags.isEmpty {
-                    tagFilterRow
-                }
-
-                if browseMode == .flat || isSearching {
-                    smartFilterRow
-                }
-
                 if isSearching {
-                    flatGrid
-                } else if browseMode == .characters {
-                    if selectedCharacter != nil {
-                        breadcrumbBar
-                    }
+                    smartFilterRow
+                    searchResultsGrid
+                } else {
+                    if selectedCharacter != nil { breadcrumbBar }
                     if let series = selectedSeries {
                         issueGrid(series: series)
                     } else if let char = selectedCharacter {
@@ -372,12 +353,6 @@ struct LibraryView: View {
                         continueRunSection
                         characterGrid
                     }
-                } else {
-                    if !library.inProgress.isEmpty && selectedTag == nil {
-                        continueReadingSection
-                    }
-                    continueRunSection
-                    flatGrid
                 }
             }
             .padding(.horizontal)
@@ -435,65 +410,34 @@ struct LibraryView: View {
         }
     }
 
-    private var tagFilterRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                FilterChip(label: "All", isActive: selectedTag == nil) {
-                    selectedTag = nil
-                    reload()
-                }
-                ForEach(library.allTags) { tag in
-                    FilterChip(label: tag.name, isActive: selectedTag == tag.name) {
-                        selectedTag = (selectedTag == tag.name) ? nil : tag.name
-                        reload()
-                    }
-                }
-            }
-            .padding(.vertical, 8)
-        }
-    }
-
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if isSelecting {
                 Button {
-                    let allIds = Set(filteredComics.map(\.id))
+                    let allIds = Set(displayedComics.map(\.id))
                     withAnimation {
                         selectedIds = (selectedIds == allIds) ? [] : allIds
                     }
                 } label: {
-                    Text(selectedIds.count == filteredComics.count && !filteredComics.isEmpty
+                    Text(selectedIds.count == displayedComics.count && !displayedComics.isEmpty
                          ? "None" : "All")
                         .font(.subheadline)
                 }
                 .accessibilityLabel("Select all or deselect all")
+            } else if isReordering {
+                Button("Done") {
+                    withAnimation { isReordering = false }
+                }
             } else {
-                if !isSearching {
-                    Picker("Browse Mode", selection: $browseMode) {
-                        Image(systemName: "square.grid.2x2").tag(BrowseMode.characters)
-                            .accessibilityLabel("Character View")
-                        Image(systemName: "list.bullet").tag(BrowseMode.flat)
-                            .accessibilityLabel("All Comics")
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 80)
-                    .accessibilityLabel("Browse Mode")
-
-                    Menu {
-                        ForEach(DatabaseManager.SortOrder.allCases, id: \.self) { order in
-                            Button {
-                                sortOrder = order
-                                reload()
-                            } label: {
-                                Label(order.rawValue,
-                                      systemImage: sortOrder == order ? "checkmark" : "")
-                            }
-                        }
+                if selectedSeries != nil && !isSearching {
+                    Button {
+                        withAnimation { isReordering = true }
+                        reloadIssues(sortOrder: .manual)
                     } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .accessibilityLabel("Sort Comics")
+                        Image(systemName: "arrow.up.arrow.down.circle")
                     }
+                    .accessibilityLabel("Reorder issues")
                 }
 
                 Menu {
@@ -513,9 +457,12 @@ struct LibraryView: View {
             if isSelecting {
                 Button("Cancel") { exitSelection() }
                     .accessibilityLabel("Cancel selection")
+            } else if isReordering {
+                EmptyView()
             } else if !isSearching && (selectedSeries != nil || selectedCharacter != nil) {
                 Button {
                     withAnimation {
+                        isReordering = false
                         if selectedSeries != nil {
                             selectedSeries = nil
                             if selectedCharacter?.character == nil {
@@ -602,23 +549,33 @@ struct LibraryView: View {
     }
 
     private func issueGrid(series: SeriesGroup) -> some View {
-        LazyVGrid(columns: columns, spacing: .arcS16) {
-            ForEach(filteredComics) { comic in
-                selectableComicCard(comic)
-            }
-        }
-        .padding(.top, 8)
-    }
+        VStack(spacing: 0) {
+            smartFilterRow
 
-    private var flatGrid: some View {
-        Group {
-            if filteredComics.isEmpty {
-                contextAwareEmptyState.padding(.top, 60)
-            } else if sortOrder == .manual && !isSelecting {
-                manualSortList
+            if isReordering {
+                List {
+                    ForEach(library.comics) { comic in
+                        ManualSortRow(comic: comic)
+                            .listRowBackground(Color.arcCard)
+                            .listRowSeparatorTint(Color.arcBorder)
+                    }
+                    .onMove { from, to in
+                        var reordered = library.comics
+                        reordered.move(fromOffsets: from, toOffset: to)
+                        let updates = reordered.enumerated().map { (id: $0.element.id, sortOrder: $0.offset) }
+                        library.updateSortOrders(updates)
+                    }
+                }
+                .environment(\.editMode, .constant(.active))
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: CGFloat(library.comics.count) * 72)
+            } else if displayedComics.isEmpty {
+                issueEmptyState
+                    .padding(.top, 60)
             } else {
                 LazyVGrid(columns: columns, spacing: .arcS16) {
-                    ForEach(filteredComics) { comic in
+                    ForEach(displayedComics) { comic in
                         selectableComicCard(comic)
                     }
                 }
@@ -627,72 +584,53 @@ struct LibraryView: View {
         }
     }
 
-    private var manualSortList: some View {
-        List {
-            ForEach(library.comics) { comic in
-                ManualSortRow(comic: comic)
-                    .contentShape(Rectangle())
-                    .onTapGesture { detailComic = comic }
-                    .listRowBackground(Color.arcCard)
-                    .listRowSeparatorTint(Color.arcBorder)
-            }
-            .onMove { from, to in
-                var reordered = library.comics
-                reordered.move(fromOffsets: from, toOffset: to)
-                let updates = reordered.enumerated().map { (id: $0.element.id, sortOrder: $0.offset) }
-                library.updateSortOrders(updates)
-            }
-        }
-        .environment(\.editMode, .constant(.active))
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .frame(minHeight: CGFloat(library.comics.count) * 72)
-    }
-
     @ViewBuilder
-    private var contextAwareEmptyState: some View {
-        if !searchText.isEmpty {
-            EmptyStateView(
-                icon: "magnifyingglass",
-                title: "No Results for \"\(searchText)\"",
-                message: "Try searching by title or series name."
-            )
-        } else if let filter = selectedSmartFilter {
+    private var issueEmptyState: some View {
+        if let filter = selectedSmartFilter {
             switch filter {
             case .recentlyAdded:
                 EmptyStateView(icon: "clock", title: "Nothing Added Recently",
                                message: "Comics added in the last 30 days will appear here.")
             case .inProgress:
                 EmptyStateView(icon: "book.fill", title: "Nothing In Progress",
-                               message: "Open any comic to start reading — it'll appear here.")
+                               message: "Open any comic to start reading.")
             case .unread:
-                EmptyStateView(icon: "checkmark.circle", title: "No Unread Comics",
-                               message: "Everything's been started. Nice work.")
+                EmptyStateView(icon: "checkmark.circle", title: "No Unread Issues",
+                               message: "Everything in this series has been started.")
             case .finished:
-                EmptyStateView(icon: "trophy", title: "No Finished Comics Yet",
-                               message: "Read to the last page of any comic to see it here.")
+                EmptyStateView(icon: "trophy", title: "No Finished Issues Yet",
+                               message: "Read to the last page of any issue to see it here.")
             }
-        } else if let tag = selectedTag {
-            EmptyStateView(icon: "tag", title: "No Comics Tagged \"\(tag)\"",
-                           message: "Open a comic's detail page to add tags.")
-        } else if selectedPublisher != "All" {
-            EmptyStateView(icon: "books.vertical", title: "No Comics from \(selectedPublisher)",
-                           message: "Import comics or check your publisher filter.")
         } else {
-            EmptyStateView(
-                icon: "books.vertical", title: "No Comics Yet",
-                message: "Tap + to import CBZ, CBR, or PDF files — or import an entire folder.",
-                actionTitle: "Import Comics",
-                action: { showImporter = true }
-            )
+            EmptyStateView(icon: "books.vertical", title: "No Issues",
+                           message: "No issues found for this series.")
+        }
+    }
+
+    private var searchResultsGrid: some View {
+        Group {
+            if displayedComics.isEmpty {
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No Results for \"\(searchText)\"",
+                    message: "Try searching by title or series name."
+                )
+                .padding(.top, 60)
+            } else {
+                LazyVGrid(columns: columns, spacing: .arcS16) {
+                    ForEach(displayedComics) { comic in
+                        selectableComicCard(comic)
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
     }
 
     private var navigationTitle: String {
-        if isSearching                        { return "Search Results" }
-        if let s = selectedSeries             { return s.groupName }
-        if let c = selectedCharacter          { return c.groupName }
-        if let t = selectedTag                 { return t }
+        if isSearching          { return "Search Results" }
+        if let s = selectedSeries  { return s.groupName }
+        if let c = selectedCharacter { return c.groupName }
         return "Library"
     }
 
@@ -822,46 +760,45 @@ struct LibraryView: View {
         }
     }
 
+    @ViewBuilder
     private var continueRunSection: some View {
-        Group {
-            if let run = activeRun {
-                Button { selectedRun = run } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "list.number")
-                            .foregroundStyle(Color.arcGold)
-                            .frame(width: 32, height: 32)
-                            .background(Color.arcGold.opacity(0.15))
-                            .clipShape(Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(run.title)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Text("\(run.completedCount) of \(run.itemCount) issues")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.arcBorder)
-                            Capsule()
-                                .fill(Color.arcGold)
-                                .frame(width: 56 * CGFloat(run.progressPercent))
-                        }
-                        .frame(width: 56, height: 4)
-                        Image(systemName: "chevron.right")
+        if let run = activeRun {
+            Button { selectedRun = run } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "list.number")
+                        .foregroundStyle(Color.arcGold)
+                        .frame(width: 32, height: 32)
+                        .background(Color.arcGold.opacity(0.15))
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(run.title)
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text("\(run.completedCount) of \(run.itemCount) issues")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(12)
-                    .background(Color.arcCard)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.arcBorder, lineWidth: 1))
+                    Spacer()
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.arcBorder)
+                        Capsule()
+                            .fill(Color.arcGold)
+                            .frame(width: 56 * CGFloat(run.progressPercent))
+                    }
+                    .frame(width: 56, height: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .padding(.bottom, 12)
-                .accessibilityLabel("Continue run: \(run.title), \(run.completedCount) of \(run.itemCount) issues")
+                .padding(12)
+                .background(Color.arcCard)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.arcBorder, lineWidth: 1))
             }
+            .buttonStyle(.plain)
+            .padding(.bottom, 12)
+            .accessibilityLabel("Continue run: \(run.title), \(run.completedCount) of \(run.itemCount) issues")
         }
     }
 
@@ -925,6 +862,7 @@ struct LibraryView: View {
 
     private func selectCharacter(_ group: SeriesGroup) {
         selectedSmartFilter = nil
+        isReordering = false
         selectedCharacter = group
         selectedSeries = nil
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
@@ -932,17 +870,28 @@ struct LibraryView: View {
             library.loadSeries(for: group.groupName, publisher: pub)
         } else {
             selectedSeries = group
-            library.loadIssues(character: nil, series: group.groupName, publisher: pub, sortOrder: sortOrder)
+            library.loadIssues(character: nil, series: group.groupName, publisher: pub)
         }
     }
 
     private func selectSeries(_ group: SeriesGroup) {
         selectedSmartFilter = nil
+        isReordering = false
         selectedSeries = group
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
         library.loadIssues(
             character: selectedCharacter?.character,
             series: group.groupName,
+            publisher: pub
+        )
+    }
+
+    private func reloadIssues(sortOrder: DatabaseManager.SortOrder = .publisher) {
+        guard let series = selectedSeries else { return }
+        let pub = selectedPublisher == "All" ? nil : selectedPublisher
+        library.loadIssues(
+            character: selectedCharacter?.character,
+            series: series.groupName,
             publisher: pub,
             sortOrder: sortOrder
         )
@@ -968,9 +917,7 @@ struct LibraryView: View {
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
         library.load(
             publisher: pub,
-            tag: selectedTag,
-            search: searchText.isEmpty ? nil : searchText,
-            sortOrder: sortOrder
+            search: searchText.isEmpty ? nil : searchText
         )
     }
 
@@ -1198,7 +1145,9 @@ struct BulkAddToRunSheet: View {
         let ids = comicIds
         Task {
             await Task.detached(priority: .userInitiated) {
-                for id in ids { DatabaseManager.shared.addToRun(runId: runId, comicId: id) }
+                for id in ids {
+                    DatabaseManager.shared.addToRun(runId: runId, comicId: id)
+                }
             }.value
         }
         onDone()
