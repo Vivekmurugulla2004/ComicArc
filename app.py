@@ -103,6 +103,45 @@ def index():
         pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
         pub_params = [publisher_filter] if publisher_filter != 'All' else []
 
+        if char_filter and series_filter:
+            status_filter = request.args.get('status', '').strip()
+            order_sql = {
+                'title':  "c.title",
+                'added':  "c.added_at DESC",
+            }.get(sort, "COALESCE(c.position, c.issue_number, 0), c.title")
+            status_cond = {
+                'unread':      "AND (rp.current_page IS NULL OR rp.current_page = 0)",
+                'in-progress': "AND rp.current_page > 0 AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)",
+                'finished':    "AND c.page_count > 0 AND rp.current_page >= c.page_count - 2",
+            }.get(status_filter, "")
+            rows = db.execute(f"""
+                SELECT c.*, COALESCE(rp.current_page, 0) as progress,
+                       COALESCE(r.rating, 0) as rating,
+                       CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
+                       CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
+                FROM comics c
+                LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+                LEFT JOIN ratings r           ON c.id = r.comic_id
+                LEFT JOIN favorites f         ON c.id = f.comic_id
+                LEFT JOIN reading_list rl     ON c.id = rl.comic_id
+                WHERE COALESCE(c.character, c.series) = ? AND c.series = ? {pub_cond} {status_cond}
+                ORDER BY {order_sql}
+            """, [char_filter, series_filter] + pub_params).fetchall()
+            db.close()
+            return render_template('index.html',
+                                   view='series', series_level='issues',
+                                   comics=rows, series_groups=[],
+                                   char_filter=char_filter, series_filter=series_filter,
+                                   publishers=publishers, current_publisher=publisher_filter,
+                                   search=search, sort=sort, total=total,
+                                   reading_list_count=reading_list_count,
+                                   status_filter=status_filter,
+                                   continuing=[], all_tags=all_tags,
+                                   tag_filter='',
+                                   unrar_missing=has_cbr,
+                                   library_path=_comics_dir(),
+                                   scan_status=get_scan_status())
+
         if char_filter:
             # Drill-down: show series cards for a specific character.
             # Match on COALESCE so comics filed directly as Publisher/Robin/file.cbz
@@ -127,6 +166,7 @@ def index():
                                    current_publisher=publisher_filter,
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
+                                   status_filter='',
                                    continuing=[], all_tags=all_tags,
                                    tag_filter=tag_filter, series_filter='',
                                    unrar_missing=has_cbr,
@@ -156,6 +196,7 @@ def index():
                                    current_publisher=publisher_filter,
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
+                                   status_filter='',
                                    continuing=continuing, all_tags=all_tags,
                                    tag_filter=tag_filter, series_filter='',
                                    unrar_missing=has_cbr,
@@ -226,6 +267,8 @@ def index():
                            search=search,
                            sort=sort,
                            view=view,
+                           series_level='',
+                           status_filter='',
                            char_filter=char_filter,
                            series_filter=series_filter,
                            total=total,

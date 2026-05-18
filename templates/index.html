@@ -22,13 +22,16 @@
       {% if search %}<button type="button" class="search-clear" onclick="clearSearch()">✕</button>{% endif %}
     </div>
     <div class="search-controls">
-      <div class="view-toggle">
-        <a href="/?publisher={{ current_publisher }}&view=series{% if search %}&q={{ search }}{% endif %}"
-           class="view-toggle-btn {% if view == 'series' %}active{% endif %}" title="Series view">⊞</a>
-        <a href="/?publisher={{ current_publisher }}&view=all{% if search %}&q={{ search }}{% endif %}"
-           class="view-toggle-btn {% if view != 'series' %}active{% endif %}" title="All comics">≡</a>
-      </div>
-      {% if view != 'series' %}
+      {% if series_level == 'issues' %}
+      <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
+        <option value="default" {% if sort not in ('title','added') %}selected{% endif %}>Issue Order</option>
+        <option value="title"   {% if sort == 'title' %}selected{% endif %}>Title A–Z</option>
+        <option value="added"   {% if sort == 'added' %}selected{% endif %}>Recently Added</option>
+      </select>
+      {% if comics|length > 0 %}
+      <button type="button" id="select-btn" class="btn-ghost select-toggle" onclick="toggleSelectMode()">Select</button>
+      {% endif %}
+      {% elif not view == 'series' %}
       <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
         <option value="publisher" {% if sort == 'publisher' %}selected{% endif %}>Publisher</option>
         <option value="title"     {% if sort == 'title'     %}selected{% endif %}>Title A–Z</option>
@@ -158,7 +161,7 @@
     {% endfor %}
   {% else %}
     {% for g in series_groups %}
-    <a class="series-card" href="/?publisher={{ current_publisher }}&character={{ g.character or '' }}&series={{ g.series }}&view=all">
+    <a class="series-card" href="/?publisher={{ current_publisher }}&character={{ g.character or '' }}&series={{ g.series }}&view=series">
       <div class="series-cover-wrap">
         <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="">
         {% if g.completed == g.issue_count and g.issue_count > 0 %}
@@ -175,6 +178,59 @@
     {% endfor %}
   {% endif %}
 </div>
+
+{% elif series_level == 'issues' %}
+<div class="smart-filter-row">
+  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}"
+     class="smart-chip {% if not status_filter %}active{% endif %}">All</a>
+  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=unread"
+     class="smart-chip {% if status_filter == 'unread' %}active{% endif %}">Unread</a>
+  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=in-progress"
+     class="smart-chip {% if status_filter == 'in-progress' %}active{% endif %}">In Progress</a>
+  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=finished"
+     class="smart-chip {% if status_filter == 'finished' %}active{% endif %}">Finished</a>
+</div>
+{% if comics|length == 0 %}
+<div class="empty-state">
+  <h2>No issues found</h2>
+  <p>No comics match the current filter.</p>
+</div>
+{% else %}
+<div class="comics-grid" id="comics-grid">
+  {% for comic in comics %}
+  <div class="comic-card" data-id="{{ comic.id }}" draggable="true"
+       onclick="if(selectMode){toggleCardSelect({{ comic.id }},this,event)}else if(!this.dataset.dragging){window.location='/comic/{{ comic.id }}'}">
+    <div class="cover-wrap">
+      <div class="select-check">✓</div>
+      <img class="cover-img" src="/cover/{{ comic.id }}" alt="{{ comic.title }}" loading="lazy">
+      {% if comic.page_count > 0 %}
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ (comic.progress / comic.page_count * 100)|int }}%"></div>
+      </div>
+      {% endif %}
+      {% if comic.is_favorite %}<div class="fav-badge">♥</div>{% endif %}
+      {% if comic.in_reading_list %}<div class="rl-badge" title="In reading list">⊕</div>{% endif %}
+      <div class="cover-overlay"><span class="read-btn">Read</span></div>
+      <form class="card-remove-form" method="post" action="/comic/{{ comic.id }}/delete"
+            onclick="event.stopPropagation()"
+            onsubmit="event.stopPropagation(); return confirm('Remove this comic from your library?')">
+        <button type="submit" class="card-remove-btn" title="Remove">×</button>
+      </form>
+    </div>
+    <div class="card-info">
+      <div class="card-title" title="{{ comic.title }}">{{ comic.title }}</div>
+      {% if comic.rating %}
+      <div class="card-rating">
+        {% for i in range(1, 6) %}
+        <span class="star {% if i <= comic.rating %}filled{% endif %}">★</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 {% elif view == 'reading-list' and comics|length == 0 %}
 <div class="empty-state">
