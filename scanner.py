@@ -94,6 +94,19 @@ def _run(library_path):
                 _state['done'] = i + 1
                 _state['added'] = added
 
+    # Prune stale entries: comics under library_path whose file no longer exists
+    stale = [
+        row['id'] for row in db.execute("SELECT id, file_path FROM comics").fetchall()
+        if row['file_path'].startswith(library_path) and not os.path.exists(row['file_path'])
+    ]
+    if stale:
+        ph = ','.join('?' * len(stale))
+        for tbl, col in [('reading_progress', 'comic_id'), ('ratings', 'comic_id'),
+                         ('favorites', 'comic_id'), ('comic_tags', 'comic_id'),
+                         ('run_items', 'comic_id'), ('reading_list', 'comic_id')]:
+            db.execute(f"DELETE FROM {tbl} WHERE {col} IN ({ph})", stale)
+        db.execute(f"DELETE FROM comics WHERE id IN ({ph})", stale)
+
     db.commit()
     db.close()
     with _lock:
