@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Recently Deleted — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Recently Deleted</h1>
+  <p class="page-subtitle">Comics are permanently removed after 30 days. You can restore them before then.</p>
+</div>
+
+{% if not deleted %}
+<div class="empty-state">
+  <div class="empty-icon">🗑</div>
+  <div class="empty-title">Trash is empty</div>
+  <div class="empty-sub">Deleted comics appear here for 30 days.</div>
+  <a href="/" class="btn-primary" style="margin-top:16px">← Back to Library</a>
+</div>
+{% else %}
+<div class="trash-list">
+  {% for comic in deleted %}
+  <div class="trash-row" id="trash-row-{{ comic.id }}">
+    <img src="/cover/{{ comic.id }}" class="trash-cover" alt="">
+    <div class="trash-info">
+      <div class="trash-title">{{ comic.title }}</div>
+      <div class="trash-meta">{{ comic.publisher }}{% if comic.series and comic.series != 'General' %} · {{ comic.series }}{% endif %}</div>
+      <div class="trash-date">Deleted {{ comic.deleted_at[:10] }}</div>
+    </div>
+    <div class="trash-actions">
+      <button class="btn-ghost" onclick="restoreComic({{ comic.id }})">↩ Restore</button>
+      <button class="btn-danger-sm" onclick="purgeComic({{ comic.id }})">Delete Forever</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function restoreComic(id) {
+  fetch(`/api/comic/${id}/restore`, {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        const row = document.getElementById('trash-row-' + id);
+        if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+      }
+    }).catch(() => {});
+}
+
+function purgeComic(id) {
+  if (!confirm('Permanently delete this comic? This cannot be undone.')) return;
+  fetch(`/api/comic/${id}/purge`, {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        const row = document.getElementById('trash-row-' + id);
+        if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+      }
+    }).catch(() => {});
+}
+</script>
+{% endblock %}

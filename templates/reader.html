@@ -15,9 +15,9 @@
       <div class="topbar-left">
         {% if run_context %}
         <a href="/runs/{{ run_id }}" class="back-link">← {{ run_context.title }}</a>
-        {% else %}
-        <a href="/" class="back-link">← Library</a>
-        {% endif %}
+      {% else %}
+        <a href="{{ back_url }}" class="back-link">← Back</a>
+      {% endif %}
         <span class="reader-title">{{ comic.title }}</span>
       </div>
       <div class="topbar-right">
@@ -55,6 +55,10 @@
         <div class="page-error-icon">⚠</div>
         <div class="page-error-text">This page could not be loaded.</div>
         <div class="page-error-hint" id="page-error-hint"></div>
+        <div class="page-error-actions">
+          <button class="btn-ghost" onclick="retryPage()">↺ Retry</button>
+          <a href="{{ back_url }}" class="btn-ghost">← Back</a>
+        </div>
       </div>
       <div id="next-zone" onclick="nextPage()" title="Next page"></div>
     </div>
@@ -165,15 +169,49 @@
   </div>
   {% endif %}
 
+  <!-- Finish suggestion overlay (shown when no next issue exists) -->
+  {% if finish_suggestion %}
+  <div id="finish-overlay" class="next-issue-overlay" style="display:none">
+    <div class="next-issue-card">
+      <div class="next-issue-label">Issue Complete</div>
+      {% if finish_suggestion.type == 'run' %}
+        <div class="next-issue-up">Next in <em>{{ finish_suggestion.run_title }}</em></div>
+        <img src="/cover/{{ finish_suggestion.comic_id }}" class="next-issue-cover" alt="">
+        <div class="next-issue-title">{{ finish_suggestion.comic_title }}</div>
+        <div class="next-issue-actions">
+          <a href="/reader/{{ finish_suggestion.comic_id }}?run_id={{ finish_suggestion.run_id }}&back={{ back_url|urlencode }}"
+             class="btn-primary next-issue-go">Continue Run →</a>
+          <button class="btn-ghost" onclick="dismissFinish()">Stay Here</button>
+        </div>
+      {% else %}
+        <div class="next-issue-up">Start <em>{{ finish_suggestion.series }}</em></div>
+        <img src="/cover/{{ finish_suggestion.comic_id }}" class="next-issue-cover" alt="">
+        <div class="next-issue-title">{{ finish_suggestion.series }} · {{ finish_suggestion.issue_count }} issues</div>
+        <div class="next-issue-actions">
+          <a href="/reader/{{ finish_suggestion.comic_id }}?back={{ back_url|urlencode }}"
+             class="btn-primary next-issue-go">Start Reading →</a>
+          <button class="btn-ghost" onclick="dismissFinish()">Stay Here</button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
   <script>
+    const readerBackUrl   = {{ back_url|tojson }};
     const nextComicUrl    = {% if run_context and next_comic %}'{{ "/reader/%d?run_id=%d"|format(next_comic.comic_id, run_id) }}'{% else %}null{% endif %};
     const prevComicUrl    = {% if run_context and prev_comic %}'{{ "/reader/%d?run_id=%d&start=last"|format(prev_comic.comic_id, run_id) }}'{% else %}null{% endif %};
     const autoplaySeconds = {{ autoplay_interval }};
-    const hasNextSeries   = {{ 'true' if next_series_comic else 'false' }};
+    const hasNextSeries      = {{ 'true' if next_series_comic else 'false' }};
+    const hasFinishSuggestion = {{ 'true' if finish_suggestion else 'false' }};
     selectedRating = {{ existing_rating }};
     initReader({{ comic.id }}, {{ current_page }}, {{ comic.page_count }});
     {% if reader_mode == 'scroll' %}toggleVertical();{% endif %}
+    // Resume autoplay if navigated here from another comic with autoplay active
+    if (new URLSearchParams(location.search).get('autoplay') === '1') {
+      toggleAutoplay();
+    }
 
     function showPageError(img) {
       img.style.display = 'none';
@@ -188,8 +226,21 @@
       }
     }
 
+    function retryPage() {
+      const errEl = document.getElementById('page-error');
+      const img   = document.getElementById('page-img');
+      errEl.style.display = 'none';
+      img.style.display = '';
+      img.src = `/page/{{ comic.id }}/${currentPage}?t=` + Date.now();
+    }
+
     function dismissNextIssue() {
       const el = document.getElementById('next-issue-overlay');
+      if (el) el.style.display = 'none';
+    }
+
+    function dismissFinish() {
+      const el = document.getElementById('finish-overlay');
       if (el) el.style.display = 'none';
     }
 

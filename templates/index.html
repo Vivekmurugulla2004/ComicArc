@@ -179,7 +179,16 @@
         </div>
         <div class="series-info">
           <div class="series-name">{{ g.group_name }}</div>
-          <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}{% if g.completed > 0 %} · {{ g.completed }} done{% endif %}</div>
+          <div class="series-meta">
+            {% if g.completed > 0 %}
+              <span class="series-progress-frac {% if g.completed == g.issue_count %}all-done{% endif %}">
+                {{ g.completed }}/{{ g.issue_count }}
+              </span>
+              <span class="series-progress-word">read</span>
+            {% else %}
+              {{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>
@@ -211,10 +220,24 @@
             <div class="series-prog-fill" style="width:{{ ((g.completed / g.issue_count) * 100)|int }}%"></div>
           </div>
           {% endif %}
+          {% if g.gap_count and g.gap_count > 0 %}
+          <div class="series-gap-badge" title="{{ g.gap_count }} missing issue{{ 's' if g.gap_count != 1 }}">
+            ⚠ {{ g.gap_count }} gap{{ 's' if g.gap_count != 1 }}
+          </div>
+          {% endif %}
         </div>
         <div class="series-info">
           <div class="series-name">{{ g.series }}</div>
-          <div class="series-meta">{{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}{% if g.completed > 0 %} · {{ g.completed }} done{% endif %}</div>
+          <div class="series-meta">
+            {% if g.completed > 0 %}
+              <span class="series-progress-frac {% if g.completed == g.issue_count %}all-done{% endif %}">
+                {{ g.completed }}/{{ g.issue_count }}
+              </span>
+              <span class="series-progress-word">read</span>
+            {% else %}
+              {{ g.issue_count }} issue{{ 's' if g.issue_count != 1 }}
+            {% endif %}
+          </div>
           {% if g.description %}
           <div class="series-desc">{{ g.description }}</div>
           {% endif %}
@@ -232,14 +255,39 @@
 <div class="series-description-bar">{{ series_description }}</div>
 {% endif %}
 <div class="smart-filter-row">
-  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}"
+  {% set base_url = "?publisher=" ~ current_publisher|urlencode ~ "&character=" ~ char_filter|urlencode ~ "&series=" ~ series_filter|urlencode ~ "&view=series" %}
+  <a href="{{ base_url }}&sort={{ sort }}"
      class="smart-chip {% if not status_filter %}active{% endif %}">All</a>
-  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=unread"
+  <a href="{{ base_url }}&sort={{ sort }}&status=unread"
      class="smart-chip {% if status_filter == 'unread' %}active{% endif %}">Unread</a>
-  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=in-progress"
+  <a href="{{ base_url }}&sort={{ sort }}&status=in-progress"
      class="smart-chip {% if status_filter == 'in-progress' %}active{% endif %}">In Progress</a>
-  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=finished"
+  <a href="{{ base_url }}&sort={{ sort }}&status=finished"
      class="smart-chip {% if status_filter == 'finished' %}active{% endif %}">Finished</a>
+
+  <span class="filter-sep">|</span>
+
+  <a href="{{ base_url }}&sort=issue&status={{ status_filter }}"
+     class="smart-chip {% if sort == 'issue' or sort not in ['title','added','year','rating'] %}active{% endif %}">
+     # Order</a>
+  <a href="{{ base_url }}&sort=year&status={{ status_filter }}"
+     class="smart-chip {% if sort == 'year' %}active{% endif %}">Year</a>
+  <a href="{{ base_url }}&sort=rating&status={{ status_filter }}"
+     class="smart-chip {% if sort == 'rating' %}active{% endif %}">Rating</a>
+  <a href="{{ base_url }}&sort=title&status={{ status_filter }}"
+     class="smart-chip {% if sort == 'title' %}active{% endif %}">Title</a>
+
+  {% if all_tags %}
+  <span class="filter-sep">|</span>
+  {% if tag_filter %}
+  <a href="{{ base_url }}&sort={{ sort }}&status={{ status_filter }}" class="smart-chip active tag-chip-filter">✕ {{ tag_filter }}</a>
+  {% else %}
+  <select class="smart-chip-select" onchange="if(this.value)location.href='{{ base_url }}&sort={{ sort }}&status={{ status_filter }}&tag='+encodeURIComponent(this.value)">
+    <option value="">Tag…</option>
+    {% for t in all_tags %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  {% endif %}
 </div>
 {% if comics|length == 0 %}
 <div class="empty-state">
@@ -376,9 +424,40 @@
     </select>
     <button class="bulk-action-btn" disabled id="bulk-add-run-btn" onclick="bulkAction('add-to-run')">Add to Run</button>
     {% endif %}
+    <button class="bulk-action-btn" disabled id="bulk-edit-btn" onclick="openBatchEdit()">Edit Metadata</button>
     <button class="bulk-action-btn bulk-danger" disabled onclick="bulkAction('delete')">Delete</button>
   </div>
   <button class="bulk-cancel-btn" onclick="toggleSelectMode()">Cancel</button>
+</div>
+
+<!-- Batch Edit Modal -->
+<div id="batch-edit-overlay" class="modal-overlay arc-hidden" onclick="closeBatchEdit()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 class="modal-title">Edit Selected Comics</h2>
+      <p class="modal-sub">Leave a field blank to keep existing values. Only filled fields are changed.</p>
+    </div>
+    <div class="batch-edit-grid">
+      <label>Publisher</label>
+      <input type="text" id="be-publisher" placeholder="e.g. Marvel" class="be-input">
+      <label>Series</label>
+      <input type="text" id="be-series" placeholder="e.g. Ultimate Spider-Man" class="be-input">
+      <label>Character</label>
+      <input type="text" id="be-character" placeholder="e.g. Spider-Man" class="be-input">
+      <label>Writer</label>
+      <input type="text" id="be-writer" placeholder="e.g. Brian Michael Bendis" class="be-input">
+      <label>Artist</label>
+      <input type="text" id="be-penciller" placeholder="e.g. Mark Bagley" class="be-input">
+      <label>Story Arc</label>
+      <input type="text" id="be-story_arc" placeholder="e.g. Death of Spider-Man" class="be-input">
+      <label>Year</label>
+      <input type="number" id="be-year" placeholder="e.g. 2001" class="be-input" min="1900" max="2100">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="submitBatchEdit()">Apply to <span id="be-count">0</span> Comics</button>
+      <button class="btn-ghost" onclick="closeBatchEdit()">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- Quick-look panel -->
@@ -924,5 +1003,109 @@ function handleFiles(files) {
     }
   }
 })();
+
+// ── Library keyboard navigation ────────────────────────────────────────────
+(function() {
+  let focusedIdx = -1;
+
+  function getCards() { return Array.from(document.querySelectorAll('.comic-card, .series-card')); }
+
+  function focusCard(idx) {
+    const cards = getCards();
+    if (!cards.length) return;
+    idx = Math.max(0, Math.min(cards.length - 1, idx));
+    cards.forEach((c, i) => c.classList.toggle('kb-focus', i === idx));
+    focusedIdx = idx;
+    cards[idx].scrollIntoView({block: 'nearest'});
+  }
+
+  document.addEventListener('keydown', e => {
+    // Skip if focus is inside an input/textarea/select or spotlight is open
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!document.getElementById('spotlight-overlay')?.classList.contains('arc-hidden')) return;
+
+    const cards = getCards();
+    if (!cards.length) return;
+
+    // Detect grid column count for arrow navigation
+    const gridEl = document.getElementById('comics-grid') || document.querySelector('.series-grid');
+    let cols = 1;
+    if (gridEl && cards.length > 1) {
+      const r0 = cards[0].getBoundingClientRect().top;
+      cols = cards.filter(c => c.getBoundingClientRect().top === r0).length || 1;
+    }
+
+    if (e.key === 'ArrowRight') { e.preventDefault(); focusCard(focusedIdx < 0 ? 0 : focusedIdx + 1); }
+    else if (e.key === 'ArrowLeft')  { e.preventDefault(); focusCard(focusedIdx <= 0 ? 0 : focusedIdx - 1); }
+    else if (e.key === 'ArrowDown')  { e.preventDefault(); focusCard(focusedIdx < 0 ? 0 : focusedIdx + cols); }
+    else if (e.key === 'ArrowUp')    { e.preventDefault(); focusCard(focusedIdx <= 0 ? 0 : focusedIdx - cols); }
+    else if ((e.key === 'Enter' || e.key === ' ') && focusedIdx >= 0) {
+      e.preventDefault();
+      const card = cards[focusedIdx];
+      // Series card — navigate to series
+      if (card.classList.contains('series-card')) {
+        const wrap = card.closest('.series-card-wrap');
+        if (wrap?.dataset.href) window.location = wrap.dataset.href;
+      } else {
+        // Comic card — open quicklook or detail
+        const id = parseInt(card.dataset.id, 10);
+        if (id) { if (typeof openQL === 'function') openQL(id); else window.location = `/comic/${id}`; }
+      }
+    } else if (e.key === 'f' && focusedIdx >= 0) {
+      // F = toggle favorite on focused card
+      const id = parseInt(cards[focusedIdx].dataset?.id, 10);
+      if (id) fetch(`/api/favorite/${id}`, {method:'POST'}).then(r=>r.json()).then(d=>{
+        const badge = cards[focusedIdx].querySelector('.fav-badge');
+        if (badge) badge.style.display = d.favorite ? '' : 'none';
+      }).catch(()=>{});
+    } else if (e.key === 'r' && focusedIdx >= 0) {
+      // R = start reading focused card
+      const id = parseInt(cards[focusedIdx].dataset?.id, 10);
+      if (id) window.location = `/reader/${id}`;
+    } else if (e.key === 'Escape') {
+      cards.forEach(c => c.classList.remove('kb-focus'));
+      focusedIdx = -1;
+    }
+  });
+
+  // Mouse click clears kb-focus
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.kb-focus').forEach(c => c.classList.remove('kb-focus'));
+    focusedIdx = -1;
+  });
+})();
+
+// ── Batch Edit ──────────────────────────────────────────────────────────────
+function openBatchEdit() {
+  const count = selectedIds.size;
+  if (!count) return;
+  document.getElementById('be-count').textContent = count;
+  ['publisher','series','character','writer','penciller','story_arc','year'].forEach(f => {
+    document.getElementById('be-' + f).value = '';
+  });
+  document.getElementById('batch-edit-overlay').classList.remove('arc-hidden');
+}
+
+function closeBatchEdit() {
+  document.getElementById('batch-edit-overlay').classList.add('arc-hidden');
+}
+
+function submitBatchEdit() {
+  const fields = {};
+  ['publisher','series','character','writer','penciller','story_arc','year'].forEach(f => {
+    const v = document.getElementById('be-' + f).value.trim();
+    if (v) fields[f] = v;
+  });
+  if (!Object.keys(fields).length) { closeBatchEdit(); return; }
+  fetch('/api/bulk/edit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ ids: [...selectedIds], fields })
+  }).then(r => r.json()).then(d => {
+    closeBatchEdit();
+    if (d.ok) location.reload();
+  }).catch(() => {});
+}
 </script>
 {% endblock %}
