@@ -17,9 +17,10 @@ final class DatabaseManager {
     }
 
     private func dbURL() -> URL {
-        let dir = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ComicArc")
+        let base = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("ComicArc")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("comics.db")
     }
@@ -214,6 +215,7 @@ final class DatabaseManager {
 
     func publishers() -> [String] {
         queue.sync {
+            guard db != nil else { return [] }
             var out: [String] = []
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, "SELECT DISTINCT publisher FROM comics ORDER BY publisher",
@@ -274,6 +276,7 @@ final class DatabaseManager {
                      character: String?, series: String, issueNumber: String?,
                      pageCount: Int, writer: String? = nil, summary: String? = nil) -> Int64? {
         queue.sync {
+            guard db != nil else { return nil }
             let sql = """
                 INSERT OR IGNORE INTO comics
                   (title, file_path, publisher, character, series, issue_number, page_count, writer, summary)
@@ -303,6 +306,7 @@ final class DatabaseManager {
 
     func updateProgress(comicId: Int64, page: Int) {
         queue.sync {
+            guard db != nil else { return }
             let sql = """
                 INSERT INTO reading_progress (comic_id, current_page)
                 VALUES (?, ?)
@@ -388,6 +392,7 @@ final class DatabaseManager {
 
     func comicId(forFilePath filePath: String) -> Int64? {
         queue.sync {
+            guard db != nil else { return nil }
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "SELECT id FROM comics WHERE file_path = ?",
                                      -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -401,6 +406,7 @@ final class DatabaseManager {
     func updateMetadata(_ id: Int64, title: String, publisher: String, character: String?,
                         series: String, issueNumber: String?) {
         queue.sync {
+            guard db != nil else { return }
             var stmt: OpaquePointer?
             let sql = "UPDATE comics SET title=?, publisher=?, character=?, series=?, issue_number=? WHERE id=?"
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -419,6 +425,7 @@ final class DatabaseManager {
 
     func tags(for comicId: Int64) -> [Tag] {
         queue.sync {
+            guard db != nil else { return [] }
             let sql = """
                 SELECT t.id, t.name FROM tags t
                 JOIN comic_tags ct ON t.id = ct.tag_id
@@ -441,6 +448,7 @@ final class DatabaseManager {
 
     func setTags(for comicId: Int64, names: [String]) {
         queue.sync {
+            guard db != nil else { return }
             exec("BEGIN")
             prepared_unsafe("DELETE FROM comic_tags WHERE comic_id = ?") {
                 sqlite3_bind_int64($0, 1, comicId)
@@ -471,6 +479,7 @@ final class DatabaseManager {
 
     func allTagsByComicId() -> [Int64: [String]] {
         queue.sync {
+            guard db != nil else { return [:] }
             var result: [Int64: [String]] = [:]
             var stmt: OpaquePointer?
             let sql = """
@@ -548,6 +557,7 @@ final class DatabaseManager {
             ORDER BY ri.position
         """
         return queue.sync {
+            guard db != nil else { return [] }
             var out: [RunItem] = []
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -569,6 +579,7 @@ final class DatabaseManager {
     @discardableResult
     func createRun(title: String, description: String = "") -> Int64? {
         queue.sync {
+            guard db != nil else { return nil }
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "INSERT INTO runs (title, description) VALUES (?, ?)",
                                      -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -599,6 +610,7 @@ final class DatabaseManager {
     func pageCountsForIds(_ ids: [Int64]) -> [Int64: Int] {
         guard !ids.isEmpty else { return [:] }
         return queue.sync {
+            guard db != nil else { return [:] }
             let placeholders = ids.map { _ in "?" }.joined(separator: ",")
             let sql = "SELECT id, page_count FROM comics WHERE id IN (\(placeholders))"
             var result: [Int64: Int] = [:]
@@ -636,6 +648,7 @@ final class DatabaseManager {
 
     func addToRun(runId: Int64, comicId: Int64) {
         queue.sync {
+            guard db != nil else { return }
             var pos = 0
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, "SELECT COALESCE(MAX(position), -1) + 1 FROM run_items WHERE run_id = ?",
@@ -681,6 +694,7 @@ final class DatabaseManager {
 
     func isComicInRun(runId: Int64, comicId: Int64) -> Bool {
         queue.sync {
+            guard db != nil else { return false }
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM run_items WHERE run_id=? AND comic_id=?",
                                      -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -695,6 +709,7 @@ final class DatabaseManager {
     func setFavoriteForIds(_ ids: [Int64], isFavorite: Bool) {
         guard !ids.isEmpty else { return }
         queue.sync {
+            guard db != nil else { return }
             let placeholders = ids.map { _ in "?" }.joined(separator: ",")
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db,
@@ -710,6 +725,7 @@ final class DatabaseManager {
     func setInReadingListForIds(_ ids: [Int64], inList: Bool) {
         guard !ids.isEmpty else { return }
         queue.sync {
+            guard db != nil else { return }
             let placeholders = ids.map { _ in "?" }.joined(separator: ",")
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db,
@@ -724,6 +740,7 @@ final class DatabaseManager {
 
     func runsContainingComic(comicId: Int64) -> Set<Int64> {
         queue.sync {
+            guard db != nil else { return [] }
             var result = Set<Int64>()
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "SELECT run_id FROM run_items WHERE comic_id=?",
@@ -747,6 +764,7 @@ final class DatabaseManager {
 
     func scalarInt(_ sql: String) -> Int {
         queue.sync {
+            guard db != nil else { return 0 }
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return 0 }
             let result = sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
@@ -757,6 +775,7 @@ final class DatabaseManager {
 
     func rows<T>(_ sql: String, map: (OpaquePointer?) -> T) -> [T] {
         queue.sync {
+            guard db != nil else { return [] }
             var out: [T] = []
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -772,10 +791,12 @@ final class DatabaseManager {
     }
 
     private func exec(_ sql: String) {
+        guard db != nil else { return }
         sqlite3_exec(db, sql, nil, nil, nil)
     }
 
     private func prepared_unsafe(_ sql: String, bind: (OpaquePointer?) -> Void) {
+        guard db != nil else { return }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         bind(stmt)
@@ -814,6 +835,7 @@ final class DatabaseManager {
 
     private func queryComics(_ sql: String, args: [String]) -> [Comic] {
         queue.sync {
+            guard db != nil else { return [] }
             var out: [Comic] = []
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -830,6 +852,7 @@ final class DatabaseManager {
 
     func setCustomCoverPath(id: Int64, path: String?) {
         queue.sync {
+            guard db != nil else { return }
             var stmt: OpaquePointer?
             let sql = "UPDATE comics SET custom_cover_path = ? WHERE id = ?"
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -857,6 +880,7 @@ final class DatabaseManager {
 
     func renameSeries(from oldName: String, to newName: String, publisher: String? = nil) {
         queue.sync {
+            guard db != nil else { return }
             var stmt: OpaquePointer?
             let sql: String
             if let pub = publisher {
@@ -879,6 +903,7 @@ final class DatabaseManager {
     func mergeSeries(sources: [String], into target: String, publisher: String? = nil) {
         guard !sources.isEmpty else { return }
         queue.sync {
+            guard db != nil else { return }
             exec("BEGIN")
             for source in sources where source != target {
                 var stmt: OpaquePointer?
@@ -903,6 +928,7 @@ final class DatabaseManager {
 
     func allDistinctSeries(publisher: String? = nil) -> [String] {
         queue.sync {
+            guard db != nil else { return [] }
             var out: [String] = []
             var stmt: OpaquePointer?
             if let pub = publisher {
@@ -939,6 +965,7 @@ final class DatabaseManager {
     @discardableResult
     func createCollection(name: String) -> Int64? {
         queue.sync {
+            guard db != nil else { return nil }
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO collections (name) VALUES (?)",
                                      -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -963,6 +990,7 @@ final class DatabaseManager {
 
     func addToCollection(collectionId: Int64, comicId: Int64) {
         queue.sync {
+            guard db != nil else { return }
             var pos = 0
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db,
@@ -1000,6 +1028,7 @@ final class DatabaseManager {
             ORDER BY ci.sort_order, c.title
         """
         return queue.sync {
+            guard db != nil else { return [] }
             var out: [Comic] = []
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -1012,6 +1041,7 @@ final class DatabaseManager {
 
     func collectionsContainingComic(comicId: Int64) -> Set<Int64> {
         queue.sync {
+            guard db != nil else { return [] }
             var result = Set<Int64>()
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, "SELECT collection_id FROM collection_items WHERE comic_id = ?",
@@ -1025,6 +1055,7 @@ final class DatabaseManager {
 
     private func queryGroups(_ sql: String, args: [String]) -> [SeriesGroup] {
         queue.sync {
+            guard db != nil else { return [] }
             var out: [SeriesGroup] = []
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }

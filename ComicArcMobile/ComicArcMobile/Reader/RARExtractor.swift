@@ -127,6 +127,11 @@ struct RARExtractor {
             handle.write(Data(buffer[..<read]))
             totalRead += read
         }
-        return totalRead > 0
+        if totalRead == 0 {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: dest)
+            return false
+        }
+        return true
     }
 }

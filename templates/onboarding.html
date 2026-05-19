@@ -291,7 +291,8 @@
           goTo(2);
           document.getElementById('folder-hint').textContent = data.error;
         }
-      });
+      })
+      .catch(() => { goTo(2); document.getElementById('folder-hint').textContent = 'Network error. Please try again.'; });
     }
 
     function pollScan() {
@@ -313,7 +314,8 @@
               s.added > 0 ? 'Found ' + s.added + ' comics!' : 'Scan complete — no new comics found.';
             setTimeout(() => goTo(4), 1200);
           }
-        });
+        })
+        .catch(() => {});
     }
 
     function selectMode(mode) {
@@ -327,7 +329,7 @@
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({reader_mode: selectedMode})
-      }).then(() => window.location.href = '/');
+      }).then(() => { window.location.href = '/'; }).catch(() => {});
     }
   </script>
 </body>

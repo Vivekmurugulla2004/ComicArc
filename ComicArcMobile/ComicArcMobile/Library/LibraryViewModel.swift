@@ -352,9 +352,10 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private nonisolated static var comicsDir: URL {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics")
+        let base = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Comics")
     }
 
     private static func importOne(source: URL, db: DatabaseManager) async -> Bool {

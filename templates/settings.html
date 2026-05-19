@@ -181,8 +181,8 @@ function updateAutoplayLabel(val) {
   fetch('/api/settings/save', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({autoplay_interval: parseInt(val)})
-  });
+    body: JSON.stringify({autoplay_interval: parseInt(val, 10)})
+  }).catch(() => {});
 }
 
 function browseFolder() {
@@ -213,7 +213,8 @@ function saveFolder() {
     if (!d.ok) { hint.textContent = d.error; label.classList.add('hidden'); return; }
     label.textContent = 'Scanning…';
     pollScan();
-  });
+  })
+  .catch(() => { hint.textContent = 'Save failed: network error.'; label.classList.add('hidden'); });
 }
 
 function pollScan() {
@@ -227,7 +228,7 @@ function pollScan() {
       label.textContent = s.added > 0 ? `Done — ${s.added} new comics added` : 'Done — library up to date';
       setTimeout(() => label.classList.add('hidden'), 4000);
     }
-  });
+  }).catch(() => {});
 }
 
 function setMode(mode) {
@@ -237,7 +238,7 @@ function setMode(mode) {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({reader_mode: mode})
-  });
+  }).catch(() => {});
 }
 
 function installCBR() {
@@ -252,7 +253,8 @@ function installCBR() {
     .then(d => {
       if (!d.ok) { log.textContent = d.error; return; }
       pollInstall();
-    });
+    })
+    .catch(() => { log.textContent = 'Install failed: network error.'; });
 }
 
 function pollInstall() {
@@ -271,13 +273,14 @@ function pollInstall() {
         document.getElementById('cbr-install-btn').disabled = false;
       }
     }
-  });
+  }).catch(() => {});
 }
 
 function resetSetup() {
   if (!confirm('Re-run the setup wizard? Your library data will be kept.')) return;
   fetch('/api/settings/reset-setup', {method: 'POST'})
-    .then(() => window.location.href = '/onboarding');
+    .then(() => { window.location.href = '/onboarding'; })
+    .catch(() => {});
 }
 
 function importBackup(input) {
@@ -297,7 +300,7 @@ function importBackup(input) {
     }).then(r => r.json()).then(d => {
       if (d.ok) status.textContent = `✓ Imported: ${d.progress} progress, ${d.ratings} ratings, ${d.tags} tags, ${d.runs} runs.`;
       else status.textContent = '✗ Import failed: ' + (d.error || 'unknown');
-    });
+    }).catch(() => { status.textContent = '✗ Import failed: network error.'; });
   };
   reader.readAsText(file);
   input.value = '';

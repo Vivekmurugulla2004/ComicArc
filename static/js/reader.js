@@ -199,7 +199,7 @@ function prevPage() {
 }
 
 function jumpToPage(page) {
-  page = Math.max(0, Math.min(totalPages - 1, parseInt(page)));
+  page = Math.max(0, Math.min(totalPages - 1, parseInt(page, 10)));
   if (verticalMode) {
     const target = document.querySelector(`.scroll-page[data-page="${page}"]`);
     if (target) target.scrollIntoView({ behavior: 'smooth' });
@@ -225,7 +225,7 @@ function _flushProgress() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ page: currentPage })
-  });
+  }).catch(() => {});
 }
 
 window.addEventListener('beforeunload', _flushProgress);
@@ -379,7 +379,7 @@ function buildScrollView() {
           img.src = img.dataset.src;
           delete img.dataset.src;
         }
-        const p = parseInt(entry.target.dataset.page);
+        const p = parseInt(entry.target.dataset.page, 10);
         if (p !== currentPage) {
           currentPage = p;
           document.getElementById('cur-page').textContent = p + 1;

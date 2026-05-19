@@ -163,15 +163,23 @@ function addTag(comicId) {
     const chip = document.createElement('span');
     chip.className    = 'tag-chip';
     chip.dataset.tagId = data.id;
-    chip.innerHTML    = `${data.name}<button class="tag-remove" onclick="removeTag(${comicId},${data.id},this.parentElement)" aria-label="Remove tag ${data.name}">✕</button>`;
+    const nameNode = document.createTextNode(data.name);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'tag-remove';
+    removeBtn.setAttribute('aria-label', `Remove tag ${data.name}`);
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => removeTag(comicId, data.id, chip);
+    chip.appendChild(nameNode);
+    chip.appendChild(removeBtn);
     list.appendChild(chip);
     input.value = '';
-  });
+  }).catch(() => {});
 }
 
 function removeTag(comicId, tagId, chip) {
   fetch(`/api/comic/${comicId}/tags/${tagId}`, { method: 'DELETE' })
-    .then(() => chip.remove());
+    .then(() => chip.remove())
+    .catch(() => {});
 }
 
 document.getElementById('tag-input').addEventListener('keydown', e => {
@@ -197,7 +205,8 @@ function markRead(comicId, btn) {
         newBtn.onclick = () => markUnread(comicId, newBtn);
         btn.insertAdjacentElement('afterend', newBtn);
       }
-    });
+    })
+    .catch(() => {});
 }
 
 function markUnread(comicId, btn) {
@@ -212,7 +221,8 @@ function markUnread(comicId, btn) {
       if (label) label.textContent = 'Not started';
       if (fill)  fill.style.width  = '0%';
       btn.remove();
-    });
+    })
+    .catch(() => {});
 }
 
 function toggleReadingList(comicId) {
@@ -223,7 +233,8 @@ function toggleReadingList(comicId) {
       const label = document.getElementById('cd-rl-label');
       btn.classList.toggle('active', data.in_list);
       label.textContent = data.in_list ? '✓ In Reading List' : '+ Want to Read';
-    });
+    })
+    .catch(() => {});
 }
 
 function rateComic(comicId, val) {
@@ -235,7 +246,7 @@ function rateComic(comicId, val) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rating: val, review: '' })
-  });
+  }).catch(() => {});
 }
 
 function toggleFav(comicId) {
@@ -246,7 +257,8 @@ function toggleFav(comicId) {
       const label = document.getElementById('cd-fav-label');
       btn.classList.toggle('active', data.favorite);
       label.textContent = data.favorite ? 'Favorited' : 'Add to Favorites';
-    });
+    })
+    .catch(() => {});
 }
 </script>
 {% endblock %}

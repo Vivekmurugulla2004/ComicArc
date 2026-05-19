@@ -1388,8 +1388,11 @@ def bulk_add_to_run():
 
 @app.route('/api/search')
 def search_api():
-    q     = request.args.get('q', '').strip()
-    limit = min(int(request.args.get('limit', 12)), 40)
+    q = request.args.get('q', '').strip()
+    try:
+        limit = min(int(request.args.get('limit', 12)), 40)
+    except (ValueError, TypeError):
+        limit = 12
     if not q:
         return jsonify({'results': []})
     db = get_db()
@@ -1405,19 +1408,6 @@ def search_api():
     return jsonify({'results': [dict(r) for r in rows]})
 
 
-# ── Random unread ──────────────────────────────────────────────────────────────
-
-@app.route('/api/random-unread')
-def random_unread():
-    db = get_db()
-    row = db.execute("""
-        SELECT c.id FROM comics c
-        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
-        WHERE rp.current_page IS NULL OR rp.current_page = 0
-        ORDER BY RANDOM() LIMIT 1
-    """).fetchone()
-    db.close()
-    return jsonify({'id': row['id'] if row else None})
 
 
 # ── Import backup ──────────────────────────────────────────────────────────────

@@ -129,7 +129,7 @@ function rateRun(runId, val) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rating: val, review: '' })
-  });
+  }).catch(() => {});
 }
 
 // Issue star rating
@@ -141,14 +141,15 @@ function rateIssue(comicId, val, container) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rating: val, review: '' })
-  });
+  }).catch(() => {});
 }
 
 // Favorite toggle
 function toggleFav(comicId, btn) {
   fetch(`/api/favorite/${comicId}`, { method: 'POST' })
     .then(r => r.json())
-    .then(data => btn.classList.toggle('active', data.favorite));
+    .then(data => btn.classList.toggle('active', data.favorite))
+    .catch(() => {});
 }
 
 // Issue notes
@@ -157,7 +158,7 @@ function saveNote(input) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ note: input.value })
-  });
+  }).catch(() => {});
 }
 
 // Drag-and-drop reordering
@@ -187,13 +188,13 @@ function saveNote(input) {
   });
   function saveRunOrder() {
     const order = [...document.querySelectorAll('.issue-row[data-item-id]')]
-      .map(r => parseInt(r.dataset.itemId));
+      .map(r => parseInt(r.dataset.itemId, 10));
     document.querySelectorAll('.issue-num').forEach((el, i) => el.textContent = i + 1);
     fetch(`/api/runs/{{ run.id }}/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order })
-    });
+    }).catch(() => {});
   }
 })();
 

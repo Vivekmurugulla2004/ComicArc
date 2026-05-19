@@ -313,9 +313,8 @@ struct LibraryView: View {
                 EmptyStateView(
                     icon: "books.vertical",
                     title: "No Issues",
-                    message: selectedSmartFilter != nil
-                        ? "No issues match the \"\(selectedSmartFilter!.rawValue)\" filter."
-                        : "No issues found for this series."
+                    message: selectedSmartFilter.map { "No issues match the \"\($0.rawValue)\" filter." }
+                        ?? "No issues found for this series."
                 )
                 .padding(.top, 40)
             } else {
