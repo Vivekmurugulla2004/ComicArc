@@ -504,6 +504,27 @@ def reader(comic_id):
                 next_comic = items[i + 1] if i < len(items) - 1 else None
                 break
 
+    # Next comic in same series (for the "Continue" overlay at end of issue)
+    next_series_comic = None
+    if not run_context and comic['series'] and comic['series'] != 'General':
+        series_comics = db.execute("""
+            SELECT id, title, COALESCE(position, id) as pos FROM comics
+            WHERE series = ? AND publisher = ?
+              AND (character IS ? OR character = ?)
+            ORDER BY COALESCE(position, id), title
+        """, (comic['series'], comic['publisher'],
+              comic['character'], comic['character'])).fetchall()
+        ids = [r['id'] for r in series_comics]
+        try:
+            cur_idx = ids.index(comic_id)
+            if cur_idx < len(ids) - 1:
+                nid = ids[cur_idx + 1]
+                next_series_comic = db.execute(
+                    "SELECT id, title FROM comics WHERE id = ?", (nid,)
+                ).fetchone()
+        except ValueError:
+            pass
+
     db.close()
     return render_template('reader.html',
                            comic=comic,
@@ -513,6 +534,7 @@ def reader(comic_id):
                            prev_comic=prev_comic,
                            next_comic=next_comic,
                            run_id=run_id,
+                           next_series_comic=next_series_comic,
                            reader_mode=get_reader_mode(),
                            autoplay_interval=get_autoplay_interval())
 
@@ -627,13 +649,21 @@ def stats():
         WHERE rp.current_page > 0
         ORDER BY rp.last_read DESC LIMIT 6
     """).fetchall()
+    # Reading activity: daily comic count for the past 52 weeks
+    activity_rows = db.execute("""
+        SELECT DATE(last_read) as day, COUNT(DISTINCT comic_id) as cnt
+        FROM reading_progress
+        WHERE last_read >= DATE('now', '-364 days')
+        GROUP BY DATE(last_read)
+    """).fetchall()
+    activity_map = {r['day']: r['cnt'] for r in activity_rows}
     db.close()
     return render_template('stats.html',
         total_comics=total_comics, read_count=read_count,
         pages_read=pages_read, in_progress=in_progress,
         fav_count=fav_count, runs_count=runs_count,
         by_publisher=by_publisher, top_series=top_series,
-        recent_reads=recent_reads)
+        recent_reads=recent_reads, activity_map=activity_map)
 
 
 @app.route('/runs')
@@ -1352,6 +1382,117 @@ def bulk_add_to_run():
     db.commit()
     db.close()
     return jsonify({'ok': True})
+
+
+# ── Search API ────────────────────────────────────────────────────────────────
+
+@app.route('/api/search')
+def search_api():
+    q     = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 12)), 40)
+    if not q:
+        return jsonify({'results': []})
+    db = get_db()
+    rows = db.execute("""
+        SELECT c.id, c.title, c.series, c.publisher, c.page_count,
+               COALESCE(rp.current_page, 0) as progress
+        FROM comics c
+        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        WHERE c.title LIKE ? OR c.series LIKE ? OR c.publisher LIKE ?
+        ORDER BY c.title LIMIT ?
+    """, (f'%{q}%', f'%{q}%', f'%{q}%', limit)).fetchall()
+    db.close()
+    return jsonify({'results': [dict(r) for r in rows]})
+
+
+# ── Random unread ──────────────────────────────────────────────────────────────
+
+@app.route('/api/random-unread')
+def random_unread():
+    db = get_db()
+    row = db.execute("""
+        SELECT c.id FROM comics c
+        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        WHERE rp.current_page IS NULL OR rp.current_page = 0
+        ORDER BY RANDOM() LIMIT 1
+    """).fetchone()
+    db.close()
+    return jsonify({'id': row['id'] if row else None})
+
+
+# ── Import backup ──────────────────────────────────────────────────────────────
+
+@app.route('/api/import', methods=['POST'])
+def import_backup():
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    prog_count = 0
+    for item in data.get('reading_progress', []):
+        comic_id = item.get('comic_id')
+        page     = item.get('current_page', 0)
+        ts       = item.get('last_read', 'CURRENT_TIMESTAMP')
+        if comic_id and db.execute("SELECT 1 FROM comics WHERE id = ?", (comic_id,)).fetchone():
+            db.execute(
+                """INSERT INTO reading_progress (comic_id, current_page, last_read) VALUES (?, ?, ?)
+                   ON CONFLICT(comic_id) DO UPDATE
+                     SET current_page = MAX(current_page, excluded.current_page),
+                         last_read = excluded.last_read""",
+                (comic_id, page, ts)
+            )
+            prog_count += 1
+    rating_count = 0
+    for item in data.get('ratings', []):
+        cid = item.get('comic_id')
+        if cid and db.execute("SELECT 1 FROM comics WHERE id = ?", (cid,)).fetchone():
+            db.execute(
+                """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, ?)
+                   ON CONFLICT(comic_id) DO UPDATE SET rating = excluded.rating""",
+                (cid, item.get('rating'), item.get('review'))
+            )
+            rating_count += 1
+    for cid in data.get('favorites', []):
+        if db.execute("SELECT 1 FROM comics WHERE id = ?", (cid,)).fetchone():
+            db.execute("INSERT OR IGNORE INTO favorites (comic_id) VALUES (?)", (cid,))
+    tag_count = 0
+    tag_map = {}
+    for t in data.get('tags', []):
+        existing = db.execute("SELECT id FROM tags WHERE name = ?", (t['name'],)).fetchone()
+        if existing:
+            tag_map[t['id']] = existing['id']
+        else:
+            cur = db.execute("INSERT INTO tags (name) VALUES (?)", (t['name'],))
+            tag_map[t['id']] = cur.lastrowid
+            tag_count += 1
+    for ct in data.get('comic_tags', []):
+        new_tag_id = tag_map.get(ct['tag_id'])
+        cid = ct['comic_id']
+        if new_tag_id and db.execute("SELECT 1 FROM comics WHERE id = ?", (cid,)).fetchone():
+            db.execute("INSERT OR IGNORE INTO comic_tags (comic_id, tag_id) VALUES (?, ?)",
+                       (cid, new_tag_id))
+    run_count = 0
+    run_map = {}
+    for r in data.get('runs', []):
+        cur = db.execute(
+            "INSERT INTO runs (title, description, created_at) VALUES (?, ?, ?)",
+            (r['title'], r.get('description'), r.get('created_at'))
+        )
+        run_map[r['id']] = cur.lastrowid
+        run_count += 1
+    for ri in data.get('run_items', []):
+        new_run_id = run_map.get(ri['run_id'])
+        cid = ri['comic_id']
+        if new_run_id and db.execute("SELECT 1 FROM comics WHERE id = ?", (cid,)).fetchone():
+            max_pos = db.execute(
+                "SELECT COALESCE(MAX(position), 0) FROM run_items WHERE run_id = ?", (new_run_id,)
+            ).fetchone()[0]
+            db.execute(
+                "INSERT OR IGNORE INTO run_items (run_id, comic_id, position) VALUES (?, ?, ?)",
+                (new_run_id, cid, ri.get('position', max_pos + 1))
+            )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'progress': prog_count, 'ratings': rating_count,
+                    'tags': tag_count, 'runs': run_count})
 
 
 # ── Export ────────────────────────────────────────────────────────────────────

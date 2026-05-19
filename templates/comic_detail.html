@@ -29,10 +29,26 @@
       {% if comic.issue_number %}
       <span class="cd-issue-num">Issue #{{ comic.issue_number }}</span>
       {% endif %}
+      {% if comic.year %}
+      <span class="cd-year">{{ comic.year }}</span>
+      {% endif %}
       {% if comic.page_count > 0 %}
       <span class="cd-pages">{{ comic.page_count }} pages</span>
       {% endif %}
     </div>
+    {% if comic.writer or comic.penciller or comic.story_arc %}
+    <div class="cd-credits">
+      {% if comic.writer %}
+      <span class="cd-credit-item"><span class="cd-credit-label">Writer</span> {{ comic.writer }}</span>
+      {% endif %}
+      {% if comic.penciller %}
+      <span class="cd-credit-item"><span class="cd-credit-label">Art</span> {{ comic.penciller }}</span>
+      {% endif %}
+      {% if comic.story_arc %}
+      <span class="cd-credit-item"><span class="cd-credit-label">Arc</span> {{ comic.story_arc }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
 
     <!-- Progress -->
     {% if comic.page_count > 0 %}

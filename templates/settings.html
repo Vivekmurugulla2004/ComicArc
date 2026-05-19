@@ -126,7 +126,7 @@
     {% endif %}
   </div>
 
-  <!-- Export -->
+  <!-- Export / Import -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>Backup &amp; Export</h2>
@@ -134,6 +134,20 @@
     </div>
     <div class="settings-actions">
       <a href="/api/export" class="btn-primary" download>Export Library</a>
+    </div>
+  </div>
+
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <h2>Import Backup</h2>
+      <p>Restore reading progress, ratings, favorites, tags, and runs from a previously exported JSON file. Existing data is kept — imported records are merged in.</p>
+    </div>
+    <div class="settings-actions">
+      <label class="btn-ghost" style="cursor:pointer">
+        Choose JSON File
+        <input type="file" id="import-file" accept=".json" hidden onchange="importBackup(this)">
+      </label>
+      <span id="import-status" class="settings-hint"></span>
     </div>
   </div>
 
@@ -264,6 +278,29 @@ function resetSetup() {
   if (!confirm('Re-run the setup wizard? Your library data will be kept.')) return;
   fetch('/api/settings/reset-setup', {method: 'POST'})
     .then(() => window.location.href = '/onboarding');
+}
+
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('import-status');
+  status.textContent = 'Importing…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    let data;
+    try { data = JSON.parse(e.target.result); }
+    catch { status.textContent = '✗ Invalid JSON file.'; return; }
+    fetch('/api/import', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) status.textContent = `✓ Imported: ${d.progress} progress, ${d.ratings} ratings, ${d.tags} tags, ${d.runs} runs.`;
+      else status.textContent = '✗ Import failed: ' + (d.error || 'unknown');
+    });
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 function copyCmd(cmd) {

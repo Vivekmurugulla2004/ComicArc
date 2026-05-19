@@ -1,6 +1,8 @@
 let comicId, currentPage, totalPages;
 let spreadMode   = false;
 let verticalMode = false;
+let mangaMode    = false;
+let fitMode      = 'contain'; // 'contain' | 'width' | 'height'
 let zoomLevel    = 1;
 let panX = 0, panY = 0;
 let isPanning = false, panStartX, panStartY;
@@ -61,12 +63,14 @@ function initReader(id, page, total) {
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
     showChrome();
-    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextPage(); }
-    if (e.key === 'ArrowLeft')                   { e.preventDefault(); prevPage(); }
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); mangaMode ? prevPage() : nextPage(); }
+    if (e.key === 'ArrowLeft')                   { e.preventDefault(); mangaMode ? nextPage() : prevPage(); }
     if (e.key === 'ArrowDown' && verticalMode)   { e.preventDefault(); scrollBy(0, window.innerHeight * 0.8); }
     if (e.key === 'ArrowUp'   && verticalMode)   { e.preventDefault(); scrollBy(0, -window.innerHeight * 0.8); }
     if (e.key === 'd' || e.key === 'D')          toggleSpread();
     if (e.key === 'v' || e.key === 'V')          toggleVertical();
+    if (e.key === 'r' || e.key === 'R')          toggleManga();
+    if (e.key === 'f' || e.key === 'F')          cycleFit();
     if (e.key === 'z' || e.key === 'Z')          setZoom(zoomLevel > 1 ? 1 : 2.5);
     if (e.key === 'a' || e.key === 'A')          toggleAutoplay();
     if (e.key === 'm' || e.key === 'M')          toggleChrome();
@@ -93,7 +97,8 @@ function initReader(id, page, total) {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-      dx < 0 ? nextPage() : prevPage();
+      const forward = mangaMode ? dx > 0 : dx < 0;
+      forward ? nextPage() : prevPage();
     }
   }, { passive: true });
 
@@ -165,6 +170,8 @@ function nextPage() {
     if (url) {
       stopAutoplayTimer();
       location.href = url;
+    } else if (typeof hasNextSeries !== 'undefined' && hasNextSeries) {
+      showNextIssueOverlay();
     } else if (autoplayMode) {
       // End of last comic in run — stop autoplay
       autoplayMode = false;
@@ -269,6 +276,43 @@ function toggleSpread() {
   document.getElementById('page-display').classList.toggle('spread', spreadMode);
   document.getElementById('spread-btn').classList.toggle('active', spreadMode);
   updateUI();
+}
+
+// ── Manga (RTL) mode ─────────────────────────────────────────────────────────
+
+function toggleManga() {
+  mangaMode = !mangaMode;
+  document.getElementById('manga-btn').classList.toggle('active', mangaMode);
+  document.getElementById('page-area').classList.toggle('manga-rtl', mangaMode);
+}
+
+// ── Fit mode ─────────────────────────────────────────────────────────────────
+
+const FIT_MODES = ['contain', 'width', 'height'];
+const FIT_ICONS = { contain: '↔', width: '⇔', height: '⇕' };
+const FIT_TITLES = { contain: 'Fit page (F)', width: 'Fit width (F)', height: 'Fit height (F)' };
+
+function cycleFit() {
+  const idx = FIT_MODES.indexOf(fitMode);
+  fitMode = FIT_MODES[(idx + 1) % FIT_MODES.length];
+  applyFit();
+  const btn = document.getElementById('fit-btn');
+  if (btn) { btn.textContent = FIT_ICONS[fitMode]; btn.title = FIT_TITLES[fitMode]; btn.classList.toggle('active', fitMode !== 'contain'); }
+}
+
+function applyFit() {
+  const img = document.getElementById('page-img');
+  const imgB = document.getElementById('page-img-b');
+  if (fitMode === 'width') {
+    img.style.maxWidth = '100%'; img.style.maxHeight = 'none'; img.style.width = '100%'; img.style.height = 'auto';
+    if (imgB) { imgB.style.maxWidth = '100%'; imgB.style.maxHeight = 'none'; imgB.style.width = '100%'; imgB.style.height = 'auto'; }
+  } else if (fitMode === 'height') {
+    img.style.maxWidth = 'none'; img.style.maxHeight = '100vh'; img.style.width = 'auto'; img.style.height = '100%';
+    if (imgB) { imgB.style.maxWidth = 'none'; imgB.style.maxHeight = '100vh'; imgB.style.width = 'auto'; imgB.style.height = '100%'; }
+  } else {
+    img.style.maxWidth = ''; img.style.maxHeight = ''; img.style.width = ''; img.style.height = '';
+    if (imgB) { imgB.style.maxWidth = ''; imgB.style.maxHeight = ''; imgB.style.width = ''; imgB.style.height = ''; }
+  }
 }
 
 // ── Vertical scroll mode ──────────────────────────────────────────────────────

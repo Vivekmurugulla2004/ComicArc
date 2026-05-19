@@ -26,6 +26,8 @@
         </span>
         <button id="vertical-btn"  title="Vertical scroll mode (V)" onclick="toggleVertical()">☰</button>
         <button id="spread-btn"    title="Double-page spread (D)"  onclick="toggleSpread()">▭</button>
+        <button id="manga-btn"     title="Manga / right-to-left mode (R)" onclick="toggleManga()">⇐</button>
+        <button id="fit-btn"       title="Fit mode (F)" onclick="cycleFit()">↔</button>
         <button id="zoom-btn"      title="Zoom (Z / scroll wheel)" onclick="setZoom(zoomLevel > 1 ? 1 : 2.5)">⊕</button>
         <button id="autoplay-btn"  title="Autoplay — advance page every {{ autoplay_interval }} s (A)" onclick="toggleAutoplay()">▶▶</button>
         <button id="rate-btn"      title="Rate this comic"         onclick="openRating()">★</button>
@@ -45,8 +47,14 @@
       <div id="prev-zone" onclick="prevPage()" title="Previous page"></div>
       <div id="scroll-container" style="display:none" aria-label="Vertical scroll reader"></div>
       <div id="page-display">
-        <img id="page-img" src="/page/{{ comic.id }}/{{ current_page }}" alt="Page {{ current_page + 1 }}">
+        <img id="page-img" src="/page/{{ comic.id }}/{{ current_page }}" alt="Page {{ current_page + 1 }}"
+             onerror="showPageError(this)">
         <img id="page-img-b" style="display:none" alt="">
+      </div>
+      <div id="page-error" class="page-error-msg" style="display:none">
+        <div class="page-error-icon">⚠</div>
+        <div class="page-error-text">This page could not be loaded.</div>
+        <div class="page-error-hint" id="page-error-hint"></div>
       </div>
       <div id="next-zone" onclick="nextPage()" title="Next page"></div>
     </div>
@@ -102,6 +110,8 @@
           <div class="help-section-title">View</div>
           <div class="help-row"><kbd>V</kbd><span>Vertical scroll mode</span></div>
           <div class="help-row"><kbd>D</kbd><span>Double-page spread</span></div>
+          <div class="help-row"><kbd>R</kbd><span>Manga / right-to-left</span></div>
+          <div class="help-row"><kbd>F</kbd><span>Cycle fit mode</span></div>
           <div class="help-row"><kbd>Z</kbd><span>Toggle zoom</span></div>
         </div>
         <div class="help-section">
@@ -139,14 +149,57 @@
     </div>
   </div>
 
+  <!-- Next-issue overlay -->
+  {% if next_series_comic %}
+  <div id="next-issue-overlay" class="next-issue-overlay" style="display:none">
+    <div class="next-issue-card">
+      <div class="next-issue-label">Series Complete</div>
+      <div class="next-issue-up">Up next in {{ comic.series }}</div>
+      <img src="/cover/{{ next_series_comic.id }}" class="next-issue-cover" alt="{{ next_series_comic.title }}">
+      <div class="next-issue-title">{{ next_series_comic.title }}</div>
+      <div class="next-issue-actions">
+        <a href="/reader/{{ next_series_comic.id }}" class="btn-primary next-issue-go">Continue Reading →</a>
+        <button class="btn-ghost" onclick="dismissNextIssue()">Stay Here</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
   <script>
     const nextComicUrl    = {% if run_context and next_comic %}'{{ "/reader/%d?run_id=%d"|format(next_comic.comic_id, run_id) }}'{% else %}null{% endif %};
     const prevComicUrl    = {% if run_context and prev_comic %}'{{ "/reader/%d?run_id=%d&start=last"|format(prev_comic.comic_id, run_id) }}'{% else %}null{% endif %};
     const autoplaySeconds = {{ autoplay_interval }};
+    const hasNextSeries   = {{ 'true' if next_series_comic else 'false' }};
     selectedRating = {{ existing_rating }};
     initReader({{ comic.id }}, {{ current_page }}, {{ comic.page_count }});
     {% if reader_mode == 'scroll' %}toggleVertical();{% endif %}
+
+    function showPageError(img) {
+      img.style.display = 'none';
+      const errEl  = document.getElementById('page-error');
+      const hint   = document.getElementById('page-error-hint');
+      const ext    = '{{ comic.file_path.split(".")[-1].lower() if comic.file_path else "" }}';
+      errEl.style.display = 'flex';
+      if (ext === 'cbr') {
+        hint.textContent = 'CBR files require unar. Go to Settings to install it.';
+      } else if (ext === 'pdf') {
+        hint.textContent = 'PDF support requires PyMuPDF. Try re-adding the file.';
+      }
+    }
+
+    function dismissNextIssue() {
+      const el = document.getElementById('next-issue-overlay');
+      if (el) el.style.display = 'none';
+    }
+
+    function showNextIssueOverlay() {
+      const el = document.getElementById('next-issue-overlay');
+      if (el) {
+        el.style.display = 'flex';
+        stopAutoplayTimer();
+      }
+    }
   </script>
 </body>
 </html>

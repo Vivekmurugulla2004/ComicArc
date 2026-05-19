@@ -39,6 +39,11 @@ def migrate_db():
         "CREATE INDEX IF NOT EXISTS idx_comic_tags_comic ON comic_tags(comic_id)",
         "ALTER TABLE comics ADD COLUMN character TEXT",
         "ALTER TABLE comics ADD COLUMN position INTEGER",
+        "ALTER TABLE comics ADD COLUMN writer TEXT",
+        "ALTER TABLE comics ADD COLUMN penciller TEXT",
+        "ALTER TABLE comics ADD COLUMN year INTEGER",
+        "ALTER TABLE comics ADD COLUMN story_arc TEXT",
+        "ALTER TABLE comics ADD COLUMN language_iso TEXT",
         """CREATE TABLE IF NOT EXISTS reading_list (
                comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE,
                added_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -73,7 +78,13 @@ def init_db():
             series TEXT,
             issue_number TEXT,
             page_count INTEGER DEFAULT 0,
-            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            position INTEGER,
+            writer TEXT,
+            penciller TEXT,
+            year INTEGER,
+            story_arc TEXT,
+            language_iso TEXT
         );
 
         CREATE TABLE IF NOT EXISTS runs (

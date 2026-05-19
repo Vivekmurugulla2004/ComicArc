@@ -1,6 +1,8 @@
 import os
 import re
 import threading
+import zipfile
+import xml.etree.ElementTree as ET
 from database import get_db
 from comic_reader import get_page_count
 
@@ -22,6 +24,42 @@ def _file_sig(path):
         return None
 
 
+def _read_comicinfo(file_path):
+    """Extract ComicInfo.xml metadata from a CBZ/ZIP file. Returns dict or {}."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in ('.cbz', '.zip'):
+        return {}
+    try:
+        with zipfile.ZipFile(file_path, 'r') as zf:
+            names = [n for n in zf.namelist() if os.path.basename(n).lower() == 'comicinfo.xml']
+            if not names:
+                return {}
+            with zf.open(names[0]) as f:
+                root = ET.parse(f).getroot()
+        def get(tag):
+            el = root.find(tag)
+            return el.text.strip() if el is not None and el.text else None
+        result = {}
+        if get('Series'):      result['series']      = get('Series')
+        if get('Publisher'):   result['publisher']   = get('Publisher')
+        if get('Writer'):      result['writer']      = get('Writer')
+        if get('Penciller'):   result['penciller']   = get('Penciller')
+        if get('Year'):
+            try: result['year'] = int(get('Year'))
+            except ValueError: pass
+        if get('StoryArc'):    result['story_arc']   = get('StoryArc')
+        if get('LanguageISO'): result['language_iso'] = get('LanguageISO')
+        num = get('Number')
+        if num:
+            m = re.search(r'(\d+)', num)
+            if m: result['issue_number'] = m.group(1)
+        title = get('Title')
+        if title: result['title_override'] = title
+        return result
+    except Exception:
+        return {}
+
+
 def _meta(file_path, base):
     rel = os.path.relpath(file_path, base)
     parts = rel.split(os.sep)
@@ -37,7 +75,9 @@ def _meta(file_path, base):
         character, series = mid[-2], mid[-1]
     m = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
     return {'publisher': publisher, 'character': character, 'series': series,
-            'title': title, 'issue_number': m.group(1) if m else None}
+            'title': title, 'issue_number': m.group(1) if m else None,
+            'writer': None, 'penciller': None, 'year': None,
+            'story_arc': None, 'language_iso': None}
 
 
 def _run(library_path):
@@ -74,12 +114,21 @@ def _run(library_path):
                 pass  # same name+size already in library under a different path
             else:
                 m = _meta(fp, library_path)
+                ci = _read_comicinfo(fp)
+                # ComicInfo.xml overrides path-derived metadata where present
+                title      = ci.get('title_override') or m['title']
+                publisher  = ci.get('publisher')  or m['publisher']
+                series     = ci.get('series')     or m['series']
+                issue_num  = ci.get('issue_number') or m['issue_number']
                 pc = get_page_count(fp)
                 db.execute(
                     """INSERT INTO comics
-                       (title, file_path, publisher, character, series, issue_number, page_count)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (m['title'], fp, m['publisher'], m['character'], m['series'], m['issue_number'], pc)
+                       (title, file_path, publisher, character, series, issue_number,
+                        page_count, writer, penciller, year, story_arc, language_iso)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (title, fp, publisher, m['character'], series, issue_num, pc,
+                     ci.get('writer'), ci.get('penciller'), ci.get('year'),
+                     ci.get('story_arc'), ci.get('language_iso'))
                 )
                 added += 1
                 known_paths.add(fp)
