@@ -13,9 +13,10 @@ final class ThumbnailCache: @unchecked Sendable {
     private let db = DatabaseManager.shared
 
     private let coversDir: URL = {
-        let dir = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ComicArc/covers")
+        let base = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("ComicArc/covers")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()

@@ -18,8 +18,9 @@ struct SettingsView: View {
     @State private var isRestoring = false
 
     private let db = DatabaseManager.shared
-    private let comicsFolder = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+    private let comicsFolder = (FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)
+        .first ?? FileManager.default.temporaryDirectory)
         .appendingPathComponent("Comics").path
 
     private func clearAllCaches() {
@@ -236,7 +237,9 @@ struct SettingsView: View {
                 let tags      = c["tags"]         as? [String] ?? []
                 let backupId  = (c["id"]          as? Int).map { Int64($0) } ?? 0
 
-                guard !relPath.isEmpty else { continue }
+                guard !relPath.isEmpty,
+                      !relPath.contains(".."),
+                      !relPath.hasPrefix("/") else { continue }
                 let fullPath = (comicsFolder as NSString).appendingPathComponent(relPath)
 
                 guard let newId = db.restoreComic(
@@ -283,17 +286,19 @@ struct SettingsView: View {
     }
 
     private func clearLibrary() {
-        let comicsDir = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Comics")
+        let docBase = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        let comicsDir = docBase.appendingPathComponent("Comics")
         try? FileManager.default.removeItem(at: comicsDir)
 
         db.deleteAllComics()
         db.deleteAllRuns()
 
-        let coversDir = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ComicArc/covers")
+        let appBase = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        let coversDir = appBase.appendingPathComponent("ComicArc/covers")
         try? FileManager.default.removeItem(at: coversDir)
 
         clearAllCaches()
@@ -302,8 +307,9 @@ struct SettingsView: View {
 
     private func computeStorageSize() {
         Task.detached {
-            let comicsDir = FileManager.default
-                .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let comicsDir = (FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)
+                .first ?? FileManager.default.temporaryDirectory)
                 .appendingPathComponent("Comics")
             let bytes = directorySize(url: comicsDir)
             let formatted = ByteCountFormatter.string(

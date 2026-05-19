@@ -118,21 +118,45 @@
           .then(r => r.json())
           .then(d => {
             if (!d.results.length) {
-              res.innerHTML = '<div class="spot-empty">No results for "' + q + '"</div>';
+              const empty = document.createElement('div');
+              empty.className = 'spot-empty';
+              empty.textContent = `No results for "${q}"`;
+              res.innerHTML = '';
+              res.appendChild(empty);
               return;
             }
-            res.innerHTML = d.results.map(c => `
-              <a href="/comic/${c.id}" class="spot-result" onclick="closeSpotlight()">
-                <img src="/cover/${c.id}" class="spot-cover" alt="">
-                <div class="spot-info">
-                  <div class="spot-title">${c.title}</div>
-                  <div class="spot-meta">${[c.publisher, c.series].filter(Boolean).join(' · ')}</div>
-                </div>
-                ${c.progress > 0 && c.page_count > 0
-                  ? `<div class="spot-prog">${Math.round(c.progress/c.page_count*100)}%</div>`
-                  : ''}
-              </a>`).join('');
-          });
+            res.innerHTML = '';
+            d.results.forEach(c => {
+              const a = document.createElement('a');
+              a.href = `/comic/${c.id}`;
+              a.className = 'spot-result';
+              a.addEventListener('click', closeSpotlight);
+              const img = document.createElement('img');
+              img.src = `/cover/${c.id}`;
+              img.className = 'spot-cover';
+              img.alt = '';
+              const info = document.createElement('div');
+              info.className = 'spot-info';
+              const title = document.createElement('div');
+              title.className = 'spot-title';
+              title.textContent = c.title;
+              const meta = document.createElement('div');
+              meta.className = 'spot-meta';
+              meta.textContent = [c.publisher, c.series].filter(Boolean).join(' · ');
+              info.appendChild(title);
+              info.appendChild(meta);
+              a.appendChild(img);
+              a.appendChild(info);
+              if (c.progress > 0 && c.page_count > 0) {
+                const prog = document.createElement('div');
+                prog.className = 'spot-prog';
+                prog.textContent = `${Math.round(c.progress / c.page_count * 100)}%`;
+                a.appendChild(prog);
+              }
+              res.appendChild(a);
+            });
+          })
+          .catch(() => { res.innerHTML = ''; });
       }, 180);
     });
   </script>

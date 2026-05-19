@@ -545,23 +545,24 @@ function bulkAction(type) {
   if (type === 'delete') {
     if (!confirm(`Remove ${ids.length} comic${ids.length > 1 ? 's' : ''} from your library?`)) return;
     fetch('/api/bulk/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
-      .then(() => location.reload());
+      .then(() => location.reload()).catch(() => {});
   } else if (type === 'mark-read') {
     fetch('/api/bulk/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
-      .then(() => location.reload());
+      .then(() => location.reload()).catch(() => {});
   } else if (type === 'mark-unread') {
     fetch('/api/bulk/mark-unread', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})})
-      .then(() => location.reload());
+      .then(() => location.reload()).catch(() => {});
   } else if (type === 'reading-list') {
     fetch('/api/bulk/reading-list', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids, action:'add'})})
-      .then(() => { toggleSelectMode(); location.reload(); });
+      .then(() => { toggleSelectMode(); location.reload(); }).catch(() => {});
   } else if (type === 'add-to-run') {
     const sel = document.getElementById('bulk-run-select');
     const run_id = sel ? +sel.value : 0;
     if (!run_id) { alert('Pick a run first.'); return; }
     fetch('/api/bulk/add-to-run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids, run_id})})
       .then(r => r.json())
-      .then(() => { toggleSelectMode(); });
+      .then(() => { toggleSelectMode(); })
+      .catch(() => {});
   }
 }
 
@@ -599,15 +600,26 @@ function openQL(id) {
         document.getElementById('ql-prog-fill').style.width = prog + '%';
         progBar.classList.remove('arc-hidden');
       } else { progBar.classList.add('arc-hidden'); }
-      document.getElementById('ql-tags').innerHTML = d.tags.map(t =>
-        `<span class="ql-tag">${t}</span>`).join('');
+      const tagsEl = document.getElementById('ql-tags');
+      tagsEl.innerHTML = '';
+      (d.tags || []).forEach(t => {
+        const s = document.createElement('span');
+        s.className = 'ql-tag'; s.textContent = t; tagsEl.appendChild(s);
+      });
       document.getElementById('ql-stars').innerHTML = [1,2,3,4,5].map(i =>
-        `<span class="star${i <= d.rating ? ' filled' : ''}" onclick="qlRate(${d.id},${i})">★</span>`).join('');
-      document.getElementById('ql-runs-in').innerHTML = d.runs_in.length
-        ? 'In: ' + d.runs_in.map(r => `<a href="/runs/${r.id}">${r.title}</a>`).join(', ')
-        : '';
-      document.getElementById('ql-read-btn').href = `/reader/${d.id}`;
-      document.getElementById('ql-detail-link').href = `/comic/${d.id}`;
+        `<span class="star${i <= d.rating ? ' filled' : ''}" onclick="qlRate(${+d.id},${i})">★</span>`).join('');
+      const runsInEl = document.getElementById('ql-runs-in');
+      runsInEl.innerHTML = '';
+      if (d.runs_in && d.runs_in.length) {
+        runsInEl.appendChild(document.createTextNode('In: '));
+        d.runs_in.forEach((r, i) => {
+          if (i > 0) runsInEl.appendChild(document.createTextNode(', '));
+          const a = document.createElement('a');
+          a.href = `/runs/${+r.id}`; a.textContent = r.title; runsInEl.appendChild(a);
+        });
+      }
+      document.getElementById('ql-read-btn').href = `/reader/${+d.id}`;
+      document.getElementById('ql-detail-link').href = `/comic/${+d.id}`;
       const favBtn = document.getElementById('ql-fav-btn');
       favBtn.classList.toggle('active', !!d.is_favorite);
       favBtn.dataset.state = d.is_favorite ? '1' : '0';
@@ -615,8 +627,14 @@ function openQL(id) {
       rlBtn.classList.toggle('active', !!d.in_reading_list);
       rlBtn.dataset.state = d.in_reading_list ? '1' : '0';
       const runSel = document.getElementById('ql-run-select');
-      runSel.innerHTML = '<option value="">Add to run…</option>' +
-        d.all_runs.map(r => `<option value="${r.id}">${r.title}</option>`).join('');
+      runSel.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = ''; placeholder.textContent = 'Add to run…';
+      runSel.appendChild(placeholder);
+      (d.all_runs || []).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = +r.id; opt.textContent = r.title; runSel.appendChild(opt);
+      });
       // Prev / next issue nav
       const prevBtn = document.getElementById('ql-prev-btn');
       const nextBtn = document.getElementById('ql-next-btn');
@@ -627,7 +645,8 @@ function openQL(id) {
       panel.classList.remove('arc-hidden');
       bd.classList.remove('arc-hidden');
       requestAnimationFrame(() => { panel.classList.add('open'); bd.classList.add('open'); });
-    });
+    })
+    .catch(() => {});
 }
 
 function closeQL() {
@@ -681,7 +700,8 @@ function qlAddToRun() {
   fetch('/api/bulk/add-to-run', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ids:[qlComicId], run_id})})
     .then(r => r.json())
-    .then(d => { if (d.ok) { sel.value = ''; alert('Added to run!'); } });
+    .then(d => { if (d.ok) { sel.value = ''; alert('Added to run!'); } })
+    .catch(() => {});
 }
 
 // ── Series edit modal ─────────────────────────────────────────────────────────
@@ -701,15 +721,22 @@ function openSeriesEdit(publisher, series, character) {
       _sePublisher = d.resolved_publisher || publisher;
       document.getElementById('se-desc').value = d.description || '';
       const grid = document.getElementById('se-covers');
-      grid.innerHTML = d.covers.map(c =>
-        `<div class="se-cover-item ${d.custom_cover_id == c.id ? 'active' : ''}"
-              data-id="${c.id}" onclick="seSelectCover(this)">
-           <img src="/cover/${c.id}" alt="">
-           <div class="se-cover-title">${c.title}</div>
-         </div>`
-      ).join('');
+      grid.innerHTML = '';
+      (d.covers || []).forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'se-cover-item' + (d.custom_cover_id == c.id ? ' active' : '');
+        item.dataset.id = c.id;
+        item.onclick = () => seSelectCover(item);
+        const img = document.createElement('img');
+        img.src = `/cover/${+c.id}`; img.alt = '';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'se-cover-title'; titleEl.textContent = c.title;
+        item.appendChild(img); item.appendChild(titleEl);
+        grid.appendChild(item);
+      });
       document.getElementById('series-edit-modal').classList.remove('arc-hidden');
-    });
+    })
+    .catch(() => {});
 }
 
 function closeSeriesEdit() {
@@ -732,7 +759,7 @@ function saveSeriesMeta() {
   }).then(r => r.json()).then(d => {
     if (d.ok) { closeSeriesEdit(); location.reload(); }
     else alert('Save failed: ' + (d.error || 'unknown'));
-  });
+  }).catch(() => { alert('Save failed: network error.'); });
 }
 
 // ── Mark Series Read ──────────────────────────────────────────────────────────
@@ -749,7 +776,7 @@ function markSeriesRead(btn) {
   }).then(r => r.json()).then(d => {
     if (d.ok) location.reload();
     else alert('Error: ' + (d.error || 'unknown'));
-  });
+  }).catch(() => { alert('Error: network error.'); });
 }
 
 // ── Series → Run ──────────────────────────────────────────────────────────────
@@ -851,8 +878,14 @@ function handleFiles(files) {
   valid.forEach(file => {
     const row = document.createElement('div');
     row.className = 'import-item';
-    row.innerHTML = `<span class="import-item-name">${file.name}</span>
-                     <span class="import-item-status">Uploading…</span>`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'import-item-name';
+    nameSpan.textContent = file.name;
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'import-item-status';
+    statusSpan.textContent = 'Uploading…';
+    row.appendChild(nameSpan);
+    row.appendChild(statusSpan);
     queue.appendChild(row);
     const status = row.querySelector('.import-item-status');
     const fd = new FormData();

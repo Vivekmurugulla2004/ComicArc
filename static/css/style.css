@@ -497,7 +497,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
   transform: translateY(-1px);
   box-shadow: 0 0 24px rgba(247,201,72,0.45);
 }
-.btn-primary.full-width { width: 100%; text-align: center; }
 
 .btn-ghost {
   display: inline-block;
@@ -1391,13 +1390,6 @@ kbd {
   border: 1px solid rgba(239,35,60,0.25);
   border-radius: var(--radius);
   background: rgba(239,35,60,0.04);
-}
-.danger-zone.minimal {
-  margin-top: 24px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
 }
 .danger-zone h3 {
   font-family: 'Bebas Neue', sans-serif;

@@ -52,8 +52,9 @@ enum ComicImporter {
     private static func pathMeta(url: URL) -> ComicMeta {
         let filename = url.deletingPathExtension().lastPathComponent
 
-        let docsPath = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let docsPath = (FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory)
             .appendingPathComponent("Comics").path
 
         var relative = url.path
