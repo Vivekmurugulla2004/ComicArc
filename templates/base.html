@@ -20,7 +20,25 @@
       <a href="/stats" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
       <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
     </div>
+    <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
+      <span class="spotlight-trigger-icon">⌕</span>
+      <span class="spotlight-trigger-label">Search…</span>
+      <kbd class="spotlight-trigger-kbd">⌘K</kbd>
+    </button>
   </nav>
+
+  <!-- Spotlight search overlay -->
+  <div id="spotlight-overlay" class="spotlight-overlay arc-hidden" onclick="closeSpotlight()">
+    <div class="spotlight-box" onclick="event.stopPropagation()">
+      <div class="spotlight-input-row">
+        <span class="spotlight-icon">⌕</span>
+        <input id="spotlight-input" class="spotlight-input" type="text"
+               placeholder="Search comics, series, publishers…" autocomplete="off" spellcheck="false">
+        <kbd class="spotlight-esc-hint" onclick="closeSpotlight()">Esc</kbd>
+      </div>
+      <div id="spotlight-results" class="spotlight-results"></div>
+    </div>
+  </div>
 
   <main>
     {% block content %}{% endblock %}
@@ -59,6 +77,63 @@
         if (img.complete) img.classList.add('loaded');
         else img.addEventListener('load', () => img.classList.add('loaded'));
       });
+    });
+
+    // ── Spotlight search ─────────────────────────────────────────────────────
+    let _spotDebounce = null;
+
+    function openSpotlight() {
+      document.getElementById('spotlight-overlay').classList.remove('arc-hidden');
+      const inp = document.getElementById('spotlight-input');
+      inp.value = '';
+      document.getElementById('spotlight-results').innerHTML = '';
+      setTimeout(() => inp.focus(), 40);
+    }
+
+    function closeSpotlight() {
+      document.getElementById('spotlight-overlay').classList.add('arc-hidden');
+    }
+
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const ol = document.getElementById('spotlight-overlay');
+        if (ol.classList.contains('arc-hidden')) openSpotlight();
+        else closeSpotlight();
+      }
+      if (e.key === 'Escape') {
+        const ol = document.getElementById('spotlight-overlay');
+        if (!ol.classList.contains('arc-hidden')) { closeSpotlight(); e.stopPropagation(); }
+      }
+    });
+
+    document.getElementById('spotlight-input').addEventListener('input', function() {
+      const q = this.value.trim();
+      clearTimeout(_spotDebounce);
+      const res = document.getElementById('spotlight-results');
+      if (!q) { res.innerHTML = ''; return; }
+      res.innerHTML = '<div class="spot-loading">Searching…</div>';
+      _spotDebounce = setTimeout(() => {
+        fetch(`/api/search?q=${encodeURIComponent(q)}&limit=12`)
+          .then(r => r.json())
+          .then(d => {
+            if (!d.results.length) {
+              res.innerHTML = '<div class="spot-empty">No results for "' + q + '"</div>';
+              return;
+            }
+            res.innerHTML = d.results.map(c => `
+              <a href="/comic/${c.id}" class="spot-result" onclick="closeSpotlight()">
+                <img src="/cover/${c.id}" class="spot-cover" alt="">
+                <div class="spot-info">
+                  <div class="spot-title">${c.title}</div>
+                  <div class="spot-meta">${[c.publisher, c.series].filter(Boolean).join(' · ')}</div>
+                </div>
+                ${c.progress > 0 && c.page_count > 0
+                  ? `<div class="spot-prog">${Math.round(c.progress/c.page_count*100)}%</div>`
+                  : ''}
+              </a>`).join('');
+          });
+      }, 180);
     });
   </script>
 </body>

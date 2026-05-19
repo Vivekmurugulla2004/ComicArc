@@ -158,7 +158,7 @@
          data-href="/?publisher={{ current_publisher|urlencode }}&character={{ g.group_name|urlencode }}&view=series">
       <div class="series-card" onclick="window.location=this.closest('.series-card-wrap').dataset.href">
         <div class="series-cover-wrap">
-          <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.group_name }}">
+          <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.group_name }}" loading="lazy">
           {% if g.completed == g.issue_count and g.issue_count > 0 %}
           <div class="series-badge done">Done</div>
           {% elif g.started > 0 %}
@@ -193,7 +193,7 @@
          data-char="{{ g.character or '' }}">
       <div class="series-card" onclick="window.location=this.closest('.series-card-wrap').dataset.href">
         <div class="series-cover-wrap">
-          <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.series }}">
+          <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.series }}" loading="lazy">
           {% if g.completed == g.issue_count and g.issue_count > 0 %}
           <div class="series-badge done">Done</div>
           {% elif g.started > 0 %}
@@ -249,7 +249,7 @@
 {% else %}
 <div class="comics-grid" id="comics-grid">
   {% for comic in comics %}
-  <div class="comic-card" data-id="{{ comic.id }}" draggable="true"
+  <div class="comic-card" data-id="{{ comic.id }}" data-issue="{{ comic.issue_number or '' }}" draggable="true"
        onclick="if(selectMode){toggleCardSelect({{ comic.id }},this,event)}else if(!this.dataset.dragging){openQL({{ comic.id }})}">
     <div class="cover-wrap">
       <div class="select-check">✓</div>
@@ -636,8 +636,10 @@ function closeQL() {
   panel.classList.remove('open');
   bd.classList.remove('open');
   panel.addEventListener('transitionend', () => {
-    panel.classList.add('arc-hidden');
-    bd.classList.add('arc-hidden');
+    if (!panel.classList.contains('open')) {
+      panel.classList.add('arc-hidden');
+      bd.classList.add('arc-hidden');
+    }
   }, {once: true});
 }
 
@@ -774,6 +776,7 @@ function addSeriesToRun() {
   });
 }
 
+
 const dropArea = document.getElementById('drop-area');
 const fileInput = document.getElementById('file-input');
 const queue    = document.getElementById('import-queue');
@@ -864,5 +867,29 @@ function handleFiles(files) {
       .finally(() => { if (++done === valid.length) setTimeout(() => location.reload(), 1200); });
   });
 }
+
+// ── Missing issue detection ────────────────────────────────────────────────────
+(function detectMissingIssues() {
+  const grid = document.getElementById('comics-grid');
+  if (!grid) return;
+  const cards = Array.from(grid.querySelectorAll('.comic-card[data-issue]'));
+  const withNums = cards.filter(c => c.dataset.issue !== '');
+  if (withNums.length < 2) return;
+  const nums = withNums.map(c => parseInt(c.dataset.issue, 10)).filter(n => !isNaN(n));
+  if (nums.length < 2) return;
+  for (let i = 0; i < withNums.length - 1; i++) {
+    const a = parseInt(withNums[i].dataset.issue, 10);
+    const b = parseInt(withNums[i + 1].dataset.issue, 10);
+    if (isNaN(a) || isNaN(b)) continue;
+    const gap = b - a;
+    if (gap > 1 && gap <= 20) {
+      const pill = document.createElement('div');
+      pill.className = 'missing-issues-pill';
+      pill.title = `Issues #${a + 1}–#${b - 1} not in library`;
+      pill.textContent = gap === 2 ? `#${a + 1} missing` : `#${a + 1}–#${b - 1} missing`;
+      withNums[i + 1].insertAdjacentElement('beforebegin', pill);
+    }
+  }
+})();
 </script>
 {% endblock %}
