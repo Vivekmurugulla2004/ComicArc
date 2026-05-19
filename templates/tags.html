@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Tags — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tags</h1>
+    <p class="page-subtitle">{{ tags|length }} tag{{ 's' if tags|length != 1 }} across your library. Click a tag name to rename it.</p>
+  </div>
+</div>
+
+{% if not tags %}
+<div class="empty-state">
+  <div class="empty-icon">🏷</div>
+  <div class="empty-title">No tags yet</div>
+  <div class="empty-sub">Open any comic and add a tag to get started.</div>
+  <a href="/" class="btn-primary" style="margin-top:16px">← Library</a>
+</div>
+{% else %}
+<div class="tags-manage-grid" id="tags-grid">
+  {% for tag in tags %}
+  <div class="tm-row" id="tm-row-{{ tag.id }}" data-id="{{ tag.id }}" data-name="{{ tag.name }}">
+    <div class="tm-left">
+      <span class="tm-name" id="tm-name-{{ tag.id }}" onclick="startRename({{ tag.id }})">{{ tag.name }}</span>
+      <input class="tm-rename-input" id="tm-input-{{ tag.id }}" type="text"
+             value="{{ tag.name }}" style="display:none"
+             onblur="commitRename({{ tag.id }})"
+             onkeydown="renameKey(event, {{ tag.id }})">
+    </div>
+    <div class="tm-right">
+      <a href="/?tag={{ tag.name|urlencode }}" class="tm-count" title="Browse comics with this tag">
+        {{ tag.comic_count }} comic{{ 's' if tag.comic_count != 1 }}
+      </a>
+      <button class="tm-btn tm-rename-btn" onclick="startRename({{ tag.id }})" title="Rename">✎</button>
+      <button class="tm-btn tm-delete-btn" onclick="deleteTag({{ tag.id }}, '{{ tag.name }}')" title="Delete tag">✕</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startRename(id) {
+  const nameEl  = document.getElementById('tm-name-' + id);
+  const inputEl = document.getElementById('tm-input-' + id);
+  nameEl.style.display  = 'none';
+  inputEl.style.display = '';
+  inputEl.focus();
+  inputEl.select();
+}
+
+function commitRename(id) {
+  const nameEl  = document.getElementById('tm-name-' + id);
+  const inputEl = document.getElementById('tm-input-' + id);
+  const newName = inputEl.value.trim().toLowerCase();
+  if (!newName || newName === nameEl.textContent.trim()) {
+    inputEl.style.display = 'none';
+    nameEl.style.display  = '';
+    return;
+  }
+  fetch(`/api/tags/${id}/rename`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: newName})
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) { inputEl.style.display = 'none'; nameEl.style.display = ''; return; }
+    if (d.merged) {
+      // Tag was merged into an existing one — remove this row
+      const row = document.getElementById('tm-row-' + id);
+      if (row) { row.style.opacity = '0'; row.style.transition = 'opacity .25s'; setTimeout(() => row.remove(), 260); }
+      // Update count on the surviving tag row if visible
+      location.reload();
+    } else {
+      nameEl.textContent    = d.name;
+      inputEl.value         = d.name;
+      inputEl.style.display = 'none';
+      nameEl.style.display  = '';
+      // Update browse link
+      const countLink = document.querySelector(`#tm-row-${id} .tm-count`);
+      if (countLink) countLink.href = `/?tag=${encodeURIComponent(d.name)}`;
+    }
+  }).catch(() => { inputEl.style.display = 'none'; nameEl.style.display = ''; });
+}
+
+function renameKey(e, id) {
+  if (e.key === 'Enter')  { e.preventDefault(); commitRename(id); }
+  if (e.key === 'Escape') { document.getElementById('tm-input-' + id).style.display = 'none'; document.getElementById('tm-name-' + id).style.display = ''; }
+}
+
+function deleteTag(id, name) {
+  if (!confirm(`Delete tag "${name}"? It will be removed from all comics.`)) return;
+  fetch(`/api/tags/${id}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        const row = document.getElementById('tm-row-' + id);
+        if (row) { row.style.opacity = '0'; row.style.transition = 'opacity .25s'; setTimeout(() => row.remove(), 260); }
+      }
+    }).catch(() => {});
+}
+</script>
+{% endblock %}

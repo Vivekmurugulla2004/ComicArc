@@ -19,11 +19,22 @@
     <div class="settings-actions">
       <button class="btn-primary" onclick="saveFolder()">Save &amp; Rescan</button>
       {% if scan_status.running %}
-      <span class="settings-scan-status" id="scan-label">Scanning… <span id="scan-prog"></span></span>
+      <span class="settings-scan-status" id="scan-label">Scanning…</span>
       {% else %}
       <span class="settings-scan-status hidden" id="scan-label"></span>
       {% endif %}
+      <button id="scan-cancel-btn" class="btn-ghost {% if not scan_status.running %}hidden{% endif %}"
+              onclick="cancelScan()">Cancel</button>
     </div>
+  </div>
+
+  <!-- Duplicate Warning -->
+  <div class="settings-card" id="dup-card" style="display:none">
+    <div class="settings-card-header">
+      <h2>⚠ Duplicate Issues Detected</h2>
+      <p>These comics share the same title and issue number. You may want to delete the extra copies.</p>
+    </div>
+    <div id="dup-list" class="dup-list"></div>
   </div>
 
   <!-- Reader Mode -->
@@ -217,18 +228,41 @@ function saveFolder() {
   .catch(() => { hint.textContent = 'Save failed: network error.'; label.classList.add('hidden'); });
 }
 
+let _scanPollCount = 0;
+const _SCAN_TIMEOUT_POLLS = 500; // ~5 min at 600 ms each
+
 function pollScan() {
+  _scanPollCount++;
   fetch('/api/scan/status').then(r => r.json()).then(s => {
-    const label = document.getElementById('scan-label');
+    const label  = document.getElementById('scan-label');
+    const cancel = document.getElementById('scan-cancel-btn');
     if (s.running) {
       const pct = s.total > 0 ? ` (${s.done}/${s.total})` : '';
       label.textContent = 'Scanning…' + pct;
+      if (cancel) cancel.classList.remove('hidden');
+      if (_scanPollCount >= _SCAN_TIMEOUT_POLLS) {
+        label.textContent = 'Scan is taking longer than expected.';
+        if (cancel) cancel.classList.remove('hidden');
+        return;
+      }
       setTimeout(pollScan, 600);
     } else {
+      if (cancel) cancel.classList.add('hidden');
+      _scanPollCount = 0;
       label.textContent = s.added > 0 ? `Done — ${s.added} new comics added` : 'Done — library up to date';
       setTimeout(() => label.classList.add('hidden'), 4000);
+      loadDuplicates();
     }
   }).catch(() => {});
+}
+
+function cancelScan() {
+  fetch('/api/scan/cancel', {method: 'POST'}).catch(() => {});
+  const label  = document.getElementById('scan-label');
+  const cancel = document.getElementById('scan-cancel-btn');
+  label.textContent = 'Scan cancelled.';
+  if (cancel) cancel.classList.add('hidden');
+  setTimeout(() => label.classList.add('hidden'), 3000);
 }
 
 function setMode(mode) {
@@ -312,5 +346,34 @@ function copyCmd(cmd) {
     if (el) { el.textContent = 'Copied!'; setTimeout(() => el.textContent = '', 2000); }
   });
 }
+
+function loadDuplicates() {
+  fetch('/api/scan/duplicates')
+    .then(r => r.json())
+    .then(d => {
+      const card = document.getElementById('dup-card');
+      const list = document.getElementById('dup-list');
+      if (!d.duplicates || !d.duplicates.length) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      list.innerHTML = '';
+      d.duplicates.forEach(dup => {
+        const row = document.createElement('div');
+        row.className = 'dup-row';
+        const label = document.createElement('div');
+        label.className = 'dup-label';
+        label.textContent = `${dup.title} #${dup.issue_number}`;
+        row.appendChild(label);
+        dup.paths.forEach(p => {
+          const pl = document.createElement('div');
+          pl.className = 'dup-path';
+          pl.textContent = p;
+          row.appendChild(pl);
+        });
+        list.appendChild(row);
+      });
+    }).catch(() => {});
+}
+
+document.addEventListener('DOMContentLoaded', loadDuplicates);
 </script>
 {% endblock %}

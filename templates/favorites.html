@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Favorites — ComicArc{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Favorites</h1>
+    <p class="page-subtitle">{{ comics|length }} comic{{ 's' if comics|length != 1 }} you've marked as favorites.</p>
+  </div>
+</div>
+
+{% if not comics %}
+<div class="empty-state">
+  <div class="empty-icon">♥</div>
+  <div class="empty-title">No favorites yet</div>
+  <div class="empty-sub">Open any comic and tap the ♥ button to add it here.</div>
+  <a href="/" class="btn-primary" style="margin-top:16px">← Library</a>
+</div>
+{% else %}
+<div class="fav-grid">
+  {% set ns = namespace(last_series='') %}
+  {% for comic in comics %}
+    {% if comic.series != ns.last_series %}
+      {% if not loop.first %}</div>{% endif %}
+      <div class="fav-series-group">
+      <div class="fav-series-label">{{ comic.series if comic.series != 'General' else comic.publisher }}</div>
+      <div class="fav-cards">
+    {% set ns.last_series = comic.series %}
+    {% endif %}
+    <a href="/comic/{{ comic.id }}" class="fav-card">
+      <div class="fav-cover-wrap">
+        <img src="/cover/{{ comic.id }}" class="fav-cover" alt="{{ comic.title }}" loading="lazy">
+        {% if comic.page_count > 0 and comic.progress > 0 %}
+        <div class="fav-prog-bar">
+          <div class="fav-prog-fill" style="width:{{ (comic.progress / comic.page_count * 100)|int }}%"></div>
+        </div>
+        {% endif %}
+        {% if comic.rating %}
+        <div class="fav-rating-badge">{{ comic.rating }}★</div>
+        {% endif %}
+      </div>
+      <div class="fav-card-title">{{ comic.title }}</div>
+      {% if comic.issue_number %}<div class="fav-card-issue">#{{ comic.issue_number }}</div>{% endif %}
+    </a>
+  {% endfor %}
+  </div></div>
+{% endif %}
+{% endblock %}

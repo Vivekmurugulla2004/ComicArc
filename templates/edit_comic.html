@@ -31,6 +31,26 @@
     <input id="issue_number" type="text" name="issue_number" value="{{ comic.issue_number or '' }}"
            placeholder="e.g. 42">
 
+    <label for="year">Year <span class="optional">(optional)</span></label>
+    <input id="year" type="number" name="year" value="{{ comic.year or '' }}"
+           placeholder="e.g. 2000" min="1900" max="2100">
+
+    <label for="writer">Writer <span class="optional">(optional)</span></label>
+    <input id="writer" type="text" name="writer" value="{{ comic.writer or '' }}"
+           placeholder="e.g. Brian Michael Bendis">
+
+    <label for="penciller">Artist <span class="optional">(optional)</span></label>
+    <input id="penciller" type="text" name="penciller" value="{{ comic.penciller or '' }}"
+           placeholder="e.g. Mark Bagley">
+
+    <label for="story_arc">Story Arc <span class="optional">(optional)</span></label>
+    <input id="story_arc" type="text" name="story_arc" value="{{ comic.story_arc or '' }}"
+           placeholder="e.g. The Death of Spider-Man">
+
+    <label for="notes">Personal Notes <span class="optional">(optional)</span></label>
+    <textarea id="notes" name="notes" rows="3"
+              placeholder="Your thoughts, reading order tips, spoiler warnings…">{{ comic.notes or '' }}</textarea>
+
     <div class="form-actions">
       <button type="submit" class="btn-primary">Save</button>
       <a href="/comic/{{ comic.id }}" class="btn-ghost">Cancel</a>

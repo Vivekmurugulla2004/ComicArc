@@ -17,8 +17,12 @@
     <div class="nav-links">
       <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Library</a>
       <a href="/runs" class="nav-link {% if request.endpoint in ['runs','run_detail','new_run','edit_run'] %}active{% endif %}">Runs</a>
+      <a href="/favorites" class="nav-link {% if request.endpoint == 'favorites_page' %}active{% endif %}">Favorites</a>
       <a href="/stats" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+      <a href="/reading-list" class="nav-link {% if request.endpoint == 'reading_list_page' %}active{% endif %}">Want to Read</a>
+      <a href="/tags" class="nav-link {% if request.endpoint == 'tags_page' %}active{% endif %}">Tags</a>
       <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
+      <a href="/trash" class="nav-link nav-link-trash {% if request.endpoint == 'trash' %}active{% endif %}" title="Recently Deleted">🗑</a>
     </div>
     <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
       <span class="spotlight-trigger-icon">⌕</span>

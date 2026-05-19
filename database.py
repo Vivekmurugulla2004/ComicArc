@@ -44,6 +44,7 @@ def migrate_db():
         "ALTER TABLE comics ADD COLUMN year INTEGER",
         "ALTER TABLE comics ADD COLUMN story_arc TEXT",
         "ALTER TABLE comics ADD COLUMN language_iso TEXT",
+        "ALTER TABLE comics ADD COLUMN deleted_at TIMESTAMP",
         """CREATE TABLE IF NOT EXISTS reading_list (
                comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE,
                added_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -56,6 +57,7 @@ def migrate_db():
                custom_cover_id INTEGER REFERENCES comics(id) ON DELETE SET NULL,
                PRIMARY KEY (publisher, series)
            )""",
+        "ALTER TABLE comics ADD COLUMN notes TEXT",
     ]:
         try:
             conn.execute(sql)

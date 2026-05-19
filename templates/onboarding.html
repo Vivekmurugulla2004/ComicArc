@@ -184,6 +184,27 @@
       font-size: 56px;
       color: #4ade80;
     }
+
+    /* Feature grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+    .feature-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 14px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .feature-tile-icon { font-size: 22px; }
+    .feature-tile-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .feature-tile-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -193,6 +214,7 @@
       <span class="dot" id="dot-2"></span>
       <span class="dot" id="dot-3"></span>
       <span class="dot" id="dot-4"></span>
+      <span class="dot" id="dot-5"></span>
     </div>
 
     <!-- Step 1: Welcome -->
@@ -229,8 +251,40 @@
       <p class="hint ok" id="scan-count"></p>
     </div>
 
-    <!-- Step 4: Reader mode -->
+    <!-- Step 4: Feature highlights -->
     <div class="step" id="step-4">
+      <h2>Everything you need</h2>
+      <p>ComicArc comes with powerful tools built right in.</p>
+      <div class="feature-grid">
+        <div class="feature-tile">
+          <div class="feature-tile-icon">📄</div>
+          <div class="feature-tile-name">Auto Metadata</div>
+          <div class="feature-tile-desc">CBZ files with ComicInfo.xml fill in writer, artist, year, and more automatically.</div>
+        </div>
+        <div class="feature-tile">
+          <div class="feature-tile-icon">🗑</div>
+          <div class="feature-tile-name">Recently Deleted</div>
+          <div class="feature-tile-desc">Deleted comics stay in Trash for 30 days so you can restore them anytime.</div>
+        </div>
+        <div class="feature-tile">
+          <div class="feature-tile-icon">🏷</div>
+          <div class="feature-tile-name">Tags</div>
+          <div class="feature-tile-desc">Tag any issue and use the search to find your whole collection your way.</div>
+        </div>
+        <div class="feature-tile">
+          <div class="feature-tile-icon">▶</div>
+          <div class="feature-tile-name">Autoplay</div>
+          <div class="feature-tile-desc">Reader autoplay advances pages automatically and carries over to the next issue.</div>
+        </div>
+      </div>
+      <div class="step-nav">
+        <button class="btn-ghost" onclick="goTo(3)" style="visibility:hidden">Back</button>
+        <button class="btn-primary" onclick="goTo(5)">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Reader mode -->
+    <div class="step" id="step-5">
       <h2>How do you like to read?</h2>
       <p>Choose your default reading style. You can change this any time.</p>
       <div class="mode-cards">

@@ -169,9 +169,15 @@ function nextPage() {
     const url = nextComicUrl || document.querySelector('.run-nav-next')?.href || null;
     if (url) {
       stopAutoplayTimer();
-      location.href = url;
+      const backParam = '&back=' + encodeURIComponent(typeof readerBackUrl !== 'undefined' ? readerBackUrl : '/');
+      const sep = url.includes('?') ? '&' : '?';
+      location.href = (autoplayMode ? url + sep + 'autoplay=1' : url) + backParam;
     } else if (typeof hasNextSeries !== 'undefined' && hasNextSeries) {
       showNextIssueOverlay();
+    } else if (typeof hasFinishSuggestion !== 'undefined' && hasFinishSuggestion) {
+      stopAutoplayTimer();
+      const overlay = document.getElementById('finish-overlay');
+      if (overlay) overlay.style.display = 'flex';
     } else if (autoplayMode) {
       // End of last comic in run — stop autoplay
       autoplayMode = false;
@@ -193,7 +199,8 @@ function prevPage() {
     const url = prevComicUrl || document.querySelector('.run-nav-prev')?.href || null;
     if (url) {
       stopAutoplayTimer();
-      location.href = url;
+      const sep = url.includes('?') ? '&' : '?';
+      location.href = autoplayMode ? url + sep + 'autoplay=1' : url;
     }
   }
 }

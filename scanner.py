@@ -8,8 +8,14 @@ from comic_reader import get_page_count
 
 SUPPORTED = {'.cbz', '.cbr', '.pdf', '.jpg', '.jpeg', '.png'}
 
-_state = {'running': False, 'total': 0, 'done': 0, 'added': 0}
+_state = {'running': False, 'total': 0, 'done': 0, 'added': 0, 'cancelled': False, 'duplicates': []}
 _lock = threading.Lock()
+
+
+def get_duplicates():
+    """Return list of {title, issue_number, paths} groups with >1 entry."""
+    with _lock:
+        return list(_state['duplicates'])
 
 
 def get_status():
@@ -18,8 +24,11 @@ def get_status():
 
 
 def _file_sig(path):
+    """Unique-enough fingerprint: full path + size. Full path avoids false
+    deduplication of two different files that happen to share a filename and
+    byte count — the old basename-only approach was collision-prone."""
     try:
-        return f"{os.path.basename(path)}:{os.path.getsize(path)}"
+        return f"{path}:{os.path.getsize(path)}"
     except OSError:
         return None
 
@@ -60,6 +69,19 @@ def _read_comicinfo(file_path):
         return {}
 
 
+def _normalize_series(name):
+    """Strip trailing year suffixes and extra whitespace so variants of the same
+    series name group together.  E.g. 'Ultimate Spider-Man (2000)' → 'Ultimate Spider-Man'."""
+    if not name:
+        return name
+    name = name.strip()
+    # Remove trailing parenthesised year: "(2000)", "(2000-2009)", "(Vol. 1)"
+    name = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
+    # Remove trailing volume marker: "Vol. 1", "Vol 2"
+    name = re.sub(r'\s+[Vv]ol\.?\s*\d+\s*$', '', name).strip()
+    return name
+
+
 def _meta(file_path, base):
     rel = os.path.relpath(file_path, base)
     parts = rel.split(os.sep)
@@ -70,9 +92,9 @@ def _meta(file_path, base):
     if not mid:
         character, series = None, 'General'
     elif len(mid) == 1:
-        character, series = None, mid[0]
+        character, series = None, _normalize_series(mid[0])
     else:
-        character, series = mid[-2], mid[-1]
+        character, series = mid[-2], _normalize_series(mid[-1])
     m = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
     return {'publisher': publisher, 'character': character, 'series': series,
             'title': title, 'issue_number': m.group(1) if m else None,
@@ -82,7 +104,7 @@ def _meta(file_path, base):
 
 def _run(library_path):
     with _lock:
-        _state.update({'running': True, 'total': 0, 'done': 0, 'added': 0})
+        _state.update({'running': True, 'total': 0, 'done': 0, 'added': 0, 'cancelled': False, 'duplicates': []})
 
     all_files = []
     for root, dirs, files in os.walk(library_path):
@@ -106,6 +128,9 @@ def _run(library_path):
 
     added = 0
     for i, fp in enumerate(all_files):
+        with _lock:
+            if _state.get('cancelled'):
+                break
         try:
             sig = _file_sig(fp)
             if fp in known_paths:
@@ -115,10 +140,11 @@ def _run(library_path):
             else:
                 m = _meta(fp, library_path)
                 ci = _read_comicinfo(fp)
-                # ComicInfo.xml overrides path-derived metadata where present
+                # ComicInfo.xml overrides path-derived metadata where present.
+                # Normalize series names from both sources to avoid spurious splits.
                 title      = ci.get('title_override') or m['title']
                 publisher  = ci.get('publisher')  or m['publisher']
-                series     = ci.get('series')     or m['series']
+                series     = _normalize_series(ci.get('series') or m['series'])
                 issue_num  = ci.get('issue_number') or m['issue_number']
                 pc = get_page_count(fp)
                 db.execute(
@@ -142,6 +168,24 @@ def _run(library_path):
             with _lock:
                 _state['done'] = i + 1
                 _state['added'] = added
+
+    # Detect duplicates: same (title, issue_number) combination in the active library
+    dup_rows = db.execute("""
+        SELECT title, issue_number, COUNT(*) as cnt
+        FROM comics
+        WHERE deleted_at IS NULL AND issue_number IS NOT NULL AND issue_number != ''
+        GROUP BY LOWER(title), issue_number
+        HAVING cnt > 1
+    """).fetchall()
+    dups = []
+    for row in dup_rows:
+        paths = [r['file_path'] for r in db.execute(
+            "SELECT file_path FROM comics WHERE LOWER(title)=LOWER(?) AND issue_number=? AND deleted_at IS NULL",
+            (row['title'], row['issue_number'])
+        ).fetchall()]
+        dups.append({'title': row['title'], 'issue_number': row['issue_number'], 'paths': paths})
+    with _lock:
+        _state['duplicates'] = dups
 
     # Prune stale entries: comics under library_path whose file no longer exists
     stale = [
@@ -171,3 +215,10 @@ def scan_library(library_path):
         return False
     threading.Thread(target=_run, args=(library_path,), daemon=True).start()
     return True
+
+
+def cancel_scan():
+    """Signal the running scan to stop after its current file."""
+    with _lock:
+        if _state['running']:
+            _state['cancelled'] = True
