@@ -24,11 +24,17 @@
       <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
       <a href="/trash" class="nav-link nav-link-trash {% if request.endpoint == 'trash' %}active{% endif %}" title="Recently Deleted">🗑</a>
     </div>
-    <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
-      <span class="spotlight-trigger-icon">⌕</span>
-      <span class="spotlight-trigger-label">Search…</span>
-      <kbd class="spotlight-trigger-kbd">⌘K</kbd>
-    </button>
+    <div class="nav-actions">
+      <button class="nav-rescan-btn" id="nav-rescan-btn" onclick="navRescan()" title="Re-scan library">
+        <span class="nav-rescan-icon" id="nav-rescan-icon">↻</span>
+        <span class="nav-rescan-label" id="nav-rescan-label">Scan</span>
+      </button>
+      <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
+        <span class="spotlight-trigger-icon">⌕</span>
+        <span class="spotlight-trigger-label">Search…</span>
+        <kbd class="spotlight-trigger-kbd">⌘K</kbd>
+      </button>
+    </div>
   </nav>
 
   <!-- Spotlight search overlay -->
@@ -110,6 +116,60 @@
         if (!ol.classList.contains('arc-hidden')) { closeSpotlight(); e.stopPropagation(); }
       }
     });
+
+    // ── Nav rescan ───────────────────────────────────────────────────────────
+    let _scanPoll = null;
+
+    function navRescan() {
+      const btn  = document.getElementById('nav-rescan-btn');
+      const icon = document.getElementById('nav-rescan-icon');
+      const lbl  = document.getElementById('nav-rescan-label');
+      if (btn.classList.contains('scanning')) return;
+      fetch('/api/scan/start', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (!d.ok) return;
+          btn.classList.add('scanning');
+          icon.textContent = '↻';
+          lbl.textContent = '0%';
+          clearInterval(_scanPoll);
+          _scanPoll = setInterval(() => {
+            fetch('/api/scan/status').then(r => r.json()).then(s => {
+              if (s.total > 0) lbl.textContent = Math.round(s.done / s.total * 100) + '%';
+              if (!s.running) {
+                clearInterval(_scanPoll);
+                btn.classList.remove('scanning');
+                lbl.textContent = 'Scan';
+                // Reload page to reflect new comics
+                location.reload();
+              }
+            });
+          }, 800);
+        });
+    }
+
+    // Resume poll if a scan is already running when the page loads
+    (function checkScanOnLoad() {
+      fetch('/api/scan/status').then(r => r.json()).then(s => {
+        if (s.running) {
+          const btn  = document.getElementById('nav-rescan-btn');
+          const lbl  = document.getElementById('nav-rescan-label');
+          btn.classList.add('scanning');
+          if (s.total > 0) lbl.textContent = Math.round(s.done / s.total * 100) + '%';
+          _scanPoll = setInterval(() => {
+            fetch('/api/scan/status').then(r => r.json()).then(st => {
+              if (st.total > 0) lbl.textContent = Math.round(st.done / st.total * 100) + '%';
+              if (!st.running) {
+                clearInterval(_scanPoll);
+                btn.classList.remove('scanning');
+                lbl.textContent = 'Scan';
+                location.reload();
+              }
+            });
+          }, 800);
+        }
+      }).catch(() => {});
+    })();
 
     document.getElementById('spotlight-input').addEventListener('input', function() {
       const q = this.value.trim();

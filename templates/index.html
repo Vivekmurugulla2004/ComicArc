@@ -30,6 +30,12 @@
       {% if comics|length > 0 %}
       <button type="button" id="select-btn" class="btn-ghost select-toggle" onclick="toggleSelectMode()">Select</button>
       {% endif %}
+      {% elif series_level == 'character' %}
+      <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
+        <option value="az"      {% if sort == 'az' or sort not in ('added','reading') %}selected{% endif %}>A–Z</option>
+        <option value="added"   {% if sort == 'added'   %}selected{% endif %}>Recently Added</option>
+        <option value="reading" {% if sort == 'reading' %}selected{% endif %}>Reading</option>
+      </select>
       {% elif not view == 'series' %}
       <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
         <option value="publisher" {% if sort == 'publisher' %}selected{% endif %}>Publisher</option>
@@ -80,11 +86,13 @@
   <div id="import-queue" class="import-queue arc-hidden"></div>
 </div>
 
-{% if char_filter and series_filter %}
+{% if series_filter %}
 <div class="series-breadcrumb">
   <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
+  {% if char_filter %}
   <span class="breadcrumb-sep">/</span>
   <a href="/?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&view=series" class="breadcrumb-char">{{ char_filter }}</a>
+  {% endif %}
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-series">{{ series_filter }}</span>
   <div class="breadcrumb-actions">
@@ -115,12 +123,6 @@
   <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-char">{{ char_filter }}</span>
-</div>
-{% elif series_filter %}
-<div class="series-breadcrumb">
-  <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
-  <span class="breadcrumb-sep">/</span>
-  <span class="breadcrumb-series">{{ series_filter }}</span>
 </div>
 {% endif %}
 

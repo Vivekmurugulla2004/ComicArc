@@ -58,7 +58,12 @@
   </form>
 
   <div class="danger-zone">
-    <h3>Danger Zone</h3>
+    <h3>Cover</h3>
+    <p>If the cover looks wrong or outdated, refresh it to regenerate from the file.</p>
+    <button type="button" class="btn-ghost" id="refresh-cover-btn"
+            onclick="refreshCover({{ comic.id }})">↻ Refresh Cover</button>
+
+    <h3 style="margin-top:1.5rem">Danger Zone</h3>
     <p>Permanently removes this comic from your library.
        {% if 'user_comics' in comic.file_path %}The uploaded file will also be deleted from disk.{% endif %}
     </p>
@@ -68,4 +73,17 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshCover(id) {
+  const btn = document.getElementById('refresh-cover-btn');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+  fetch(`/api/comic/${id}/refresh-cover`, { method: 'POST' })
+    .then(() => { btn.textContent = '✓ Done'; })
+    .catch(() => { btn.disabled = false; btn.textContent = '↻ Refresh Cover'; });
+}
+</script>
 {% endblock %}
