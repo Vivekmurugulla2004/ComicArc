@@ -2502,6 +2502,39 @@ button.btn-sm { font-family: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
+/* ── Nav actions (rescan + spotlight) ────────────────────────────────────────── */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.nav-rescan-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.nav-rescan-btn:hover { border-color: var(--gold); color: var(--text); }
+.nav-rescan-icon { font-size: 14px; }
+.nav-rescan-label { display: none; }
+@media (min-width: 900px) { .nav-rescan-label { display: inline; } }
+
+.nav-rescan-btn.scanning .nav-rescan-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+.nav-rescan-btn.scanning { border-color: var(--gold); color: var(--gold); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Spotlight Search ───────────────────────────────────────────────────────── */
 .spotlight-trigger {
   display: flex;

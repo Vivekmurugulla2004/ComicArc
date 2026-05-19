@@ -99,13 +99,13 @@ def index():
         pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
         pub_params = [publisher_filter] if publisher_filter != 'All' else []
 
-        if char_filter and series_filter:
+        if series_filter:
             status_filter = request.args.get('status', '').strip()
             order_sql = {
                 'title':  "c.title",
                 'added':  "c.added_at DESC",
-                'year':   "c.year DESC NULLS LAST, COALESCE(c.position, c.issue_number, 0)",
-                'rating': "COALESCE(r.rating, 0) DESC, COALESCE(c.position, c.issue_number, 0)",
+                'year':   "c.year DESC NULLS LAST, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
+                'rating': "COALESCE(r.rating, 0) DESC, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
             }.get(sort, "COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0), c.title")
             status_cond = {
                 'unread':      "AND (rp.current_page IS NULL OR rp.current_page = 0)",
@@ -114,6 +114,8 @@ def index():
             }.get(status_filter, "")
             tag_cond   = "AND c.id IN (SELECT ct.comic_id FROM comic_tags ct JOIN tags t ON t.id=ct.tag_id WHERE t.name=?)" if tag_filter else ""
             tag_params = [tag_filter] if tag_filter else []
+            char_cond  = "AND COALESCE(c.character, c.series) = ?" if char_filter else ""
+            char_params = [char_filter] if char_filter else []
             rows = db.execute(f"""
                 SELECT c.*, COALESCE(rp.current_page, 0) as progress,
                        COALESCE(r.rating, 0) as rating,
@@ -124,9 +126,9 @@ def index():
                 LEFT JOIN ratings r           ON c.id = r.comic_id
                 LEFT JOIN favorites f         ON c.id = f.comic_id
                 LEFT JOIN reading_list rl     ON c.id = rl.comic_id
-                WHERE COALESCE(c.character, c.series) = ? AND c.series = ? AND c.deleted_at IS NULL {pub_cond} {status_cond} {tag_cond}
+                WHERE c.series = ? AND c.deleted_at IS NULL {char_cond} {pub_cond} {status_cond} {tag_cond}
                 ORDER BY {order_sql}
-            """, [char_filter, series_filter] + pub_params + tag_params).fetchall()
+            """, [series_filter] + char_params + pub_params + tag_params).fetchall()
             actual_pub = publisher_filter if publisher_filter != 'All' else (rows[0]['publisher'] if rows else '')
             sm = db.execute(
                 "SELECT description, custom_cover_id FROM series_meta WHERE publisher = ? AND series = ?",
@@ -168,7 +170,7 @@ def index():
                         WHERE c2.series = c.series AND c2.publisher = c.publisher
                           AND (c2.character IS c.character)
                           AND NOT (c2.page_count > 0 AND COALESCE(rp2.current_page, 0) >= c2.page_count - 2)
-                        ORDER BY COALESCE(c2.position, 0), c2.title LIMIT 1) as resume_id,
+                        ORDER BY COALESCE(c2.position, CAST(c2.issue_number AS INTEGER), c2.id), c2.title LIMIT 1) as resume_id,
                        (SELECT MAX(CAST(c3.issue_number AS INTEGER)) - MIN(CAST(c3.issue_number AS INTEGER)) + 1
                                - COUNT(DISTINCT CAST(c3.issue_number AS INTEGER))
                         FROM comics c3
@@ -198,6 +200,11 @@ def index():
                                    scan_status=get_scan_status())
         else:
             # Top level: show character cards (or series if no character subfolder)
+            char_order = {
+                'added':   "MAX(c.id) DESC",
+                'reading': "started DESC, group_name",
+                'az':      "c.publisher, group_name",
+            }.get(sort, "c.publisher, group_name")
             rows = db.execute(f"""
                 SELECT c.publisher,
                        COALESCE(c.character, c.series) as group_name,
@@ -211,12 +218,12 @@ def index():
                         WHERE COALESCE(c2.character, c2.series) = COALESCE(c.character, c.series)
                           AND c2.publisher = c.publisher
                           AND NOT (c2.page_count > 0 AND COALESCE(rp2.current_page, 0) >= c2.page_count - 2)
-                        ORDER BY c2.series, COALESCE(c2.position, 0), c2.title LIMIT 1) as resume_id
+                        ORDER BY c2.series, COALESCE(c2.position, CAST(c2.issue_number AS INTEGER), c2.id), c2.title LIMIT 1) as resume_id
                 FROM comics c
                 LEFT JOIN reading_progress rp ON c.id = rp.comic_id
                 WHERE c.deleted_at IS NULL {pub_cond}
                 GROUP BY c.publisher, COALESCE(c.character, c.series)
-                ORDER BY c.publisher, group_name
+                ORDER BY {char_order}
             """, pub_params).fetchall()
             db.close()
             return render_template('index.html',
@@ -495,6 +502,10 @@ def _permanently_delete_comic(comic_id, db):
     row = db.execute("SELECT file_path FROM comics WHERE id = ?", (comic_id,)).fetchone()
     db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
     db.execute("DELETE FROM ratings WHERE comic_id = ?", (comic_id,))
+    db.execute("DELETE FROM favorites WHERE comic_id = ?", (comic_id,))
+    db.execute("DELETE FROM comic_tags WHERE comic_id = ?", (comic_id,))
+    db.execute("DELETE FROM reading_list WHERE comic_id = ?", (comic_id,))
+    db.execute("DELETE FROM run_items WHERE comic_id = ?", (comic_id,))
     db.execute("DELETE FROM comics WHERE id = ?", (comic_id,))
     for ext in ('jpg', 'png'):
         cp = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
@@ -528,17 +539,22 @@ def purge_comic(comic_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/comic/<int:comic_id>/refresh-cover', methods=['POST'])
+def refresh_cover(comic_id):
+    """Delete the cached cover so it is regenerated on next request."""
+    for ext in ('jpg', 'png'):
+        path = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    return jsonify({'ok': True})
+
+
 @app.route('/trash')
 def trash():
     db = get_db()
-    deleted = db.execute("""
-        SELECT id, title, publisher, series, deleted_at FROM comics
-        WHERE deleted_at IS NOT NULL
-        ORDER BY deleted_at DESC
-    """).fetchall()
-    db.close()
-    # Auto-purge anything deleted more than 30 days ago
-    db = get_db()
+    # Auto-purge anything deleted more than 30 days ago first
     stale = db.execute("""
         SELECT id FROM comics WHERE deleted_at IS NOT NULL
         AND deleted_at < DATETIME('now', '-30 days')
@@ -547,6 +563,11 @@ def trash():
         _permanently_delete_comic(row['id'], db)
     if stale:
         db.commit()
+    deleted = db.execute("""
+        SELECT id, title, publisher, series, deleted_at FROM comics
+        WHERE deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+    """).fetchall()
     db.close()
     return render_template('trash.html', deleted=deleted)
 
@@ -601,10 +622,11 @@ def reader(comic_id):
     next_series_comic = None
     if not run_context and comic['series'] and comic['series'] != 'General':
         series_comics = db.execute("""
-            SELECT id, title, COALESCE(position, id) as pos FROM comics
+            SELECT id, title FROM comics
             WHERE series = ? AND publisher = ?
               AND (character IS ? OR character = ?)
-            ORDER BY COALESCE(position, id), title
+              AND deleted_at IS NULL
+            ORDER BY COALESCE(position, CAST(issue_number AS INTEGER), id), title
         """, (comic['series'], comic['publisher'],
               comic['character'], comic['character'])).fetchall()
         ids = [r['id'] for r in series_comics]
@@ -639,9 +661,14 @@ def reader(comic_id):
                                  'comic_id': run_suggestion['next_id'],
                                  'comic_title': run_suggestion['next_title']}
         else:
-            # 2. Unstarted series by the same publisher
+            # 2. Unstarted series by the same publisher — pick lowest issue_number as entry point
             unread = db.execute("""
-                SELECT c.series, MIN(c.id) as first_id, COUNT(*) as cnt
+                SELECT c.series,
+                       (SELECT c2.id FROM comics c2
+                        WHERE c2.series = c.series AND c2.publisher = c.publisher
+                          AND c2.deleted_at IS NULL
+                        ORDER BY COALESCE(CAST(c2.issue_number AS INTEGER), c2.id) LIMIT 1) as first_id,
+                       COUNT(*) as cnt
                 FROM comics c
                 LEFT JOIN reading_progress rp ON rp.comic_id = c.id
                 WHERE c.publisher = ? AND c.series != 'General' AND c.series != ?
@@ -748,30 +775,36 @@ def rate_comic(comic_id):
 @app.route('/stats')
 def stats():
     db = get_db()
-    total_comics   = db.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+    total_comics   = db.execute("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL").fetchone()[0]
     read_count     = db.execute("""
         SELECT COUNT(*) FROM reading_progress rp
         JOIN comics c ON rp.comic_id = c.id
         WHERE rp.current_page >= c.page_count - 2 AND c.page_count > 1
+          AND c.deleted_at IS NULL
     """).fetchone()[0]
-    pages_read     = db.execute(
-        "SELECT COALESCE(SUM(current_page), 0) FROM reading_progress"
-    ).fetchone()[0]
+    pages_read     = db.execute("""
+        SELECT COALESCE(SUM(rp.current_page), 0) FROM reading_progress rp
+        JOIN comics c ON rp.comic_id = c.id WHERE c.deleted_at IS NULL
+    """).fetchone()[0]
     in_progress    = db.execute("""
         SELECT COUNT(*) FROM reading_progress rp
         JOIN comics c ON rp.comic_id = c.id
         WHERE rp.current_page > 0
           AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+          AND c.deleted_at IS NULL
     """).fetchone()[0]
-    fav_count      = db.execute("SELECT COUNT(*) FROM favorites").fetchone()[0]
+    fav_count      = db.execute("""
+        SELECT COUNT(*) FROM favorites f JOIN comics c ON f.comic_id = c.id
+        WHERE c.deleted_at IS NULL
+    """).fetchone()[0]
     runs_count     = db.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
     by_publisher   = db.execute("""
         SELECT publisher, COUNT(*) as count FROM comics
-        GROUP BY publisher ORDER BY count DESC
+        WHERE deleted_at IS NULL GROUP BY publisher ORDER BY count DESC
     """).fetchall()
     top_series     = db.execute("""
         SELECT series, publisher, COUNT(*) as count FROM comics
-        WHERE series != 'General'
+        WHERE series != 'General' AND deleted_at IS NULL
         GROUP BY series ORDER BY count DESC LIMIT 8
     """).fetchall()
     recent_reads   = db.execute("""
@@ -1119,6 +1152,7 @@ def clear_library():
     db.execute("DELETE FROM ratings")
     db.execute("DELETE FROM favorites")
     db.execute("DELETE FROM comic_tags")
+    db.execute("DELETE FROM reading_list")
     db.execute("DELETE FROM run_items")
     db.execute("DELETE FROM comics")
     db.commit()
@@ -1410,9 +1444,11 @@ def bulk_mark_read():
 @app.route('/api/bulk/mark-unread', methods=['POST'])
 def bulk_mark_unread():
     ids = (request.get_json(silent=True) or {}).get('ids', [])
+    if not ids:
+        return jsonify({'ok': True})
     db = get_db()
-    for comic_id in ids:
-        db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
+    ph = ','.join('?' * len(ids))
+    db.execute(f"DELETE FROM reading_progress WHERE comic_id IN ({ph})", ids)
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1481,7 +1517,8 @@ def series_meta():
             (publisher, series)
         ).fetchone()
         covers = db.execute(
-            "SELECT id, title FROM comics WHERE publisher = ? AND series = ? ORDER BY COALESCE(position, 0), title",
+            """SELECT id, title FROM comics WHERE publisher = ? AND series = ? AND deleted_at IS NULL
+               ORDER BY COALESCE(position, CAST(issue_number AS INTEGER), id), title""",
             (publisher, series)
         ).fetchall()
         db.close()
@@ -1580,13 +1617,15 @@ def series_add_to_run():
     if char:
         comics = db.execute(
             """SELECT id FROM comics WHERE series = ? AND publisher = ? AND character = ?
-               ORDER BY COALESCE(position, 0), title""",
+               AND deleted_at IS NULL
+               ORDER BY COALESCE(position, CAST(issue_number AS INTEGER), id), title""",
             (series, publisher, char)
         ).fetchall()
     else:
         comics = db.execute(
             """SELECT id FROM comics WHERE series = ? AND publisher = ?
-               ORDER BY COALESCE(position, 0), title""",
+               AND deleted_at IS NULL
+               ORDER BY COALESCE(position, CAST(issue_number AS INTEGER), id), title""",
             (series, publisher)
         ).fetchall()
     max_pos = db.execute(
@@ -1686,11 +1725,11 @@ def search_api():
         LEFT JOIN tags t ON t.id = ct.tag_id
         WHERE c.deleted_at IS NULL AND (
               c.title LIKE ? OR c.series LIKE ? OR c.publisher LIKE ?
-           OR c.writer LIKE ? OR c.penciller LIKE ?
+           OR c.writer LIKE ? OR c.penciller LIKE ? OR c.character LIKE ?
            OR c.story_arc LIKE ? OR t.name LIKE ?
         )
         ORDER BY c.title LIMIT ?
-    """, (p, p, p, p, p, p, p, limit)).fetchall()
+    """, (p, p, p, p, p, p, p, p, limit)).fetchall()
     db.close()
     return jsonify({'results': [dict(r) for r in rows]})
 
@@ -1779,7 +1818,7 @@ def export_library():
     db = get_db()
     data = {
         'exported_at':    time.strftime('%Y-%m-%dT%H:%M:%S'),
-        'comics':         [dict(r) for r in db.execute("SELECT * FROM comics").fetchall()],
+        'comics':         [dict(r) for r in db.execute("SELECT * FROM comics WHERE deleted_at IS NULL").fetchall()],
         'reading_progress': [dict(r) for r in db.execute("SELECT * FROM reading_progress").fetchall()],
         'ratings':        [dict(r) for r in db.execute("SELECT * FROM ratings").fetchall()],
         'favorites':      [r['comic_id'] for r in db.execute("SELECT comic_id FROM favorites").fetchall()],
