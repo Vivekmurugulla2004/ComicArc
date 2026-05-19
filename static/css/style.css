@@ -1,5 +1,6 @@
 /* ── Reset & Base ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.arc-hidden { display: none !important; }
 
 :root {
   --bg:         #0b0c18;
@@ -463,6 +464,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
 }
 .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .card-rating { margin-top: 5px; }
+.card-issue-num { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
 .star { font-size: 11px; color: var(--border); }
 .star.filled { color: var(--gold); }
 
@@ -2288,11 +2290,29 @@ button.btn-sm { font-family: inherit; cursor: pointer; }
 .ql-runs-in a { color: var(--gold); text-decoration: none; }
 .ql-runs-in a:hover { text-decoration: underline; }
 
+.ql-issue-nav {
+  display: flex;
+  gap: 6px;
+  padding: 6px 14px 0;
+}
+.ql-nav-btn {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ql-nav-btn:hover { color: var(--text); border-color: var(--gold); }
+
 .ql-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px 8px;
+  padding: 8px 14px 8px;
   flex-wrap: wrap;
 }
 .ql-read-btn {

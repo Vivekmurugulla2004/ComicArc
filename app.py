@@ -1292,6 +1292,45 @@ def series_add_to_run():
     return jsonify({'ok': True, 'added': len(comics)})
 
 
+# ── Series mark-read ─────────────────────────────────────────────────────────
+
+@app.route('/api/series/mark-read', methods=['POST'])
+def series_mark_read():
+    data      = request.get_json(silent=True) or {}
+    publisher = data.get('publisher', '').strip()
+    series    = data.get('series', '').strip()
+    char      = data.get('character') or None
+    if not series:
+        return jsonify({'ok': False, 'error': 'series required'}), 400
+    db = get_db()
+    if not publisher or publisher == 'All':
+        row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
+        publisher = row['publisher'] if row else ''
+    if char:
+        comics = db.execute(
+            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ? AND character = ?",
+            (series, publisher, char)
+        ).fetchall()
+    else:
+        comics = db.execute(
+            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ?",
+            (series, publisher)
+        ).fetchall()
+    for c in comics:
+        last = max((c['page_count'] or 1) - 1, 0)
+        db.execute(
+            """INSERT INTO reading_progress (comic_id, current_page, last_read)
+               VALUES (?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(comic_id) DO UPDATE
+                 SET current_page = excluded.current_page,
+                     last_read    = CURRENT_TIMESTAMP""",
+            (c['id'], last)
+        )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'marked': len(comics)})
+
+
 # ── Bulk add-to-run ───────────────────────────────────────────────────────────
 
 @app.route('/api/bulk/add-to-run', methods=['POST'])

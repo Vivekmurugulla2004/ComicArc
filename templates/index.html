@@ -55,10 +55,10 @@
     Want to Read <span class="tab-count">{{ reading_list_count }}</span>
   </a>
   {% endif %}
-  <a href="/?publisher=All{% if search %}&q={{ search }}{% endif %}"
+  <a href="/?publisher=All{% if search %}&q={{ search|urlencode }}{% endif %}"
      class="tab {% if current_publisher == 'All' and view != 'reading-list' %}active{% endif %}">All</a>
   {% for pub in publishers %}
-  <a href="/?publisher={{ pub }}{% if search %}&q={{ search }}{% endif %}"
+  <a href="/?publisher={{ pub|urlencode }}{% if search %}&q={{ search|urlencode }}{% endif %}"
      class="tab {% if current_publisher == pub and view != 'reading-list' %}active{% endif %}">{{ pub }}</a>
   {% endfor %}
 </div>
@@ -77,18 +77,28 @@
       <input type="file" id="folder-input" webkitdirectory multiple hidden>
     </label>
   </div>
-  <div id="import-queue" class="import-queue" hidden></div>
+  <div id="import-queue" class="import-queue arc-hidden"></div>
 </div>
 
 {% if char_filter and series_filter %}
 <div class="series-breadcrumb">
-  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Characters</a>
+  <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
   <span class="breadcrumb-sep">/</span>
-  <a href="/?publisher={{ current_publisher }}&character={{ char_filter }}&view=series" class="breadcrumb-char">{{ char_filter }}</a>
+  <a href="/?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&view=series" class="breadcrumb-char">{{ char_filter }}</a>
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-series">{{ series_filter }}</span>
   <div class="breadcrumb-actions">
-    <button class="btn-ghost btn-sm" onclick="openSeriesEdit('{{ series_publisher|e }}','{{ series_filter|e }}','{{ char_filter|e }}')">✎ Edit Series</button>
+    <button class="btn-ghost btn-sm"
+            data-pub="{{ series_publisher }}"
+            data-series="{{ series_filter }}"
+            data-char="{{ char_filter }}"
+            onclick="openSeriesEdit(this.dataset.pub, this.dataset.series, this.dataset.char)">✎ Edit Series</button>
+    <button class="btn-ghost btn-sm"
+            data-pub="{{ series_publisher }}"
+            data-series="{{ series_filter }}"
+            data-char="{{ char_filter }}"
+            onclick="markSeriesRead(this)"
+            id="mark-series-read-btn">✓ Mark All Read</button>
     {% if all_runs %}
     <div class="series-run-picker">
       <select id="series-run-select" class="sort-select" style="font-size:12px;padding:5px 10px">
@@ -102,13 +112,13 @@
 </div>
 {% elif char_filter %}
 <div class="series-breadcrumb">
-  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Characters</a>
+  <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-char">{{ char_filter }}</span>
 </div>
 {% elif series_filter %}
 <div class="series-breadcrumb">
-  <a href="/?publisher={{ current_publisher }}&view=series" class="breadcrumb-back">← Characters</a>
+  <a href="/?publisher={{ current_publisher|urlencode }}&view=series" class="breadcrumb-back">← Characters</a>
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-series">{{ series_filter }}</span>
 </div>
@@ -144,8 +154,9 @@
 <div class="series-grid">
   {% if series_level == 'character' %}
     {% for g in series_groups %}
-    <div class="series-card-wrap">
-      <div class="series-card" onclick="window.location='/?publisher={{ current_publisher }}&character={{ g.group_name|urlencode }}&view=series'">
+    <div class="series-card-wrap"
+         data-href="/?publisher={{ current_publisher|urlencode }}&character={{ g.group_name|urlencode }}&view=series">
+      <div class="series-card" onclick="window.location=this.closest('.series-card-wrap').dataset.href">
         <div class="series-cover-wrap">
           <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.group_name }}">
           {% if g.completed == g.issue_count and g.issue_count > 0 %}
@@ -175,8 +186,12 @@
     {% endfor %}
   {% else %}
     {% for g in series_groups %}
-    <div class="series-card-wrap">
-      <div class="series-card" onclick="window.location='/?publisher={{ current_publisher }}&character={{ (g.character or '')|urlencode }}&series={{ g.series|urlencode }}&view=series'">
+    <div class="series-card-wrap"
+         data-href="/?publisher={{ current_publisher|urlencode }}&character={{ (g.character or '')|urlencode }}&series={{ g.series|urlencode }}&view=series"
+         data-pub="{{ g.publisher }}"
+         data-series="{{ g.series }}"
+         data-char="{{ g.character or '' }}">
+      <div class="series-card" onclick="window.location=this.closest('.series-card-wrap').dataset.href">
         <div class="series-cover-wrap">
           <img src="/cover/{{ g.cover_id }}" class="series-cover" alt="{{ g.series }}">
           {% if g.completed == g.issue_count and g.issue_count > 0 %}
@@ -205,7 +220,7 @@
           {% endif %}
         </div>
       </div>
-      <button class="series-edit-btn" onclick="event.stopPropagation(); openSeriesEdit('{{ g.publisher|e }}','{{ g.series|e }}','{{ (g.character or '')|e }}')"
+      <button class="series-edit-btn" onclick="event.stopPropagation(); _openSeriesEditWrap(this)"
               title="Edit series info">✎</button>
     </div>
     {% endfor %}
@@ -217,13 +232,13 @@
 <div class="series-description-bar">{{ series_description }}</div>
 {% endif %}
 <div class="smart-filter-row">
-  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}"
+  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}"
      class="smart-chip {% if not status_filter %}active{% endif %}">All</a>
-  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=unread"
+  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=unread"
      class="smart-chip {% if status_filter == 'unread' %}active{% endif %}">Unread</a>
-  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=in-progress"
+  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=in-progress"
      class="smart-chip {% if status_filter == 'in-progress' %}active{% endif %}">In Progress</a>
-  <a href="?publisher={{ current_publisher }}&character={{ char_filter }}&series={{ series_filter }}&view=series&sort={{ sort }}&status=finished"
+  <a href="?publisher={{ current_publisher|urlencode }}&character={{ char_filter|urlencode }}&series={{ series_filter|urlencode }}&view=series&sort={{ sort }}&status=finished"
      class="smart-chip {% if status_filter == 'finished' %}active{% endif %}">Finished</a>
 </div>
 {% if comics|length == 0 %}
@@ -255,6 +270,9 @@
     </div>
     <div class="card-info">
       <div class="card-title" title="{{ comic.title }}">{{ comic.title }}</div>
+      {% if comic.issue_number %}
+      <div class="card-issue-num">#{{ comic.issue_number }}</div>
+      {% endif %}
       {% if comic.rating %}
       <div class="card-rating">
         {% for i in range(1, 6) %}
@@ -344,7 +362,7 @@
 {% endif %}
 
 <!-- Bulk action bar -->
-<div id="bulk-bar" class="bulk-bar" hidden>
+<div id="bulk-bar" class="bulk-bar arc-hidden">
   <span id="bulk-count" class="bulk-count">0 selected</span>
   <div class="bulk-actions">
     <button class="bulk-action-btn bulk-select-all" onclick="selectAll()">Select All</button>
@@ -364,12 +382,12 @@
 </div>
 
 <!-- Quick-look panel -->
-<div id="ql-panel" class="ql-panel" hidden>
+<div id="ql-panel" class="ql-panel arc-hidden">
   <button class="ql-close" onclick="closeQL()">✕</button>
   <div class="ql-body">
     <div class="ql-cover-wrap">
       <img id="ql-cover" src="" alt="" class="ql-cover">
-      <div id="ql-prog-bar" class="ql-prog-bar" hidden>
+      <div id="ql-prog-bar" class="ql-prog-bar arc-hidden">
         <div id="ql-prog-fill" class="ql-prog-fill"></div>
       </div>
     </div>
@@ -380,6 +398,10 @@
       <div id="ql-stars" class="ql-stars"></div>
       <div id="ql-runs-in" class="ql-runs-in"></div>
     </div>
+  </div>
+  <div class="ql-issue-nav">
+    <button id="ql-prev-btn" class="ql-nav-btn" style="display:none" title="Previous issue">‹ Prev</button>
+    <button id="ql-next-btn" class="ql-nav-btn" style="display:none" title="Next issue">Next ›</button>
   </div>
   <div class="ql-actions">
     <a id="ql-read-btn" href="#" class="ql-read-btn">▶ Read</a>
@@ -394,10 +416,10 @@
     <button class="btn-ghost btn-sm" onclick="qlAddToRun()">Add</button>
   </div>
 </div>
-<div id="ql-backdrop" class="ql-backdrop" hidden onclick="closeQL()"></div>
+<div id="ql-backdrop" class="ql-backdrop arc-hidden" onclick="closeQL()"></div>
 
 <!-- Series edit modal -->
-<div id="series-edit-modal" class="series-edit-modal" hidden>
+<div id="series-edit-modal" class="series-edit-modal arc-hidden">
   <div class="series-edit-backdrop" onclick="closeSeriesEdit()"></div>
   <div class="series-edit-panel">
     <div class="series-edit-header">
@@ -500,7 +522,7 @@ function selectAll() {
 function updateBulkBar() {
   const bar   = document.getElementById('bulk-bar');
   const count = selectedIds.size;
-  bar.hidden  = !selectMode;
+  bar.classList.toggle('arc-hidden', !selectMode);
   document.getElementById('bulk-count').textContent = count + ' selected';
   const total = document.querySelectorAll('.comic-card').length;
   document.querySelector('.bulk-select-all').textContent = count === total ? 'Deselect All' : 'Select All';
@@ -546,8 +568,23 @@ function bulkAction(type) {
 // ── Quick-look panel ──────────────────────────────────────────────────────────
 let qlComicId = null;
 
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const panel = document.getElementById('ql-panel');
+    if (panel && !panel.classList.contains('arc-hidden')) closeQL();
+    const modal = document.getElementById('series-edit-modal');
+    if (modal && !modal.classList.contains('arc-hidden')) closeSeriesEdit();
+  }
+});
+
 function openQL(id) {
   qlComicId = id;
+  // Detect prev/next in the current grid without an extra API call
+  const cards = [...document.querySelectorAll('.comic-card')];
+  const idx   = cards.findIndex(c => +c.dataset.id === id);
+  const prevId = idx > 0 ? +cards[idx - 1].dataset.id : null;
+  const nextId = idx < cards.length - 1 ? +cards[idx + 1].dataset.id : null;
+
   fetch(`/api/comic/${id}/quicklook`)
     .then(r => r.json())
     .then(d => {
@@ -560,8 +597,8 @@ function openQL(id) {
       const progBar = document.getElementById('ql-prog-bar');
       if (d.page_count > 0) {
         document.getElementById('ql-prog-fill').style.width = prog + '%';
-        progBar.hidden = false;
-      } else { progBar.hidden = true; }
+        progBar.classList.remove('arc-hidden');
+      } else { progBar.classList.add('arc-hidden'); }
       document.getElementById('ql-tags').innerHTML = d.tags.map(t =>
         `<span class="ql-tag">${t}</span>`).join('');
       document.getElementById('ql-stars').innerHTML = [1,2,3,4,5].map(i =>
@@ -580,10 +617,15 @@ function openQL(id) {
       const runSel = document.getElementById('ql-run-select');
       runSel.innerHTML = '<option value="">Add to run…</option>' +
         d.all_runs.map(r => `<option value="${r.id}">${r.title}</option>`).join('');
+      // Prev / next issue nav
+      const prevBtn = document.getElementById('ql-prev-btn');
+      const nextBtn = document.getElementById('ql-next-btn');
+      if (prevBtn) { prevBtn.style.display = prevId ? '' : 'none'; if (prevId) prevBtn.onclick = () => openQL(prevId); }
+      if (nextBtn) { nextBtn.style.display = nextId ? '' : 'none'; if (nextId) nextBtn.onclick = () => openQL(nextId); }
       const panel = document.getElementById('ql-panel');
       const bd    = document.getElementById('ql-backdrop');
-      panel.hidden = false;
-      bd.hidden    = false;
+      panel.classList.remove('arc-hidden');
+      bd.classList.remove('arc-hidden');
       requestAnimationFrame(() => { panel.classList.add('open'); bd.classList.add('open'); });
     });
 }
@@ -594,8 +636,8 @@ function closeQL() {
   panel.classList.remove('open');
   bd.classList.remove('open');
   panel.addEventListener('transitionend', () => {
-    panel.hidden = true;
-    bd.hidden    = true;
+    panel.classList.add('arc-hidden');
+    bd.classList.add('arc-hidden');
   }, {once: true});
 }
 
@@ -641,6 +683,11 @@ function qlAddToRun() {
 }
 
 // ── Series edit modal ─────────────────────────────────────────────────────────
+function _openSeriesEditWrap(btn) {
+  const wrap = btn.closest('.series-card-wrap');
+  openSeriesEdit(wrap.dataset.pub, wrap.dataset.series, wrap.dataset.char || '');
+}
+
 let _sePublisher = '', _seSeries = '', _seCharacter = '';
 
 function openSeriesEdit(publisher, series, character) {
@@ -659,12 +706,12 @@ function openSeriesEdit(publisher, series, character) {
            <div class="se-cover-title">${c.title}</div>
          </div>`
       ).join('');
-      document.getElementById('series-edit-modal').hidden = false;
+      document.getElementById('series-edit-modal').classList.remove('arc-hidden');
     });
 }
 
 function closeSeriesEdit() {
-  document.getElementById('series-edit-modal').hidden = true;
+  document.getElementById('series-edit-modal').classList.add('arc-hidden');
 }
 
 function seSelectCover(el) {
@@ -683,6 +730,23 @@ function saveSeriesMeta() {
   }).then(r => r.json()).then(d => {
     if (d.ok) { closeSeriesEdit(); location.reload(); }
     else alert('Save failed: ' + (d.error || 'unknown'));
+  });
+}
+
+// ── Mark Series Read ──────────────────────────────────────────────────────────
+function markSeriesRead(btn) {
+  if (!confirm('Mark all issues in this series as read?')) return;
+  fetch('/api/series/mark-read', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      publisher: btn.dataset.pub,
+      series:    btn.dataset.series,
+      character: btn.dataset.char || null,
+    })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else alert('Error: ' + (d.error || 'unknown'));
   });
 }
 
@@ -778,7 +842,7 @@ if (grid) {
 function handleFiles(files) {
   const valid = files.filter(f => /\.(cbz|cbr|pdf|jpg|jpeg|png)$/i.test(f.name));
   if (!valid.length) return;
-  queue.hidden = false;
+  queue.classList.remove('arc-hidden');
   queue.innerHTML = '';
   let done = 0;
   valid.forEach(file => {
