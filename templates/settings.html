@@ -178,8 +178,8 @@
       <p>Permanently remove all comics, progress, ratings, and favorites from ComicArc. Your actual files are not deleted.</p>
     </div>
     <form method="post" action="/library/clear"
-          onsubmit="return confirm('Clear entire library? Reading progress, ratings, and favorites will all be lost. Your files will not be deleted.')">
-      <button type="submit" class="btn-danger">Clear Library</button>
+          onsubmit="return confirm('Clear entire library? This will delete {{ comic_count }} comic{{ 's' if comic_count != 1 else '' }}, all reading progress, ratings, and favorites. Your files will not be deleted.')">
+      <button type="submit" class="btn-danger">Clear Library ({{ comic_count }} comic{{ 's' if comic_count != 1 else '' }})</button>
     </form>
   </div>
 </div>

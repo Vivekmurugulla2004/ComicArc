@@ -11,7 +11,7 @@
     <a href="{{ run.buy_link }}" target="_blank" rel="noopener" class="buy-link-btn">🛒 Find / Buy This Run</a>
     {% endif %}
   </div>
-  <div class="header-actions">
+  <div class="header-actions" style="position:relative">
     <!-- Run rating -->
     <div class="run-rate-wrap">
       <div id="run-star-picker">
@@ -26,10 +26,16 @@
     <a href="/reader/{{ resume_comic_id }}?run_id={{ run.id }}" class="btn-primary">▶ {{ 'Resume' if items|selectattr('progress','gt',0)|list else 'Start Reading' }}</a>
     {% endif %}
     <a href="/runs/{{ run.id }}/edit" class="btn-ghost">Edit</a>
-    <form method="post" action="/runs/{{ run.id }}/delete"
-          onsubmit="return confirm('Delete this run?')">
-      <button type="submit" class="btn-danger">Delete Run</button>
-    </form>
+    <button type="button" class="btn-danger" onclick="document.getElementById('delete-run-confirm').style.display='block'">Delete Run</button>
+    <div id="delete-run-confirm" style="display:none;position:absolute;right:0;top:calc(100% + 8px);z-index:100;padding:14px;background:var(--card);border:1px solid var(--danger,#e53e3e);border-radius:10px;font-size:13px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,.4)">
+      <p style="margin:0 0 10px">Delete <strong>{{ run.title }}</strong>? Your comics are not affected — only this run is removed.</p>
+      <div style="display:flex;gap:8px">
+        <form method="post" action="/runs/{{ run.id }}/delete" style="margin:0">
+          <button type="submit" class="btn-danger">Yes, Delete Run</button>
+        </form>
+        <button type="button" class="btn-ghost" onclick="document.getElementById('delete-run-confirm').style.display='none'">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 

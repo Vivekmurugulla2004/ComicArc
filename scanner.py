@@ -124,12 +124,12 @@ def _run(library_path):
 
     db = get_db()
     known_paths = set()
-    known_sigs = set()
-    for row in db.execute("SELECT file_path FROM comics").fetchall():
+    known_sigs = {}
+    for row in db.execute("SELECT id, file_path FROM comics").fetchall():
         known_paths.add(row['file_path'])
         s = _file_sig(row['file_path'])
         if s:
-            known_sigs.add(s)
+            known_sigs[s] = row['file_path']
 
     added = 0
     for i, fp in enumerate(all_files):
@@ -158,7 +158,22 @@ def _run(library_path):
                 added += 1
                 known_paths.add(fp)
                 if sig:
-                    known_sigs.add(sig)
+                    known_sigs[sig] = fp
+            elif fp in known_paths:
+                ci = _read_comicinfo(fp)
+                if ci:
+                    fields, vals = [], []
+                    for col, key in [('writer', 'writer'), ('penciller', 'penciller'),
+                                     ('year', 'year'), ('story_arc', 'story_arc'),
+                                     ('language_iso', 'language_iso'), ('issue_number', 'issue_number')]:
+                        if key in ci and ci[key] is not None:
+                            fields.append(f"{col} = ?")
+                            vals.append(ci[key])
+                    if fields:
+                        db.execute(
+                            f"UPDATE comics SET {', '.join(fields)} WHERE file_path = ?",
+                            vals + [fp]
+                        )
         except Exception as e:
             print(f"[scanner] skip {fp}: {e}")
 

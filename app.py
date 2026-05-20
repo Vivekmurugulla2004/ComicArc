@@ -10,7 +10,7 @@ from flask import Flask, render_template, redirect, url_for, request, jsonify, R
 from werkzeug.utils import secure_filename
 from database import get_db
 from comic_reader import get_page, get_page_count, cbr_tool_available, _find_bin
-from config import get_data_dir, get_resource_dir
+from config import get_data_dir, get_resource_dir, VERSION
 from onboarding import is_onboarding_done, get_library_path, save_config, load_config, get_reader_mode, get_autoplay_interval
 from scanner import scan_library, get_status as get_scan_status, cancel_scan, get_duplicates, _read_comicinfo, _normalize_series
 
@@ -54,7 +54,8 @@ def natural_sort_key(s):
 
 @app.context_processor
 def _inject_globals():
-    return {'library_path': _comics_dir(), 'scan_status': get_scan_status()}
+    return {'library_path': _comics_dir(), 'scan_status': get_scan_status(), 'app_version': VERSION,
+            'dup_count': len(get_duplicates())}
 
 
 def _resolve_publisher(db, publisher, series):
@@ -85,7 +86,10 @@ def index():
     total = db.execute("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL").fetchone()[0]
     reading_list_count = db.execute("""
         SELECT COUNT(*) FROM reading_list rl
-        JOIN comics c ON rl.comic_id = c.id WHERE c.deleted_at IS NULL
+        JOIN comics c ON rl.comic_id = c.id
+        LEFT JOIN reading_progress rp ON c.id = rp.comic_id
+        WHERE c.deleted_at IS NULL
+          AND NOT (c.page_count > 1 AND COALESCE(rp.current_page, 0) >= c.page_count - 2)
     """).fetchone()[0]
     continuing = db.execute("""
         SELECT c.id, c.title, c.series, c.publisher, c.page_count,
@@ -96,11 +100,6 @@ def index():
           AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
           AND c.deleted_at IS NULL
         ORDER BY rp.last_read DESC LIMIT 8
-    """).fetchall()
-    recently_added = db.execute("""
-        SELECT id, title, series, publisher FROM comics
-        WHERE deleted_at IS NULL
-        ORDER BY added_at DESC LIMIT 12
     """).fetchall()
     has_cbr = (not cbr_tool_available()) and (
         db.execute("SELECT 1 FROM comics WHERE file_path LIKE '%.cbr' AND deleted_at IS NULL LIMIT 1").fetchone() is not None
@@ -114,9 +113,10 @@ def index():
             status_filter = request.args.get('status', '').strip()
             order_sql = {
                 'title':  "c.title",
-                'added':  "c.added_at DESC",
-                'year':   "c.year DESC NULLS LAST, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
-                'rating': "COALESCE(r.rating, 0) DESC, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
+                'added':     "c.added_at DESC",
+                'year':      "c.year DESC NULLS LAST, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
+                'rating':    "COALESCE(r.rating, 0) DESC, COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0)",
+                'last_read': "rp.last_read DESC NULLS LAST",
             }.get(sort, "COALESCE(c.position, CAST(c.issue_number AS INTEGER), 0), c.title")
             status_cond = {
                 'unread':      "AND (rp.current_page IS NULL OR rp.current_page = 0)",
@@ -170,7 +170,7 @@ def index():
                        COUNT(*) as issue_count,
                        COALESCE(sm.custom_cover_id, MIN(c.id)) as cover_id,
                        SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
-                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed,
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 2 THEN 1 ELSE 0 END) as completed,
                        COALESCE(sm.description, '') as description,
                        (SELECT c2.id FROM comics c2
                         LEFT JOIN reading_progress rp2 ON c2.id = rp2.comic_id
@@ -210,23 +210,26 @@ def index():
                 'az':      "c.publisher, group_name",
             }.get(sort, "c.publisher, group_name")
             rows = db.execute(f"""
-                SELECT c.publisher,
+                SELECT (SELECT c2.publisher FROM comics c2
+                        WHERE LOWER(TRIM(COALESCE(c2.character, c2.series))) = LOWER(TRIM(COALESCE(c.character, c.series)))
+                          AND c2.deleted_at IS NULL
+                        GROUP BY c2.publisher ORDER BY COUNT(*) DESC LIMIT 1) as publisher,
                        COALESCE(c.character, c.series) as group_name,
-                       c.character,
+                       MAX(c.character) as character,
                        COUNT(*) as issue_count,
                        MIN(c.id) as cover_id,
                        SUM(CASE WHEN rp.current_page > 0 THEN 1 ELSE 0 END) as started,
-                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 1 THEN 1 ELSE 0 END) as completed,
+                       SUM(CASE WHEN c.page_count > 0 AND rp.current_page >= c.page_count - 2 THEN 1 ELSE 0 END) as completed,
                        (SELECT c2.id FROM comics c2
                         LEFT JOIN reading_progress rp2 ON c2.id = rp2.comic_id
-                        WHERE COALESCE(c2.character, c2.series) = COALESCE(c.character, c.series)
-                          AND c2.publisher = c.publisher
+                        WHERE LOWER(TRIM(COALESCE(c2.character, c2.series))) = LOWER(TRIM(COALESCE(c.character, c.series)))
+                          AND c2.deleted_at IS NULL
                           AND NOT (c2.page_count > 0 AND COALESCE(rp2.current_page, 0) >= c2.page_count - 2)
                         ORDER BY c2.series, COALESCE(c2.position, CAST(c2.issue_number AS INTEGER), c2.id), c2.title LIMIT 1) as resume_id
                 FROM comics c
                 LEFT JOIN reading_progress rp ON c.id = rp.comic_id
                 WHERE c.deleted_at IS NULL {pub_cond}
-                GROUP BY c.publisher, COALESCE(c.character, c.series)
+                GROUP BY LOWER(TRIM(COALESCE(c.character, c.series)))
                 ORDER BY {char_order}
             """, pub_params).fetchall()
             db.close()
@@ -238,7 +241,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='', tag_filter='', all_tags=[],
-                                   continuing=continuing, recently_added=recently_added,
+                                   continuing=continuing, recently_added=[],
                                    series_filter='',
                                    unrar_missing=has_cbr)
 
@@ -310,7 +313,7 @@ def index():
                            total=total,
                            reading_list_count=reading_list_count,
                            continuing=continuing,
-                           recently_added=recently_added,
+                           recently_added=[],
                            unrar_missing=has_cbr)
 
 
@@ -408,6 +411,7 @@ def comic_detail(comic_id):
         SELECT c.*,
                COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
+               rp.last_read,
                CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
                CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
         FROM comics c
@@ -417,8 +421,11 @@ def comic_detail(comic_id):
         LEFT JOIN reading_list rl     ON c.id = rl.comic_id
         WHERE c.id = ?
     """, (comic_id,)).fetchone()
+    if not comic:
+        db.close()
+        abort(404)
     runs_featuring = db.execute("""
-        SELECT r.id, r.title FROM runs r
+        SELECT r.id, r.title, ri.position FROM runs r
         JOIN run_items ri ON r.id = ri.run_id
         WHERE ri.comic_id = ?
         ORDER BY r.title
@@ -429,12 +436,37 @@ def comic_detail(comic_id):
         WHERE ct.comic_id = ? ORDER BY t.name
     """, (comic_id,)).fetchall()
     all_tags = db.execute("SELECT id, name FROM tags ORDER BY name").fetchall()
+    arc_issues = []
+    if comic['story_arc']:
+        arc_issues = db.execute("""
+            SELECT id, title, issue_number FROM comics
+            WHERE story_arc = ? AND id != ? AND deleted_at IS NULL
+            ORDER BY COALESCE(CAST(NULLIF(issue_number,'') AS INTEGER), id)
+            LIMIT 10
+        """, (comic['story_arc'], comic_id)).fetchall()
+    prev_comic = next_comic = None
+    if comic['series'] and comic['series'] != 'General':
+        series_ids = [r['id'] for r in db.execute("""
+            SELECT id FROM comics
+            WHERE series = ? AND publisher = ? AND deleted_at IS NULL
+            ORDER BY COALESCE(position, CAST(NULLIF(issue_number,'') AS INTEGER), id), title
+        """, (comic['series'], comic['publisher'])).fetchall()]
+        if comic_id in series_ids:
+            idx = series_ids.index(comic_id)
+            if idx > 0:
+                prev_comic = db.execute(
+                    "SELECT id, title, issue_number FROM comics WHERE id = ?", (series_ids[idx - 1],)
+                ).fetchone()
+            if idx < len(series_ids) - 1:
+                next_comic = db.execute(
+                    "SELECT id, title, issue_number FROM comics WHERE id = ?", (series_ids[idx + 1],)
+                ).fetchone()
     db.close()
-    if not comic:
-        abort(404)
     return render_template('comic_detail.html', comic=comic,
                            runs_featuring=runs_featuring,
-                           comic_tags=comic_tags, all_tags=all_tags)
+                           comic_tags=comic_tags, all_tags=all_tags,
+                           arc_issues=arc_issues,
+                           prev_comic=prev_comic, next_comic=next_comic)
 
 
 @app.route('/comic/<int:comic_id>/edit', methods=['GET', 'POST'])
@@ -505,6 +537,18 @@ def _permanently_delete_comic(comic_id, db):
             os.remove(row['file_path'])
         except OSError:
             pass
+
+
+@app.route('/api/trash/empty', methods=['POST'])
+def empty_trash():
+    db = get_db()
+    deleted = db.execute("SELECT id FROM comics WHERE deleted_at IS NOT NULL").fetchall()
+    count = len(deleted)
+    for row in deleted:
+        _permanently_delete_comic(row['id'], db)
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'count': count})
 
 
 @app.route('/api/comic/<int:comic_id>/restore', methods=['POST'])
@@ -680,7 +724,7 @@ def mark_read(comic_id):
     if not page_count:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-    last = max(page_count['page_count'] - 1, 0)
+    last = max(page_count['page_count'] - 2, 0)
     db.execute(
         """INSERT INTO reading_progress (comic_id, current_page, last_read)
            VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -1115,6 +1159,7 @@ def clear_library():
     db.execute("DELETE FROM comic_tags")
     db.execute("DELETE FROM reading_list")
     db.execute("DELETE FROM run_items")
+    db.execute("DELETE FROM runs")
     db.execute("DELETE FROM comics")
     db.commit()
     db.close()
@@ -1208,13 +1253,17 @@ _cbr_install_state = {'running': False, 'log': '', 'done': False, 'ok': False}
 def settings():
     cfg = load_config()
     system = _platform.system()
+    db = get_db()
+    comic_count = db.execute("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL").fetchone()[0]
+    db.close()
     return render_template('settings.html',
                            library_path=cfg.get('library_path', ''),
                            reader_mode=cfg.get('reader_mode', 'page'),
                            autoplay_interval=int(cfg.get('autoplay_interval', 10)),
                            cbr_ok=cbr_tool_available(),
                            brew_ok=bool(shutil.which('brew') or _find_bin('brew')),
-                           platform=system)
+                           platform=system,
+                           comic_count=comic_count)
 
 
 @app.route('/api/settings/save', methods=['POST'])
@@ -1347,10 +1396,19 @@ def reading_list_page():
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
         LEFT JOIN ratings r           ON c.id = r.comic_id
         WHERE c.deleted_at IS NULL
-        ORDER BY rl.added_at DESC
+        ORDER BY c.publisher, c.series, rl.added_at ASC
     """).fetchall()
     db.close()
-    return render_template('reading_list.html', comics=comics)
+    from collections import OrderedDict
+    series_groups = OrderedDict()
+    for comic in comics:
+        key = (comic['publisher'], comic['series'] or 'General')
+        if key not in series_groups:
+            series_groups[key] = []
+        series_groups[key].append(dict(comic))
+    groups = [{'publisher': pub, 'series': ser, 'comics': c}
+              for (pub, ser), c in series_groups.items()]
+    return render_template('reading_list.html', series_groups=groups, total=len(comics))
 
 
 @app.route('/api/bulk/delete', methods=['POST'])
@@ -1375,7 +1433,7 @@ def bulk_mark_read():
     ph = ','.join('?' * len(ids))
     db.execute(f"""
         INSERT INTO reading_progress (comic_id, current_page, last_read)
-        SELECT id, MAX(page_count - 1, 0), CURRENT_TIMESTAMP
+        SELECT id, MAX(page_count - 2, 0), CURRENT_TIMESTAMP
         FROM comics WHERE id IN ({ph}) AND page_count > 0
         ON CONFLICT(comic_id) DO UPDATE
           SET current_page = excluded.current_page,
@@ -1450,7 +1508,7 @@ def series_meta():
         db = get_db()
         publisher = _resolve_publisher(db, publisher, series)
         sm = db.execute(
-            "SELECT description, custom_cover_id FROM series_meta WHERE publisher = ? AND series = ?",
+            "SELECT * FROM series_meta WHERE publisher = ? AND series = ?",
             (publisher, series)
         ).fetchone()
         covers = db.execute(
@@ -1462,6 +1520,11 @@ def series_meta():
         return jsonify({
             'description':     sm['description'] if sm else '',
             'custom_cover_id': sm['custom_cover_id'] if sm else None,
+            'writer':          sm['writer'] if sm else '',
+            'penciller':       sm['penciller'] if sm else '',
+            'year':            sm['year'] if sm else '',
+            'story_arc':       sm['story_arc'] if sm else '',
+            'language_iso':    sm['language_iso'] if sm else '',
             'covers':          [{'id': c['id'], 'title': c['title']} for c in covers],
             'resolved_publisher': publisher,
         })
@@ -1470,16 +1533,27 @@ def series_meta():
     series    = data.get('series', '').strip()
     desc      = data.get('description', '').strip()
     cover_id  = data.get('custom_cover_id')
+    writer    = data.get('writer', '').strip() or None
+    penciller = data.get('penciller', '').strip() or None
+    year      = data.get('year') or None
+    story_arc = data.get('story_arc', '').strip() or None
+    language  = data.get('language_iso', '').strip() or None
     if not publisher or not series:
         return jsonify({'ok': False, 'error': 'publisher and series required'}), 400
     db = get_db()
     db.execute(
-        """INSERT INTO series_meta (publisher, series, description, custom_cover_id)
-           VALUES (?, ?, ?, ?)
+        """INSERT INTO series_meta (publisher, series, description, custom_cover_id,
+                                    writer, penciller, year, story_arc, language_iso)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(publisher, series) DO UPDATE
              SET description = excluded.description,
-                 custom_cover_id = excluded.custom_cover_id""",
-        (publisher, series, desc, cover_id or None)
+                 custom_cover_id = excluded.custom_cover_id,
+                 writer = excluded.writer,
+                 penciller = excluded.penciller,
+                 year = excluded.year,
+                 story_arc = excluded.story_arc,
+                 language_iso = excluded.language_iso""",
+        (publisher, series, desc, cover_id or None, writer, penciller, year, story_arc, language)
     )
     db.commit()
     db.close()
@@ -1490,9 +1564,11 @@ def series_meta():
 def comic_quicklook(comic_id):
     db = get_db()
     comic = db.execute("""
-        SELECT c.id, c.title, c.series, c.publisher, c.issue_number, c.page_count, c.character,
+        SELECT c.id, c.title, c.series, c.publisher, c.issue_number, c.page_count,
+               c.character, c.writer, c.year, c.language_iso,
                COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
+               rp.last_read,
                CASE WHEN f.comic_id  IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
                CASE WHEN rl.comic_id IS NOT NULL THEN 1 ELSE 0 END as in_reading_list
         FROM comics c
@@ -1523,6 +1599,11 @@ def comic_quicklook(comic_id):
         'publisher':     comic['publisher'],
         'issue_number':  comic['issue_number'],
         'page_count':    comic['page_count'],
+        'character':     comic['character'],
+        'writer':        comic['writer'],
+        'year':          comic['year'],
+        'language_iso':  comic['language_iso'],
+        'last_read':     comic['last_read'],
         'progress':      comic['progress'],
         'rating':        comic['rating'],
         'is_favorite':   comic['is_favorite'],
@@ -1592,7 +1673,7 @@ def series_mark_read():
             (series, publisher)
         ).fetchall()
     for c in comics:
-        last = max((c['page_count'] or 1) - 1, 0)
+        last = max((c['page_count'] or 2) - 2, 0)
         db.execute(
             """INSERT INTO reading_progress (comic_id, current_page, last_read)
                VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -1638,9 +1719,7 @@ def search_api():
         return jsonify({'results': []})
     db = get_db()
     p = f'%{q}%'
-    rows = db.execute("""
-        SELECT DISTINCT c.id, c.title, c.series, c.publisher, c.page_count,
-               COALESCE(rp.current_page, 0) as progress
+    base_cond = """
         FROM comics c
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
         LEFT JOIN comic_tags ct ON ct.comic_id = c.id
@@ -1650,10 +1729,16 @@ def search_api():
            OR c.writer LIKE ? OR c.penciller LIKE ? OR c.character LIKE ?
            OR c.story_arc LIKE ? OR t.name LIKE ?
         )
+    """
+    total = db.execute(f"SELECT COUNT(DISTINCT c.id) {base_cond}", (p,)*8).fetchone()[0]
+    rows = db.execute(f"""
+        SELECT DISTINCT c.id, c.title, c.series, c.publisher, c.page_count,
+               COALESCE(rp.current_page, 0) as progress
+        {base_cond}
         ORDER BY c.title LIMIT ?
-    """, (p, p, p, p, p, p, p, p, limit)).fetchall()
+    """, (p,)*8 + (limit,)).fetchall()
     db.close()
-    return jsonify({'results': [dict(r) for r in rows]})
+    return jsonify({'results': [dict(r) for r in rows], 'total': total})
 
 
 @app.route('/api/import', methods=['POST'])
@@ -1743,6 +1828,7 @@ def export_library():
         'comic_tags':     [dict(r) for r in db.execute("SELECT * FROM comic_tags").fetchall()],
         'runs':           [dict(r) for r in db.execute("SELECT * FROM runs").fetchall()],
         'run_items':      [dict(r) for r in db.execute("SELECT * FROM run_items").fetchall()],
+        'series_meta':    [dict(r) for r in db.execute("SELECT * FROM series_meta").fetchall()],
     }
     db.close()
     filename = f'comicarc-export-{time.strftime("%Y%m%d")}.json'

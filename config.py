@@ -2,6 +2,8 @@ import os
 import sys
 import platform
 
+VERSION = '1.1.0'
+
 
 def get_data_dir():
     system = platform.system()

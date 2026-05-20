@@ -23,9 +23,12 @@
     <div class="search-controls">
       {% if series_level == 'issues' %}
       <select name="sort" class="sort-select" id="sort-select" onchange="this.form.submit()" aria-label="Sort by">
-        <option value="default" {% if sort not in ('title','added') %}selected{% endif %}>Issue Order</option>
-        <option value="title"   {% if sort == 'title' %}selected{% endif %}>Title A–Z</option>
-        <option value="added"   {% if sort == 'added' %}selected{% endif %}>Recently Added</option>
+        <option value="default"   {% if sort not in ('title','added','last_read','year','rating') %}selected{% endif %}>Issue Order</option>
+        <option value="title"     {% if sort == 'title' %}selected{% endif %}>Title A–Z</option>
+        <option value="added"     {% if sort == 'added' %}selected{% endif %}>Recently Added</option>
+        <option value="last_read" {% if sort == 'last_read' %}selected{% endif %}>Last Read</option>
+        <option value="year"      {% if sort == 'year' %}selected{% endif %}>Year</option>
+        <option value="rating"    {% if sort == 'rating' %}selected{% endif %}>Rating</option>
       </select>
       {% if comics|length > 0 %}
       <button type="button" id="select-btn" class="btn-ghost select-toggle" onclick="toggleSelectMode()">Select</button>
@@ -126,30 +129,12 @@
 </div>
 {% endif %}
 
-{% if recently_added and not char_filter and not series_filter and not search %}
-<div class="continue-section">
-  <h2 class="continue-heading">Recently Added</h2>
-  <div class="continue-row">
-    {% for comic in recently_added %}
-    <a href="/comic/{{ comic.id }}" class="continue-card">
-      <div class="continue-cover-wrap">
-        <img src="/cover/{{ comic.id }}" class="continue-cover" alt="">
-      </div>
-      <div class="continue-info">
-        <div class="continue-title">{{ comic.title }}</div>
-        {% if comic.series and comic.series != 'General' %}
-        <div class="continue-pg">{{ comic.series }}</div>
-        {% endif %}
-      </div>
-    </a>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
 {% if continuing and not char_filter and not series_filter %}
 <div class="continue-section">
-  <h2 class="continue-heading">Continue Reading</h2>
+  <div class="continue-heading-row" style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+    <h2 class="continue-heading" style="margin-bottom:0">Continue Reading</h2>
+    <a href="/?status=in-progress&view=series" class="continue-see-all" style="font-size:12px;color:var(--muted);transition:color .15s">See all →</a>
+  </div>
   <div class="continue-row">
     {% for comic in continuing %}
     <a href="/reader/{{ comic.id }}" class="continue-card">
@@ -344,6 +329,9 @@
       {% if comic.issue_number %}
       <div class="card-issue-num">#{{ comic.issue_number }}</div>
       {% endif %}
+      {% if comic.writer %}
+      <div class="card-writer" title="{{ comic.writer }}">{{ comic.writer }}</div>
+      {% endif %}
       {% if comic.rating %}
       <div class="card-rating">
         {% for i in range(1, 6) %}
@@ -520,6 +508,9 @@
 </div>
 <div id="ql-backdrop" class="ql-backdrop arc-hidden" onclick="closeQL()"></div>
 
+<!-- Toast notification -->
+<div id="arc-toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap;pointer-events:none"></div>
+
 <!-- Series edit modal -->
 <div id="series-edit-modal" class="series-edit-modal arc-hidden">
   <div class="series-edit-backdrop" onclick="closeSeriesEdit()"></div>
@@ -530,9 +521,26 @@
     </div>
     <div class="series-edit-body">
       <label class="se-label">Description</label>
-      <textarea id="se-desc" class="se-textarea" rows="4" placeholder="Write a short description…"></textarea>
-      <label class="se-label">Cover Image</label>
+      <textarea id="se-desc" class="se-textarea" rows="3" placeholder="Write a short description…"></textarea>
+      <div class="batch-edit-grid" style="margin-top:12px">
+        <label>Writer</label>
+        <input type="text" id="se-writer" class="be-input" placeholder="e.g. Brian Michael Bendis">
+        <label>Artist</label>
+        <input type="text" id="se-penciller" class="be-input" placeholder="e.g. Mark Bagley">
+        <label>Year</label>
+        <input type="number" id="se-year" class="be-input" placeholder="e.g. 2000" min="1900" max="2100">
+        <label>Story Arc</label>
+        <input type="text" id="se-story_arc" class="be-input" placeholder="e.g. Ultimate Spider-Man">
+        <label>Language</label>
+        <input type="text" id="se-language_iso" class="be-input" placeholder="e.g. en, fr, ja">
+      </div>
+      <label class="se-label" style="margin-top:14px">Cover Image</label>
+      <p class="form-hint" style="margin:0 0 8px;font-size:11px">Click a cover to select it, then click it again to preview full size.</p>
       <div id="se-covers" class="se-covers"></div>
+      <div id="se-cover-preview" style="display:none;margin-top:10px;text-align:center">
+        <img id="se-cover-preview-img" src="" alt="" style="max-height:300px;border-radius:6px;object-fit:contain">
+        <button type="button" class="btn-ghost" style="display:block;margin:8px auto 0" onclick="document.getElementById('se-cover-preview').style.display='none'">Close Preview</button>
+      </div>
     </div>
     <div class="series-edit-footer">
       <button class="btn-ghost" onclick="closeSeriesEdit()">Cancel</button>
@@ -547,6 +555,18 @@
 {% if series_level == 'issues' %}
 const seriesPublisher = {{ series_publisher|tojson }};
 {% endif %}
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, isError) {
+  const el = document.getElementById('arc-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.borderColor = isError ? 'var(--danger,#e53e3e)' : 'var(--border)';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
 // ── Search clear ──────────────────────────────────────────────────────────────
 function clearSearch() {
   const form = document.getElementById('search-form');
@@ -694,9 +714,17 @@ function openQL(id) {
       document.getElementById('ql-cover').src = `/cover/${d.id}`;
       document.getElementById('ql-title').textContent = d.title;
       const prog = d.page_count > 0 ? Math.round(d.progress / d.page_count * 100) : 0;
-      document.getElementById('ql-meta').textContent =
-        [d.publisher, d.series, d.issue_number ? `#${d.issue_number}` : null,
-         d.page_count > 0 ? `${prog}%` : null].filter(Boolean).join(' · ');
+      const metaParts = [
+        d.publisher,
+        d.character || null,
+        d.series,
+        d.issue_number ? `#${d.issue_number}` : null,
+        d.year ? String(d.year) : null,
+        d.writer ? `✍ ${d.writer}` : null,
+        d.page_count > 0 ? `${prog}%` : null,
+        d.last_read ? `Last read ${d.last_read.slice(0,10)}` : null,
+      ].filter(Boolean);
+      document.getElementById('ql-meta').innerHTML = metaParts.map(p => `<span>${p}</span>`).join(' · ');
       const progBar = document.getElementById('ql-prog-bar');
       if (d.page_count > 0) {
         document.getElementById('ql-prog-fill').style.width = prog + '%';
@@ -802,7 +830,7 @@ function qlAddToRun() {
   fetch('/api/bulk/add-to-run', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ids:[qlComicId], run_id})})
     .then(r => r.json())
-    .then(d => { if (d.ok) { sel.value = ''; alert('Added to run!'); } })
+    .then(d => { if (d.ok) { sel.value = ''; showToast('Added to run!'); } })
     .catch(() => {});
 }
 
@@ -821,7 +849,13 @@ function openSeriesEdit(publisher, series, character) {
     .then(r => r.json())
     .then(d => {
       _sePublisher = d.resolved_publisher || publisher;
-      document.getElementById('se-desc').value = d.description || '';
+      document.getElementById('se-desc').value       = d.description || '';
+      document.getElementById('se-writer').value     = d.writer || '';
+      document.getElementById('se-penciller').value  = d.penciller || '';
+      document.getElementById('se-year').value       = d.year || '';
+      document.getElementById('se-story_arc').value  = d.story_arc || '';
+      document.getElementById('se-language_iso').value = d.language_iso || '';
+      document.getElementById('se-cover-preview').style.display = 'none';
       const grid = document.getElementById('se-covers');
       grid.innerHTML = '';
       (d.covers || []).forEach(c => {
@@ -829,6 +863,7 @@ function openSeriesEdit(publisher, series, character) {
         item.className = 'se-cover-item' + (d.custom_cover_id == c.id ? ' active' : '');
         item.dataset.id = c.id;
         item.onclick = () => seSelectCover(item);
+        item.ondblclick = () => sePreviewCover(c.id);
         const img = document.createElement('img');
         img.src = `/cover/${+c.id}`; img.alt = '';
         const titleEl = document.createElement('div');
@@ -839,6 +874,13 @@ function openSeriesEdit(publisher, series, character) {
       document.getElementById('series-edit-modal').classList.remove('arc-hidden');
     })
     .catch(() => {});
+}
+
+function sePreviewCover(id) {
+  const wrap = document.getElementById('se-cover-preview');
+  const img  = document.getElementById('se-cover-preview-img');
+  img.src = `/cover/${id}`;
+  wrap.style.display = 'block';
 }
 
 function closeSeriesEdit() {
@@ -854,14 +896,25 @@ function saveSeriesMeta() {
   const desc     = document.getElementById('se-desc').value.trim();
   const active   = document.querySelector('.se-cover-item.active');
   const cover_id = active ? +active.dataset.id : null;
+  const year     = document.getElementById('se-year').value.trim();
   fetch('/api/series-meta', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({publisher: _sePublisher, series: _seSeries, description: desc, custom_cover_id: cover_id})
+    body: JSON.stringify({
+      publisher:    _sePublisher,
+      series:       _seSeries,
+      description:  desc,
+      custom_cover_id: cover_id,
+      writer:       document.getElementById('se-writer').value.trim(),
+      penciller:    document.getElementById('se-penciller').value.trim(),
+      year:         year ? parseInt(year, 10) : null,
+      story_arc:    document.getElementById('se-story_arc').value.trim(),
+      language_iso: document.getElementById('se-language_iso').value.trim(),
+    })
   }).then(r => r.json()).then(d => {
     if (d.ok) { closeSeriesEdit(); location.reload(); }
-    else alert('Save failed: ' + (d.error || 'unknown'));
-  }).catch(() => { alert('Save failed: network error.'); });
+    else showToast('Save failed: ' + (d.error || 'unknown'), true);
+  }).catch(() => { showToast('Save failed: network error.', true); });
 }
 
 // ── Mark Series Read ──────────────────────────────────────────────────────────
@@ -900,8 +953,8 @@ function addSeriesToRun() {
       character: params.get('character') || null,
     })
   }).then(r => r.json()).then(d => {
-    if (d.ok) { sel.value = ''; alert(`Added ${d.added} issue${d.added !== 1 ? 's' : ''} to run!`); }
-    else alert('Error: ' + (d.error || 'unknown'));
+    if (d.ok) { sel.value = ''; showToast(`Added ${d.added} issue${d.added !== 1 ? 's' : ''} to run!`); }
+    else showToast('Error: ' + (d.error || 'unknown'), true);
   });
 }
 

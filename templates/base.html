@@ -21,7 +21,7 @@
       <a href="/stats" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
       <a href="/reading-list" class="nav-link {% if request.endpoint == 'reading_list_page' %}active{% endif %}">Want to Read</a>
       <a href="/tags" class="nav-link {% if request.endpoint == 'tags_page' %}active{% endif %}">Tags</a>
-      <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
+      <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">Settings{% if dup_count > 0 %}<span class="nav-dup-badge" title="{{ dup_count }} duplicate{{ 's' if dup_count != 1 }} detected"></span>{% endif %}</a>
       <a href="/trash" class="nav-link nav-link-trash {% if request.endpoint == 'trash' %}active{% endif %}" title="Recently Deleted">🗑</a>
     </div>
     <div class="nav-actions">
@@ -55,7 +55,7 @@
   </main>
 
   <footer class="app-footer">
-    ComicArc v1.0.0 — personal use only. Only import files you have the legal right to possess.
+    ComicArc v{{ app_version }} — personal use only. Only import files you have the legal right to possess.
     <a href="https://github.com/Vivekmurugulla2004/ComicArc/blob/main/LEGAL.md" target="_blank" rel="noopener">Legal &amp; Content Policy</a>
   </footer>
 
@@ -102,6 +102,9 @@
 
     function closeSpotlight() {
       document.getElementById('spotlight-overlay').classList.add('arc-hidden');
+      document.getElementById('spotlight-input').value = '';
+      document.getElementById('spotlight-results').innerHTML = '';
+      clearTimeout(_spotDebounce);
     }
 
     document.addEventListener('keydown', e => {
@@ -194,6 +197,12 @@
               return;
             }
             res.innerHTML = '';
+            if (d.total > d.results.length) {
+              const countEl = document.createElement('div');
+              countEl.className = 'spot-count';
+              countEl.textContent = `Showing ${d.results.length} of ${d.total} results`;
+              res.appendChild(countEl);
+            }
             d.results.forEach(c => {
               const a = document.createElement('a');
               a.href = `/comic/${c.id}`;
