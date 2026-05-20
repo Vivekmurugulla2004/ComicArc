@@ -123,11 +123,11 @@ struct LibraryView: View {
                     .onDisappear { loadActiveRun() }
             }
             .confirmationDialog(
-                "Delete \(selectedIds.count) comic\(selectedIds.count == 1 ? "" : "s")? This cannot be undone.",
+                "Move \(selectedIds.count) comic\(selectedIds.count == 1 ? "" : "s") to Trash?",
                 isPresented: $showBulkDeleteConfirm,
                 titleVisibility: .visible
             ) {
-                Button("Delete", role: .destructive) { bulkDelete() }
+                Button("Move to Trash", role: .destructive) { bulkDelete() }
             }
             .sheet(isPresented: $showBulkAddToRun) {
                 BulkAddToRunSheet(comicIds: Array(selectedIds)) { exitSelection() }
@@ -573,8 +573,29 @@ struct LibraryView: View {
         }
     }
 
+    @State private var seriesDescription: String = ""
+
     private func issueGrid(series: SeriesGroup) -> some View {
         VStack(spacing: 0) {
+            if !seriesDescription.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "text.quote")
+                        .font(.caption)
+                        .foregroundStyle(Color.arcGold)
+                        .padding(.top, 1)
+                    Text(seriesDescription)
+                        .font(.caption)
+                        .foregroundStyle(Color.arcMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.arcSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.arcBorder, lineWidth: 1))
+                .padding(.bottom, 8)
+            }
+
             smartFilterRow
 
             if isReordering {
@@ -898,6 +919,7 @@ struct LibraryView: View {
         isReordering = false
         selectedCharacter = group
         selectedSeries = nil
+        seriesDescription = ""
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
         if group.character != nil {
             library.loadSeries(for: group.groupName, publisher: pub)
@@ -911,12 +933,21 @@ struct LibraryView: View {
         selectedSmartFilter = nil
         isReordering = false
         selectedSeries = group
+        seriesDescription = ""
         let pub = selectedPublisher == "All" ? nil : selectedPublisher
         library.loadIssues(
             character: selectedCharacter?.character,
             series: group.groupName,
             publisher: pub
         )
+        Task.detached(priority: .utility) { [pub] in
+            let meta = DatabaseManager.shared.seriesMeta(
+                publisher: pub ?? group.publisher,
+                series: group.groupName
+            )
+            let desc = meta?.description ?? ""
+            await MainActor.run { seriesDescription = desc }
+        }
     }
 
     private func reloadIssues(sortOrder: DatabaseManager.SortOrder = .publisher) {
@@ -1035,9 +1066,17 @@ struct SeriesCard: View {
         VStack(alignment: .leading, spacing: 0) {
 
             ZStack(alignment: .topTrailing) {
-                CoverImage(comicId: group.coverComicId)
-                    .aspectRatio(2/3, contentMode: .fill)
-                    .clipped()
+                ZStack(alignment: .bottom) {
+                    CoverImage(comicId: group.coverComicId)
+                        .aspectRatio(2/3, contentMode: .fill)
+                        .clipped()
+                    if group.issueCount > 0 && group.completed > 0 {
+                        Rectangle()
+                            .fill(group.isFinished ? Color.green : Color.arcGold)
+                            .frame(height: 3)
+                            .scaleEffect(x: CGFloat(group.completed) / CGFloat(group.issueCount), y: 1, anchor: .leading)
+                    }
+                }
                 if group.isFinished {
                     badge("Done", color: .green)
                 } else if group.isReading {

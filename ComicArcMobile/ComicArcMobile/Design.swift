@@ -1,14 +1,17 @@
 import SwiftUI
 
 extension Color {
-    static let arcGold    = Color(red: 247/255, green: 201/255, blue: 72/255)
-    static let arcRed     = Color(red: 239/255, green: 35/255,  blue: 60/255)
-    static let arcBg      = Color(red: 11/255,  green: 12/255,  blue: 24/255)
-    static let arcSurface = Color(red: 19/255,  green: 21/255,  blue: 42/255)
-    static let arcCard    = Color(red: 26/255,  green: 29/255,  blue: 53/255)
-    static let arcBorder  = Color(red: 45/255,  green: 49/255,  blue: 88/255)
-    static let arcMuted   = Color(red: 122/255, green: 122/255, blue: 154/255)
-    static let arcBlue    = Color(red: 37/255,  green: 99/255,  blue: 235/255)
+    static let arcGold      = Color(red: 247/255, green: 201/255, blue: 72/255)
+    static let arcGold2     = Color(red: 255/255, green: 224/255, blue: 130/255)
+    static let arcRed       = Color(red: 239/255, green: 35/255,  blue: 60/255)
+    static let arcRed2      = Color(red: 255/255, green: 107/255, blue: 129/255)
+    static let arcBg        = Color(red: 11/255,  green: 12/255,  blue: 24/255)
+    static let arcSurface   = Color(red: 19/255,  green: 21/255,  blue: 42/255)
+    static let arcCard      = Color(red: 26/255,  green: 29/255,  blue: 53/255)
+    static let arcCardHover = Color(red: 33/255,  green: 37/255,  blue: 74/255)
+    static let arcBorder    = Color(red: 45/255,  green: 49/255,  blue: 88/255)
+    static let arcMuted     = Color(red: 122/255, green: 122/255, blue: 154/255)
+    static let arcBlue      = Color(red: 37/255,  green: 99/255,  blue: 235/255)
 
     static let pubMarvel  = Color(red: 0.8,  green: 0,    blue: 0)
     static let pubDC      = Color(red: 0.1,  green: 0.23, blue: 0.54)
