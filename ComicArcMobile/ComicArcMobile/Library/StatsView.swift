@@ -10,22 +10,23 @@ struct StatsView: View {
             Group {
                 if let s = stats {
                     List {
-
                         Section {
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                                statTile("Comics", value: "\(s.totalComics)", icon: "books.vertical", color: .arcGold)
-                                statTile("Pages Read", value: "\(s.pagesRead)", icon: "doc.text", color: .arcBlue)
-                                statTile("Favorites", value: "\(s.favorites)", icon: "heart.fill", color: .arcRed)
-                                statTile("In Progress", value: "\(s.inProgress)", icon: "clock", color: .arcGold)
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                statTile("Comics",     value: "\(s.totalComics)",                   icon: "books.vertical",  color: .arcGold)
+                                statTile("Finished",   value: "\(s.finished)",                      icon: "checkmark.circle.fill", color: .green)
+                                statTile("In Progress",value: "\(s.inProgress)",                    icon: "clock",           color: .arcGold)
+                                statTile("Pages Read", value: formattedInt(s.pagesRead),            icon: "doc.text",        color: .arcBlue)
+                                statTile("Favorites",  value: "\(s.favorites)",                     icon: "heart.fill",      color: .arcRed)
+                                statTile("Runs",       value: "\(s.runsCount)",                     icon: "list.number",     color: .purple)
                             }
                             .listRowInsets(.init())
                             .listRowBackground(Color.clear)
                         }
 
                         Section("Reading Status") {
-                            completionRow("Finished", count: s.finished, total: s.totalComics, color: .green)
-                            completionRow("In Progress", count: s.inProgress, total: s.totalComics, color: .arcGold)
-                            completionRow("Unread", count: s.unread, total: s.totalComics, color: .secondary)
+                            completionRow("Finished",    count: s.finished,    total: s.totalComics, color: .green)
+                            completionRow("In Progress", count: s.inProgress,  total: s.totalComics, color: .arcGold)
+                            completionRow("Unread",      count: s.unread,      total: s.totalComics, color: .secondary)
                         }
 
                         Section("Reading Activity") {
@@ -50,6 +51,12 @@ struct StatsView: View {
                                 Spacer()
                             }
                             .padding(.vertical, 4)
+
+                            if !s.activityMap.isEmpty {
+                                ReadingHeatmap(activityMap: s.activityMap)
+                                    .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
+                                    .listRowBackground(Color.clear)
+                            }
                         }
 
                         if !s.publisherBreakdown.isEmpty {
@@ -68,10 +75,8 @@ struct StatsView: View {
                                             .font(.caption).foregroundStyle(.secondary)
                                             .frame(width: 20, alignment: .leading)
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(row.series)
-                                                .font(.subheadline)
-                                            Text(row.publisher)
-                                                .font(.caption).foregroundStyle(.secondary)
+                                            Text(row.series).font(.subheadline)
+                                            Text(row.publisher).font(.caption).foregroundStyle(.secondary)
                                         }
                                         Spacer()
                                         Text("\(row.count)")
@@ -90,9 +95,7 @@ struct StatsView: View {
                                             .frame(width: 36, height: 52)
                                             .clipShape(RoundedRectangle(cornerRadius: 4))
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(comic.title)
-                                                .font(.subheadline)
-                                                .lineLimit(1)
+                                            Text(comic.title).font(.subheadline).lineLimit(1)
                                             if comic.pageCount > 0 {
                                                 Text("p. \(comic.progress + 1) / \(comic.pageCount)")
                                                     .font(.caption).foregroundStyle(.secondary)
@@ -100,8 +103,7 @@ struct StatsView: View {
                                         }
                                         Spacer()
                                         if comic.isFinished {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.green)
+                                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                                         }
                                     }
                                 }
@@ -121,25 +123,24 @@ struct StatsView: View {
     }
 
     private func loadStats() async {
-        let loaded = await Task.detached(priority: .utility) {
-            LibraryStats.load()
-        }.value
+        let loaded = await Task.detached(priority: .utility) { LibraryStats.load() }.value
         stats = loaded
+    }
+
+    private func formattedInt(_ n: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 
     private func statTile(_ label: String, value: String, icon: String, color: Color) -> some View {
         VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.title2.bold())
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Image(systemName: icon).font(.title3).foregroundStyle(color)
+            Text(value).font(.title3.bold())
+            Text(label).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding()
+        .padding(.vertical, 12)
         .arcCard()
     }
 
@@ -148,11 +149,9 @@ struct StatsView: View {
             HStack {
                 Text(label)
                 Spacer()
-                Text("\(count)")
-                    .foregroundStyle(.secondary)
+                Text("\(count)").foregroundStyle(.secondary)
             }
             .font(.subheadline)
-
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.arcBorder)
                 Capsule()
@@ -169,11 +168,9 @@ struct StatsView: View {
             HStack {
                 Text(row.publisher)
                 Spacer()
-                Text("\(row.count)")
-                    .foregroundStyle(.secondary)
+                Text("\(row.count)").foregroundStyle(.secondary)
             }
             .font(.subheadline)
-
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.arcBorder)
                 Capsule()
@@ -183,6 +180,76 @@ struct StatsView: View {
             .frame(height: 6)
         }
         .padding(.vertical, 2)
+    }
+}
+
+struct ReadingHeatmap: View {
+    let activityMap: [String: Int]
+
+    private let cols = 18
+    private let rows = 7
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Past \(cols) weeks")
+                .font(.caption2)
+                .foregroundStyle(Color.arcMuted)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 3) {
+                    ForEach(0..<cols, id: \.self) { col in
+                        VStack(spacing: 3) {
+                            ForEach(0..<rows, id: \.self) { row in
+                                let date = dateFor(col: col, row: row)
+                                let count = activityMap[date] ?? 0
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(heatColor(count))
+                                    .frame(width: 13, height: 13)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
+            HStack(spacing: 4) {
+                Text("Less").font(.caption2).foregroundStyle(Color.arcMuted)
+                ForEach(0...4, id: \.self) { level in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(heatColor(level == 0 ? 0 : level == 1 ? 1 : level == 2 ? 2 : level == 3 ? 4 : 6))
+                        .frame(width: 11, height: 11)
+                }
+                Text("More").font(.caption2).foregroundStyle(Color.arcMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func dateFor(col: Int, row: Int) -> String {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let totalDays = cols * rows
+        let daysAgo = totalDays - 1 - (col * rows + row)
+        guard let date = cal.date(byAdding: .day, value: -daysAgo, to: today) else { return "" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        return fmt.string(from: date)
+    }
+
+    private func heatColor(_ count: Int) -> Color {
+        switch count {
+        case 0:    return Color.arcSurface
+        case 1:    return Color(red: 0.10, green: 0.28, blue: 0.19)
+        case 2...3: return Color(red: 0.18, green: 0.42, blue: 0.31)
+        case 4...5: return Color(red: 0.25, green: 0.57, blue: 0.42)
+        default:   return Color(red: 0.32, green: 0.72, blue: 0.53)
+        }
     }
 }
 
@@ -196,41 +263,57 @@ struct LibraryStats {
     let inProgress: Int
     let finished: Int
     let unread: Int
+    let runsCount: Int
     let readingStreak: Int
+    let activityMap: [String: Int]
     let publisherBreakdown: [PublisherStat]
     let topSeries: [SeriesStat]
     let recentlyRead: [Comic]
 
     static func load() -> LibraryStats {
         let db = DatabaseManager.shared
-        let total    = db.scalarInt("SELECT COUNT(*) FROM comics")
-        let pagesRead = db.scalarInt("SELECT COALESCE(SUM(current_page), 0) FROM reading_progress")
-        let favorites = db.scalarInt("SELECT COUNT(*) FROM comics WHERE is_favorite = 1")
-        let inProg   = db.scalarInt("""
+        let total     = db.scalarInt("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL")
+        let pagesRead = db.scalarInt("""
+            SELECT COALESCE(SUM(rp.current_page), 0) FROM reading_progress rp
+            JOIN comics c ON rp.comic_id = c.id WHERE c.deleted_at IS NULL
+        """)
+        let favorites = db.scalarInt("SELECT COUNT(*) FROM comics WHERE is_favorite = 1 AND deleted_at IS NULL")
+        let inProg    = db.scalarInt("""
             SELECT COUNT(*) FROM comics c
             JOIN reading_progress rp ON c.id = rp.comic_id
-            WHERE rp.current_page > 0 AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+            WHERE rp.current_page > 0
+              AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
+              AND c.deleted_at IS NULL
         """)
-        let finished = db.scalarInt("""
+        let finished  = db.scalarInt("""
             SELECT COUNT(*) FROM comics c
             JOIN reading_progress rp ON c.id = rp.comic_id
             WHERE c.page_count > 1 AND rp.current_page >= c.page_count - 2
+              AND c.deleted_at IS NULL
         """)
+        let runsCount = db.scalarInt("SELECT COUNT(*) FROM runs")
 
         let streakDates = db.rows(
             "SELECT DISTINCT date(updated_at) FROM reading_progress ORDER BY date(updated_at) DESC"
         ) { stmt in db.colText(stmt, 0) ?? "" }
         let streak = computeStreak(dates: streakDates)
 
-        let pubRows = db.rows("SELECT publisher, COUNT(*) as cnt FROM comics GROUP BY publisher ORDER BY cnt DESC") { stmt in
+        let activityMap = db.readingActivityMap(days: 126)
+
+        let pubRows = db.rows("""
+            SELECT publisher, COUNT(*) as cnt FROM comics
+            WHERE deleted_at IS NULL GROUP BY publisher ORDER BY cnt DESC
+        """) { stmt in
             PublisherStat(publisher: db.colText(stmt, 0) ?? "", count: Int(sqlite3_column_int(stmt, 1)))
         }
 
         let seriesRows = db.rows("""
             SELECT series, publisher, COUNT(*) as cnt FROM comics
+            WHERE deleted_at IS NULL
             GROUP BY publisher, series ORDER BY cnt DESC LIMIT 5
         """) { stmt in
-            SeriesStat(series: db.colText(stmt, 0) ?? "", publisher: db.colText(stmt, 1) ?? "", count: Int(sqlite3_column_int(stmt, 2)))
+            SeriesStat(series: db.colText(stmt, 0) ?? "", publisher: db.colText(stmt, 1) ?? "",
+                       count: Int(sqlite3_column_int(stmt, 2)))
         }
 
         let recent = db.inProgress(limit: 8)
@@ -238,7 +321,7 @@ struct LibraryStats {
         return LibraryStats(
             totalComics: total, pagesRead: pagesRead, favorites: favorites,
             inProgress: inProg, finished: finished, unread: max(0, total - inProg - finished),
-            readingStreak: streak,
+            runsCount: runsCount, readingStreak: streak, activityMap: activityMap,
             publisherBreakdown: pubRows, topSeries: seriesRows, recentlyRead: recent
         )
     }

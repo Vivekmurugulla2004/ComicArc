@@ -865,6 +865,28 @@ final class DatabaseManager {
         return f
     }()
 
+    func readingActivityMap(days: Int = 365) -> [String: Int] {
+        queue.sync {
+            guard db != nil else { return [:] }
+            let sql = """
+                SELECT date(updated_at) as day, COUNT(DISTINCT comic_id) as cnt
+                FROM reading_progress
+                WHERE updated_at >= date('now', '-\(days) days')
+                GROUP BY date(updated_at)
+            """
+            var result: [String: Int] = [:]
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return result }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let day = colText(stmt, 0) {
+                    result[day] = Int(sqlite3_column_int(stmt, 1))
+                }
+            }
+            sqlite3_finalize(stmt)
+            return result
+        }
+    }
+
     func scalarInt(_ sql: String) -> Int {
         queue.sync {
             guard db != nil else { return 0 }
