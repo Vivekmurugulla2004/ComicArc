@@ -59,12 +59,20 @@ def migrate_db():
                PRIMARY KEY (publisher, series)
            )""",
         "ALTER TABLE comics ADD COLUMN notes TEXT",
+        "ALTER TABLE series_meta ADD COLUMN writer TEXT",
+        "ALTER TABLE series_meta ADD COLUMN penciller TEXT",
+        "ALTER TABLE series_meta ADD COLUMN year INTEGER",
+        "ALTER TABLE series_meta ADD COLUMN story_arc TEXT",
+        "ALTER TABLE series_meta ADD COLUMN language_iso TEXT",
     ]:
         try:
             conn.execute(sql)
         except sqlite3.OperationalError:
             pass
-    conn.execute("UPDATE comics SET position = id WHERE position IS NULL")
+    conn.execute("""
+        UPDATE comics SET position = COALESCE(CAST(NULLIF(issue_number,'') AS INTEGER), id)
+        WHERE position IS NULL
+    """)
     conn.commit()
     conn.close()
 

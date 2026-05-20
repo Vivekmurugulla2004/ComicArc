@@ -22,7 +22,23 @@
 
   <!-- Right: info -->
   <div class="cd-info-col">
-    <a href="/" class="back-crumb">← Library</a>
+    <div class="cd-nav-row">
+      <a href="/" class="back-crumb">← Library</a>
+      {% if prev_comic or next_comic %}
+      <div class="cd-prev-next">
+        {% if prev_comic %}
+        <a href="/comic/{{ prev_comic.id }}" class="cd-prev-next-btn" title="{{ prev_comic.title }}">‹ {% if prev_comic.issue_number %}#{{ prev_comic.issue_number }}{% else %}Prev{% endif %}</a>
+        {% else %}
+        <span class="cd-prev-next-btn disabled">‹ Prev</span>
+        {% endif %}
+        {% if next_comic %}
+        <a href="/comic/{{ next_comic.id }}" class="cd-prev-next-btn" title="{{ next_comic.title }}">{% if next_comic.issue_number %}#{{ next_comic.issue_number }}{% else %}Next{% endif %} ›</a>
+        {% else %}
+        <span class="cd-prev-next-btn disabled">Next ›</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
 
     {% if comic.series and comic.series != 'General' %}
     <div class="cd-series">{{ comic.series }}</div>
@@ -32,14 +48,23 @@
 
     <div class="cd-meta-row">
       <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
+      {% if comic.character %}
+      <span class="cd-character">{{ comic.character }}</span>
+      {% endif %}
       {% if comic.issue_number %}
       <span class="cd-issue-num">Issue #{{ comic.issue_number }}</span>
       {% endif %}
       {% if comic.year %}
       <span class="cd-year">{{ comic.year }}</span>
       {% endif %}
+      {% if comic.language_iso and comic.language_iso|lower not in ('en', 'eng', 'english') %}
+      <span class="cd-language">{{ comic.language_iso|upper }}</span>
+      {% endif %}
       {% if comic.page_count > 0 %}
       <span class="cd-pages">{{ comic.page_count }} pages</span>
+      {% endif %}
+      {% if comic.last_read %}
+      <span class="cd-last-read" title="{{ comic.last_read }}">Last read {{ comic.last_read[:10] }}</span>
       {% endif %}
     </div>
     {% if comic.writer or comic.penciller or comic.story_arc %}
@@ -140,13 +165,27 @@
       </div>
     </div>
 
+    <!-- Other issues in same story arc -->
+    {% if arc_issues %}
+    <div class="cd-runs-section">
+      <div class="cd-runs-label">Also in "{{ comic.story_arc }}"</div>
+      <div class="cd-runs-list">
+        {% for a in arc_issues %}
+        <a href="/comic/{{ a.id }}" class="cd-run-chip">
+          {% if a.issue_number %}#{{ a.issue_number }} — {% endif %}{{ a.title }}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Appears in runs -->
     {% if runs_featuring %}
     <div class="cd-runs-section">
       <div class="cd-runs-label">Appears in</div>
       <div class="cd-runs-list">
         {% for r in runs_featuring %}
-        <a href="/runs/{{ r.id }}" class="cd-run-chip">{{ r.title }}</a>
+        <a href="/runs/{{ r.id }}" class="cd-run-chip">{{ r.title }}{% if r.position %} <span class="cd-run-pos">#{{ r.position + 1 }}</span>{% endif %}</a>
         {% endfor %}
       </div>
     </div>

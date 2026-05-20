@@ -57,19 +57,24 @@
     </div>
   </form>
 
-  <div class="danger-zone">
+  <div class="form-section">
     <h3>Cover</h3>
-    <p>If the cover looks wrong or outdated, refresh it to regenerate from the file.</p>
+    <p class="form-hint">If the cover looks wrong or outdated, refresh it to regenerate from the file.</p>
+    <div id="cover-preview-wrap" style="margin-bottom:10px">
+      <img id="cover-preview-img" src="/cover/{{ comic.id }}" alt="" style="height:120px;border-radius:6px;object-fit:cover">
+    </div>
     <button type="button" class="btn-ghost" id="refresh-cover-btn"
             onclick="refreshCover({{ comic.id }})">↻ Refresh Cover</button>
+  </div>
 
-    <h3 style="margin-top:1.5rem">Danger Zone</h3>
-    <p>Permanently removes this comic from your library.
-       {% if 'user_comics' in comic.file_path %}The uploaded file will also be deleted from disk.{% endif %}
+  <div class="danger-zone">
+    <h3>Danger Zone</h3>
+    <p>Moves this comic to the Trash. You can restore it from the Trash page within 30 days.
+       {% if 'user_comics' in comic.file_path %}The uploaded file will be deleted permanently when purged.{% endif %}
     </p>
     <form method="post" action="/comic/{{ comic.id }}/delete"
-          onsubmit="return confirm('Delete this comic? This cannot be undone.')">
-      <button type="submit" class="btn-danger">Delete Comic</button>
+          onsubmit="return confirm('Move this comic to Trash?')">
+      <button type="submit" class="btn-danger">Move to Trash</button>
     </form>
   </div>
 </div>
@@ -82,7 +87,11 @@ function refreshCover(id) {
   btn.disabled = true;
   btn.textContent = 'Refreshing…';
   fetch(`/api/comic/${id}/refresh-cover`, { method: 'POST' })
-    .then(() => { btn.textContent = '✓ Done'; })
+    .then(() => {
+      btn.textContent = '✓ Done';
+      const img = document.getElementById('cover-preview-img');
+      if (img) img.src = `/cover/${id}?t=${Date.now()}`;
+    })
     .catch(() => { btn.disabled = false; btn.textContent = '↻ Refresh Cover'; });
 }
 </script>

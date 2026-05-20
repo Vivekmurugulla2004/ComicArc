@@ -17,17 +17,20 @@
   <a href="/" class="btn-primary" style="margin-top:16px">← Library</a>
 </div>
 {% else %}
+{% set max_count = tags[0].comic_count if tags else 1 %}
 <div class="tags-manage-grid" id="tags-grid">
   {% for tag in tags %}
-  <div class="tm-row" id="tm-row-{{ tag.id }}" data-id="{{ tag.id }}" data-name="{{ tag.name }}">
-    <div class="tm-left">
+  {% set bar_pct = ((tag.comic_count / max_count) * 100)|int if max_count > 0 else 0 %}
+  <div class="tm-row" id="tm-row-{{ tag.id }}" data-id="{{ tag.id }}" data-name="{{ tag.name }}" style="position:relative;overflow:hidden">
+    <div class="tm-bar-bg" style="position:absolute;left:0;top:0;bottom:0;width:{{ bar_pct }}%;background:var(--border);opacity:0.35;pointer-events:none;border-radius:6px 0 0 6px"></div>
+    <div class="tm-left" style="position:relative">
       <span class="tm-name" id="tm-name-{{ tag.id }}" onclick="startRename({{ tag.id }})">{{ tag.name }}</span>
       <input class="tm-rename-input" id="tm-input-{{ tag.id }}" type="text"
              value="{{ tag.name }}" style="display:none"
              onblur="commitRename({{ tag.id }})"
              onkeydown="renameKey(event, {{ tag.id }})">
     </div>
-    <div class="tm-right">
+    <div class="tm-right" style="position:relative">
       <a href="/?tag={{ tag.name|urlencode }}" class="tm-count" title="Browse comics with this tag">
         {{ tag.comic_count }} comic{{ 's' if tag.comic_count != 1 }}
       </a>

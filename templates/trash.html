@@ -3,8 +3,16 @@
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title">Recently Deleted</h1>
-  <p class="page-subtitle">Comics are permanently removed after 30 days. You can restore them before then.</p>
+  <div>
+    <h1 class="page-title">Recently Deleted</h1>
+    <p class="page-subtitle">Comics are permanently removed after 30 days. You can restore them before then.</p>
+  </div>
+  {% if deleted %}
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn-ghost" id="bulk-select-btn" onclick="toggleBulkMode()">Select</button>
+    <button class="btn-danger" id="empty-trash-btn" onclick="emptyTrash()">Empty Trash</button>
+  </div>
+  {% endif %}
 </div>
 
 {% if not deleted %}
@@ -15,16 +23,25 @@
   <a href="/" class="btn-primary" style="margin-top:16px">← Back to Library</a>
 </div>
 {% else %}
-<div class="trash-list">
+<div id="bulk-bar" style="display:none;padding:10px 0;margin-bottom:12px;display:none;gap:10px;align-items:center">
+  <span id="bulk-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+  <button class="btn-ghost" onclick="selectAll()">Select All</button>
+  <button class="btn-danger" onclick="bulkPurge()">Delete Selected Forever</button>
+  <button class="btn-ghost" onclick="toggleBulkMode()">Cancel</button>
+</div>
+<div class="trash-list" id="trash-list">
   {% for comic in deleted %}
-  <div class="trash-row" id="trash-row-{{ comic.id }}">
+  <div class="trash-row" id="trash-row-{{ comic.id }}" data-id="{{ comic.id }}">
+    <label class="trash-select-check" style="display:none;cursor:pointer;margin-right:8px">
+      <input type="checkbox" class="trash-cb" data-id="{{ comic.id }}" onchange="updateBulkCount()" style="width:16px;height:16px">
+    </label>
     <img src="/cover/{{ comic.id }}" class="trash-cover" alt="">
     <div class="trash-info">
       <div class="trash-title">{{ comic.title }}</div>
       <div class="trash-meta">{{ comic.publisher }}{% if comic.series and comic.series != 'General' %} · {{ comic.series }}{% endif %}</div>
       <div class="trash-date">Deleted {{ comic.deleted_at[:10] }}</div>
     </div>
-    <div class="trash-actions">
+    <div class="trash-actions" id="trash-actions-{{ comic.id }}">
       <button class="btn-ghost" onclick="restoreComic({{ comic.id }})">↩ Restore</button>
       <button class="btn-danger-sm" onclick="purgeComic({{ comic.id }})">Delete Forever</button>
     </div>
@@ -36,6 +53,61 @@
 
 {% block scripts %}
 <script>
+let bulkMode = false;
+
+function toggleBulkMode() {
+  bulkMode = !bulkMode;
+  const bar = document.getElementById('bulk-bar');
+  const btn = document.getElementById('bulk-select-btn');
+  bar.style.display = bulkMode ? 'flex' : 'none';
+  btn.textContent   = bulkMode ? 'Done' : 'Select';
+  document.querySelectorAll('.trash-select-check').forEach(el => {
+    el.style.display = bulkMode ? '' : 'none';
+  });
+  document.querySelectorAll('[id^="trash-actions-"]').forEach(el => {
+    el.style.display = bulkMode ? 'none' : '';
+  });
+  if (!bulkMode) {
+    document.querySelectorAll('.trash-cb').forEach(cb => cb.checked = false);
+    updateBulkCount();
+  }
+}
+
+function selectAll() {
+  document.querySelectorAll('.trash-cb').forEach(cb => cb.checked = true);
+  updateBulkCount();
+}
+
+function updateBulkCount() {
+  const checked = document.querySelectorAll('.trash-cb:checked').length;
+  document.getElementById('bulk-count').textContent = checked + ' selected';
+}
+
+function bulkPurge() {
+  const ids = [...document.querySelectorAll('.trash-cb:checked')].map(cb => parseInt(cb.dataset.id));
+  if (!ids.length) return;
+  if (!confirm(`Permanently delete ${ids.length} comic${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+  Promise.all(ids.map(id =>
+    fetch(`/api/comic/${id}/purge`, {method: 'POST'}).then(r => r.json())
+  )).then(() => {
+    ids.forEach(id => {
+      const row = document.getElementById('trash-row-' + id);
+      if (row) row.remove();
+    });
+    toggleBulkMode();
+  }).catch(() => {});
+}
+
+function emptyTrash() {
+  const count = document.querySelectorAll('.trash-row').length;
+  if (!confirm(`Permanently delete all ${count} comic${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+  fetch('/api/trash/empty', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) location.reload();
+    }).catch(() => {});
+}
+
 function restoreComic(id) {
   fetch(`/api/comic/${id}/restore`, {method: 'POST'})
     .then(r => r.json())

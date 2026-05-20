@@ -5,14 +5,14 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Reading List</h1>
-    <p class="page-subtitle">Comics you want to read next, in the order you added them.</p>
+    <p class="page-subtitle">Comics you want to read, grouped by series.</p>
   </div>
-  {% if comics %}
-  <span class="rl-count">{{ comics|length }} queued</span>
+  {% if total %}
+  <span class="rl-count">{{ total }} queued</span>
   {% endif %}
 </div>
 
-{% if not comics %}
+{% if not series_groups %}
 <div class="empty-state">
   <div class="empty-icon">◫</div>
   <div class="empty-title">Your reading list is empty</div>
@@ -20,47 +20,54 @@
   <a href="/" class="btn-primary" style="margin-top:16px">← Browse Library</a>
 </div>
 {% else %}
-<div class="rl-grid">
-  {% for comic in comics %}
-  <div class="rl-card" id="rl-card-{{ comic.id }}">
-    <a href="/comic/{{ comic.id }}" class="rl-cover-link">
-      <img src="/cover/{{ comic.id }}" class="rl-cover" alt="{{ comic.title }}" loading="lazy">
-      {% if comic.page_count > 0 and comic.progress > 0 %}
-      <div class="rl-prog-bar">
-        <div class="rl-prog-fill" style="width:{{ (comic.progress / comic.page_count * 100)|int }}%"></div>
-      </div>
-      {% endif %}
-    </a>
-    <div class="rl-info">
-      <a href="/comic/{{ comic.id }}" class="rl-title">{{ comic.title }}</a>
-      <div class="rl-meta">
-        <span class="publisher-badge pub-{{ comic.publisher|lower }}">{{ comic.publisher }}</span>
-        {% if comic.series and comic.series != 'General' %}
-        <span class="rl-series">{{ comic.series }}</span>
+{% for grp in series_groups %}
+<div class="rl-group">
+  {% if grp.series and grp.series != 'General' %}
+  <div class="rl-group-header">
+    <a href="/?publisher={{ grp.publisher|urlencode }}&series={{ grp.series|urlencode }}&view=series"
+       class="rl-group-title">{{ grp.series }}</a>
+    <span class="rl-group-pub">{{ grp.publisher }}</span>
+  </div>
+  {% endif %}
+  <div class="rl-grid">
+    {% for comic in grp.comics %}
+    <div class="rl-card" id="rl-card-{{ comic.id }}">
+      <a href="/comic/{{ comic.id }}" class="rl-cover-link">
+        <img src="/cover/{{ comic.id }}" class="rl-cover" alt="{{ comic.title }}" loading="lazy">
+        {% if comic.page_count > 0 and comic.progress > 0 %}
+        <div class="rl-prog-bar">
+          <div class="rl-prog-fill" style="width:{{ (comic.progress / comic.page_count * 100)|int }}%"></div>
+        </div>
         {% endif %}
-        {% if comic.issue_number %}<span class="rl-issue">#{{ comic.issue_number }}</span>{% endif %}
-      </div>
-      {% if comic.writer %}<div class="rl-credit">{{ comic.writer }}</div>{% endif %}
-      <div class="rl-status">
-        {% if comic.page_count > 0 and comic.progress >= comic.page_count - 2 %}
-          <span class="rl-badge done">Read</span>
-        {% elif comic.progress > 0 %}
-          <span class="rl-badge reading">p.{{ comic.progress }}/{{ comic.page_count }}</span>
-        {% else %}
-          <span class="rl-badge unread">Unread</span>
-        {% endif %}
-        {% if comic.rating %}
-        <span class="rl-rating">{{ '★' * comic.rating }}{% if comic.rating < 5 %}{{ '☆' * (5 - comic.rating) }}{% endif %}</span>
-        {% endif %}
-      </div>
-      <div class="rl-actions">
-        <a href="/reader/{{ comic.id }}" class="btn-primary rl-read-btn">▶ Read</a>
-        <button class="btn-ghost rl-remove-btn" onclick="removeFromList({{ comic.id }})">Remove</button>
+      </a>
+      <div class="rl-info">
+        <a href="/comic/{{ comic.id }}" class="rl-title">{{ comic.title }}</a>
+        <div class="rl-meta">
+          {% if comic.issue_number %}<span class="rl-issue">#{{ comic.issue_number }}</span>{% endif %}
+        </div>
+        {% if comic.writer %}<div class="rl-credit">{{ comic.writer }}</div>{% endif %}
+        <div class="rl-status">
+          {% if comic.page_count > 0 and comic.progress >= comic.page_count - 2 %}
+            <span class="rl-badge done">Read</span>
+          {% elif comic.progress > 0 %}
+            <span class="rl-badge reading">p.{{ comic.progress }}/{{ comic.page_count }}</span>
+          {% else %}
+            <span class="rl-badge unread">Unread</span>
+          {% endif %}
+          {% if comic.rating %}
+          <span class="rl-rating">{{ '★' * comic.rating }}{% if comic.rating < 5 %}{{ '☆' * (5 - comic.rating) }}{% endif %}</span>
+          {% endif %}
+        </div>
+        <div class="rl-actions">
+          <a href="/reader/{{ comic.id }}" class="btn-primary rl-read-btn">▶ Read</a>
+          <button class="btn-ghost rl-remove-btn" onclick="removeFromList({{ comic.id }})">Remove</button>
+        </div>
       </div>
     </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
+{% endfor %}
 {% endif %}
 {% endblock %}
 

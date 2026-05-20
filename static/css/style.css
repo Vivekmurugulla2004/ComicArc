@@ -466,6 +466,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
 .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .card-rating { margin-top: 5px; }
 .card-issue-num { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.card-writer { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.continue-see-all:hover { color: var(--gold) !important; }
 .star { font-size: 11px; color: var(--border); }
 .star.filled { color: var(--gold); }
 
@@ -508,6 +510,18 @@ main { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
 .page-subtitle { color: var(--muted); margin-top: 6px; font-size: 14px; }
 .back-crumb { color: var(--muted); font-size: 13px; display: block; margin-bottom: 8px; }
 .back-crumb:hover { color: var(--gold); }
+.cd-nav-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cd-prev-next { display: flex; gap: 6px; }
+.cd-prev-next-btn { font-size: 12px; color: var(--muted); padding: 4px 10px; border: 1px solid var(--border); border-radius: 20px; transition: color .15s, border-color .15s; white-space: nowrap; }
+.cd-prev-next-btn:hover { color: var(--gold); border-color: var(--gold); }
+.cd-prev-next-btn.disabled { opacity: 0.35; pointer-events: none; }
+.pub-stat-row-link { text-decoration: none; transition: background .15s; border-radius: 6px; }
+.pub-stat-row-link:hover { background: var(--card-hover); }
+.rl-group { margin-bottom: 28px; }
+.rl-group-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.rl-group-title { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 1px; color: var(--text); }
+.rl-group-title:hover { color: var(--gold); }
+.rl-group-pub { font-size: 11px; color: var(--muted); }
 .header-actions { display: flex; gap: 10px; align-items: center; }
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
@@ -908,6 +922,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
 }
 .cd-issue-num { font-size: 12px; color: var(--muted); }
 .cd-pages { font-size: 12px; color: var(--muted); }
+.cd-character { font-size: 12px; color: var(--gold); font-weight: 600; }
+.cd-language { font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; text-transform: uppercase; letter-spacing: .5px; }
+.cd-last-read { font-size: 11px; color: var(--muted); }
+.cd-run-pos { font-size: 10px; opacity: .7; }
 
 .cd-notes {
   font-size: 13px;
@@ -1436,6 +1454,17 @@ kbd {
   transition: all 0.15s;
 }
 .cd-run-chip:hover { background: rgba(247,201,72,0.18); border-color: var(--gold); }
+
+/* ── Form section / hint (edit comic) ─────────────────────────────────────── */
+.form-section {
+  margin-top: 32px;
+  padding: 18px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.form-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.form-hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 
 /* ── Danger Zone (edit comic) ──────────────────────────────────────────────── */
 .danger-zone {
@@ -2615,6 +2644,12 @@ button.btn-sm { font-family: inherit; cursor: pointer; }
   color: var(--muted);
   font-size: 13px;
 }
+.spot-count {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
 .spot-result {
   display: flex;
   align-items: center;
@@ -2829,6 +2864,7 @@ button.btn-sm { font-family: inherit; cursor: pointer; }
 /* ── Trash page ──────────────────────────────────────────────────────────────── */
 .nav-link-trash { opacity: 0.6; font-size: 15px; }
 .nav-link-trash:hover, .nav-link-trash.active { opacity: 1; }
+.nav-dup-badge { display: inline-block; width: 7px; height: 7px; background: var(--red); border-radius: 50%; margin-left: 4px; vertical-align: middle; position: relative; top: -1px; }
 .trash-list { display: flex; flex-direction: column; gap: 1px; margin-top: 24px; }
 .trash-row {
   display: flex; align-items: center; gap: 16px;

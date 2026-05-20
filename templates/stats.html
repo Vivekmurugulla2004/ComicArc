@@ -53,13 +53,13 @@
     <h2 class="section-title">By Publisher</h2>
     {% for row in by_publisher %}
     {% set pct = ((row.count / total_comics) * 100)|int if total_comics > 0 else 0 %}
-    <div class="pub-stat-row">
+    <a href="/?publisher={{ row.publisher|urlencode }}" class="pub-stat-row pub-stat-row-link">
       <span class="publisher-badge pub-{{ row.publisher|lower }}">{{ row.publisher }}</span>
       <div class="pub-stat-bar-wrap">
         <div class="pub-stat-bar" style="width: {{ pct }}%"></div>
       </div>
       <span class="pub-stat-count">{{ row.count }}</span>
-    </div>
+    </a>
     {% endfor %}
   </div>
 
@@ -83,7 +83,18 @@
 <!-- Reading activity heatmap -->
 <div class="stat-section heatmap-section" style="margin-top: 40px;">
   <h2 class="section-title">Reading Activity <span class="section-subtitle">— past year</span></h2>
-  <div class="heatmap" id="reading-heatmap"></div>
+  <div style="display:flex;gap:6px;align-items:flex-start">
+    <div class="heatmap-day-labels" style="display:flex;flex-direction:column;gap:0;padding-top:2px">
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px"></span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px">Mon</span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px"></span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px">Wed</span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px"></span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px">Fri</span>
+      <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px"></span>
+    </div>
+    <div class="heatmap" id="reading-heatmap" style="flex:1"></div>
+  </div><!-- end heatmap flex row -->
   <div class="heatmap-legend">
     <span class="heatmap-legend-label">Less</span>
     <span class="heatmap-cell legend-cell" data-level="0"></span>
