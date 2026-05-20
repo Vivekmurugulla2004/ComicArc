@@ -16,7 +16,12 @@ struct Comic: Identifiable, Hashable {
     var tags: [String]
     var dateAdded: Date
     var writer: String?
+    var penciller: String?
+    var year: Int?
+    var storyArc: String?
+    var languageISO: String?
     var summary: String?
+    var notes: String?
     var customCoverPath: String?
 
     var progressPercent: Double {
@@ -24,7 +29,7 @@ struct Comic: Identifiable, Hashable {
         return Double(progress) / Double(pageCount)
     }
 
-    var isFinished: Bool { pageCount > 0 && progress >= pageCount - 1 }
+    var isFinished: Bool { pageCount > 1 && progress >= pageCount - 2 }
     var isStarted: Bool  { progress > 0 }
 
     var fileExtension: String {
@@ -55,3 +60,7 @@ struct Collection: Identifiable {
     var comicCount: Int
 }
 
+struct SeriesMeta {
+    var description: String
+    var customCoverId: Int64?
+}

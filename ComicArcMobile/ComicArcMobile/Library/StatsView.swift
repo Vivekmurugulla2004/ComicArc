@@ -209,12 +209,12 @@ struct LibraryStats {
         let inProg   = db.scalarInt("""
             SELECT COUNT(*) FROM comics c
             JOIN reading_progress rp ON c.id = rp.comic_id
-            WHERE rp.current_page > 0 AND (c.page_count = 0 OR rp.current_page < c.page_count - 1)
+            WHERE rp.current_page > 0 AND (c.page_count = 0 OR rp.current_page < c.page_count - 2)
         """)
         let finished = db.scalarInt("""
             SELECT COUNT(*) FROM comics c
             JOIN reading_progress rp ON c.id = rp.comic_id
-            WHERE c.page_count > 0 AND rp.current_page >= c.page_count - 1
+            WHERE c.page_count > 1 AND rp.current_page >= c.page_count - 2
         """)
 
         let streakDates = db.rows(

@@ -26,6 +26,7 @@ final class LibraryViewModel: ObservableObject {
     @Published var seriesGroups: [SeriesGroup] = []
     @Published var publishers: [String] = []
     @Published var collections: [Collection] = []
+    @Published var recentlyAdded: [Comic] = []
 
     @Published var importProgress = ImportProgress()
     @Published var importError: String?
@@ -131,12 +132,14 @@ final class LibraryViewModel: ObservableObject {
         Task.detached(priority: .userInitiated) { [weak self] in
             let publishers      = db.publishers()
             let inProgress      = db.inProgress()
+            let recentlyAdded   = db.recentlyAdded()
             let characterGroups = db.characterGroups(publisher: publisher)
             let comics          = db.allComics(publisher: publisher, search: search, sortOrder: sortOrder)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.publishers      = publishers
                 self.inProgress      = inProgress
+                self.recentlyAdded   = recentlyAdded
                 self.characterGroups = characterGroups
                 self.comics          = comics
             }
@@ -400,7 +403,7 @@ final class LibraryViewModel: ObservableObject {
         let extracted: [URL]
         do { extracted = try RARExtractor.extract(archiveURL: source, destination: destDir) }
         catch { try? FileManager.default.removeItem(at: destDir); return false }
-        let meta = ComicImporter.parse(url: source)
+        let meta = ComicImporter.parse(url: destDir)
         db.insertComic(title: meta.title, filePath: destDir.path, publisher: meta.publisher,
                        character: meta.character, series: meta.series, issueNumber: meta.issueNumber,
                        pageCount: extracted.count, writer: meta.writer, summary: meta.summary)
@@ -433,12 +436,9 @@ final class LibraryViewModel: ObservableObject {
         DirectoryReaderCache.shared.invalidate(path: comic.filePath)
         db.deleteComic(comic.id)
         reload()
-        removeFileIfOwned(comic.filePath)
     }
 
     func deleteBatch(_ comics: [Comic]) {
-        let docsPath = Self.comicsDir.path
-        let paths = comics.map(\.filePath)
         comics.forEach { comic in
             ThumbnailCache.shared.invalidate(comicId: comic.id)
             CBZReaderCache.shared.invalidate(path: comic.filePath)
@@ -446,17 +446,19 @@ final class LibraryViewModel: ObservableObject {
             db.deleteComic(comic.id)
         }
         reload()
-        Task.detached(priority: .background) {
-            for path in paths where path.hasPrefix(docsPath) {
-                try? FileManager.default.removeItem(atPath: path)
-            }
-        }
     }
 
-    private func removeFileIfOwned(_ filePath: String) {
-        let docsPath = Self.comicsDir.path
-        guard filePath.hasPrefix(docsPath) else { return }
-        Task.detached(priority: .background) { try? FileManager.default.removeItem(atPath: filePath) }
+    func purgeComic(_ comic: Comic) {
+        ThumbnailCache.shared.invalidate(comicId: comic.id)
+        CBZReaderCache.shared.invalidate(path: comic.filePath)
+        DirectoryReaderCache.shared.invalidate(path: comic.filePath)
+        let filePath = db.purgeComic(comic.id)
+        if let path = filePath {
+            let docsPath = Self.comicsDir.path
+            if path.hasPrefix(docsPath) {
+                Task.detached(priority: .background) { try? FileManager.default.removeItem(atPath: path) }
+            }
+        }
     }
 
     func updateProgress(_ comic: Comic, page: Int) {

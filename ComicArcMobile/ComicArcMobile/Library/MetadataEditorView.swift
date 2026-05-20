@@ -11,7 +11,13 @@ struct MetadataEditorView: View {
     @State private var character: String   = ""
     @State private var series: String      = ""
     @State private var issueNumber: String = ""
+    @State private var writer: String      = ""
+    @State private var penciller: String   = ""
+    @State private var yearText: String    = ""
+    @State private var storyArc: String    = ""
+    @State private var notes: String       = ""
     @State private var tagsText: String    = ""
+    @State private var seriesDescription: String = ""
 
     @State private var showRenameSeriesSheet = false
     @State private var showMergeSeriesSheet  = false
@@ -22,12 +28,20 @@ struct MetadataEditorView: View {
         NavigationStack {
             Form {
                 Section("Comic Info") {
-                    LabeledField("Title", text: $title)
-                    LabeledField("Publisher", text: $publisher)
-                    LabeledField("Character", text: $character)
-                    LabeledField("Series", text: $series)
-                    LabeledField("Issue #", text: $issueNumber)
-                        .keyboardType(.numberPad)
+                    LabeledField("Title",      text: $title)
+                    LabeledField("Publisher",  text: $publisher)
+                    LabeledField("Character",  text: $character)
+                    LabeledField("Series",     text: $series)
+                    LabeledField("Issue #",    text: $issueNumber).keyboardType(.numberPad)
+                    LabeledField("Writer",     text: $writer)
+                    LabeledField("Penciller",  text: $penciller)
+                    LabeledField("Year",       text: $yearText).keyboardType(.numberPad)
+                    LabeledField("Story Arc",  text: $storyArc)
+                }
+
+                Section("Notes") {
+                    TextEditor(text: $notes)
+                        .frame(minHeight: 80)
                 }
 
                 Section {
@@ -39,13 +53,14 @@ struct MetadataEditorView: View {
 
                 let currentSeries = series.trimmingCharacters(in: .whitespaces)
                 if !currentSeries.isEmpty && currentSeries != "General" {
+                    Section("Series Description") {
+                        TextEditor(text: $seriesDescription)
+                            .frame(minHeight: 60)
+                    }
+
                     Section("Series Actions") {
-                        Button("Rename Series for All Comics") {
-                            showRenameSeriesSheet = true
-                        }
-                        Button("Merge Another Series Into This One") {
-                            showMergeSeriesSheet = true
-                        }
+                        Button("Rename Series for All Comics") { showRenameSeriesSheet = true }
+                        Button("Merge Another Series Into This One") { showMergeSeriesSheet = true }
                     }
                 }
             }
@@ -54,12 +69,9 @@ struct MetadataEditorView: View {
             .navigationTitle("Edit Metadata")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading)  { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { save() }
-                        .fontWeight(.semibold)
+                    Button("Save") { save() }.fontWeight(.semibold)
                 }
             }
             .onAppear { load() }
@@ -67,10 +79,7 @@ struct MetadataEditorView: View {
                 RenameSeriesSheet(
                     currentName: series.trimmingCharacters(in: .whitespaces),
                     publisher: publisher.trimmingCharacters(in: .whitespaces)
-                ) { newName in
-                    series = newName
-                    onSave()
-                }
+                ) { newName in series = newName; onSave() }
             }
             .sheet(isPresented: $showMergeSeriesSheet) {
                 MergeSeriesSheet(
@@ -85,28 +94,44 @@ struct MetadataEditorView: View {
     private func load() {
         let id = comicId
         Task {
-            let (comic, tags) = await Task.detached(priority: .userInitiated) {
-                (DatabaseManager.shared.comic(id: id), DatabaseManager.shared.tags(for: id))
+            let result = await Task.detached(priority: .userInitiated) { () -> (Comic?, [Tag], SeriesMeta?) in
+                let comic = DatabaseManager.shared.comic(id: id)
+                let tags  = DatabaseManager.shared.tags(for: id)
+                let meta  = comic.flatMap {
+                    DatabaseManager.shared.seriesMeta(publisher: $0.publisher, series: $0.series)
+                }
+                return (comic, tags, meta)
             }.value
-            guard let comic else { return }
-            title       = comic.title
-            publisher   = comic.publisher
-            character   = comic.character ?? ""
-            series      = comic.series
-            issueNumber = comic.issueNumber ?? ""
-            tagsText    = tags.map(\.name).joined(separator: ", ")
+            guard let comic = result.0 else { return }
+            title             = comic.title
+            publisher         = comic.publisher
+            character         = comic.character ?? ""
+            series            = comic.series
+            issueNumber       = comic.issueNumber ?? ""
+            writer            = comic.writer ?? ""
+            penciller         = comic.penciller ?? ""
+            yearText          = comic.year.map(String.init) ?? ""
+            storyArc          = comic.storyArc ?? ""
+            notes             = comic.notes ?? ""
+            tagsText          = result.1.map(\.name).joined(separator: ", ")
+            seriesDescription = result.2?.description ?? ""
         }
     }
 
     private func save() {
         let ws           = CharacterSet.whitespaces
+        let titleVal     = title.trimmingCharacters(in: ws)
+        let publisherVal = publisher.trimmingCharacters(in: ws)
         let charVal      = character.trimmingCharacters(in: ws)
         let serVal       = series.trimmingCharacters(in: ws)
         let numVal       = issueNumber.trimmingCharacters(in: ws)
-        let titleVal     = title.trimmingCharacters(in: ws)
-        let publisherVal = publisher.trimmingCharacters(in: ws)
-        let tagNames = tagsText
-            .split(separator: ",")
+        let writerVal    = writer.trimmingCharacters(in: ws)
+        let pencillerVal = penciller.trimmingCharacters(in: ws)
+        let storyArcVal  = storyArc.trimmingCharacters(in: ws)
+        let notesVal     = notes.trimmingCharacters(in: ws)
+        let serDescVal   = seriesDescription.trimmingCharacters(in: ws)
+        let yearVal      = Int(yearText.trimmingCharacters(in: ws))
+        let tagNames = tagsText.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         let id = comicId
@@ -116,11 +141,21 @@ struct MetadataEditorView: View {
                     id,
                     title:       titleVal,
                     publisher:   publisherVal,
-                    character:   charVal.isEmpty ? nil       : charVal,
-                    series:      serVal.isEmpty  ? "General" : serVal,
-                    issueNumber: numVal.isEmpty  ? nil       : numVal
+                    character:   charVal.isEmpty      ? nil       : charVal,
+                    series:      serVal.isEmpty        ? "General" : serVal,
+                    issueNumber: numVal.isEmpty        ? nil       : numVal,
+                    writer:      writerVal.isEmpty     ? nil       : writerVal,
+                    penciller:   pencillerVal.isEmpty  ? nil       : pencillerVal,
+                    year:        yearVal,
+                    storyArc:    storyArcVal.isEmpty   ? nil       : storyArcVal,
+                    notes:       notesVal.isEmpty      ? nil       : notesVal
                 )
                 DatabaseManager.shared.setTags(for: id, names: tagNames)
+                if !serVal.isEmpty && serVal != "General" && !publisherVal.isEmpty {
+                    DatabaseManager.shared.saveSeriesMeta(
+                        publisher: publisherVal, series: serVal, description: serDescVal
+                    )
+                }
             }.value
             onSave()
             dismiss()
@@ -130,11 +165,9 @@ struct MetadataEditorView: View {
 
 private struct RenameSeriesSheet: View {
     @Environment(\.dismiss) private var dismiss
-
     let currentName: String
     let publisher: String
     let onRenamed: (String) -> Void
-
     @State private var newName: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -155,11 +188,8 @@ private struct RenameSeriesSheet: View {
                     Text("Renames this series for all \(publisher.isEmpty ? "comics" : "\(publisher) comics") in your library.")
                         .font(.caption)
                 }
-
                 if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
-                    }
+                    Section { Text(error).foregroundStyle(.red).font(.caption) }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -167,9 +197,7 @@ private struct RenameSeriesSheet: View {
             .navigationTitle("Rename Series")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading)  { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Rename") { performRename() }
                         .fontWeight(.semibold)
@@ -183,8 +211,7 @@ private struct RenameSeriesSheet: View {
     private func performRename() {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed != currentName else {
-            errorMessage = "Enter a different name to rename."
-            return
+            errorMessage = "Enter a different name to rename."; return
         }
         isSaving = true
         let pub = publisher.isEmpty ? nil : publisher
@@ -200,11 +227,9 @@ private struct RenameSeriesSheet: View {
 
 private struct MergeSeriesSheet: View {
     @Environment(\.dismiss) private var dismiss
-
     let targetSeries: String
     let publisher: String
     let onMerged: () -> Void
-
     @State private var allSeries: [String] = []
     @State private var selected: Set<String> = []
     @State private var isMerging = false
@@ -213,11 +238,8 @@ private struct MergeSeriesSheet: View {
         NavigationStack {
             Group {
                 if allSeries.isEmpty {
-                    ContentUnavailableView(
-                        "No Other Series",
-                        systemImage: "square.stack",
-                        description: Text("There are no other series to merge into \"\(targetSeries)\".")
-                    )
+                    ContentUnavailableView("No Other Series", systemImage: "square.stack",
+                        description: Text("There are no other series to merge into \"\(targetSeries)\"."))
                 } else {
                     List(allSeries, id: \.self, selection: $selected) { name in
                         HStack {
@@ -228,8 +250,7 @@ private struct MergeSeriesSheet: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            if selected.contains(name) { selected.remove(name) }
-                            else { selected.insert(name) }
+                            if selected.contains(name) { selected.remove(name) } else { selected.insert(name) }
                         }
                     }
                     .listStyle(.plain)
@@ -239,9 +260,7 @@ private struct MergeSeriesSheet: View {
             .navigationTitle("Merge Into \"\(targetSeries)\"")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading)  { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Merge (\(selected.count))") { performMerge() }
                         .fontWeight(.semibold)
@@ -250,23 +269,19 @@ private struct MergeSeriesSheet: View {
             }
             .safeAreaInset(edge: .bottom) {
                 if !selected.isEmpty {
-                    mergePreviewBanner
+                    VStack(alignment: .leading, spacing: .arcS4) {
+                        Text("Merging \(selected.count) series into \"\(targetSeries)\"")
+                            .font(.subheadline).fontWeight(.medium)
+                        Text(selected.sorted().joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.arcS12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.ultraThinMaterial)
                 }
             }
             .onAppear { loadSeries() }
         }
-    }
-
-    private var mergePreviewBanner: some View {
-        VStack(alignment: .leading, spacing: .arcS4) {
-            Text("Merging \(selected.count) series into \"\(targetSeries)\"")
-                .font(.subheadline).fontWeight(.medium)
-            Text(selected.sorted().joined(separator: ", "))
-                .font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(.arcS12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
     }
 
     private func loadSeries() {
@@ -274,8 +289,7 @@ private struct MergeSeriesSheet: View {
         let target = targetSeries
         Task {
             let result = await Task.detached(priority: .utility) {
-                DatabaseManager.shared.allDistinctSeries(publisher: pub)
-                    .filter { $0 != target }
+                DatabaseManager.shared.allDistinctSeries(publisher: pub).filter { $0 != target }
             }.value
             allSeries = result
         }
@@ -300,19 +314,11 @@ private struct MergeSeriesSheet: View {
 private struct LabeledField: View {
     let label: String
     @Binding var text: String
-
-    init(_ label: String, text: Binding<String>) {
-        self.label = label
-        self._text = text
-    }
-
+    init(_ label: String, text: Binding<String>) { self.label = label; self._text = text }
     var body: some View {
         HStack {
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
-            TextField(label, text: $text)
-                .accessibilityLabel(label)
+            Text(label).foregroundStyle(.secondary).frame(width: 80, alignment: .leading)
+            TextField(label, text: $text).accessibilityLabel(label)
         }
     }
 }

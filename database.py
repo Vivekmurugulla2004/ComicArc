@@ -10,11 +10,12 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA cache_size = -8000")
     return conn
 
 
 def migrate_db():
-    """Add new columns and tables to existing databases without losing data."""
     conn = get_db()
     for sql in [
         "ALTER TABLE runs ADD COLUMN rating INTEGER",
@@ -86,7 +87,9 @@ def init_db():
             penciller TEXT,
             year INTEGER,
             story_arc TEXT,
-            language_iso TEXT
+            language_iso TEXT,
+            deleted_at TIMESTAMP,
+            notes TEXT
         );
 
         CREATE TABLE IF NOT EXISTS runs (
@@ -116,6 +119,41 @@ def init_db():
             rating INTEGER CHECK(rating BETWEEN 1 AND 5),
             review TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS favorites (
+            comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS tags (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS comic_tags (
+            comic_id INTEGER REFERENCES comics(id) ON DELETE CASCADE,
+            tag_id   INTEGER REFERENCES tags(id)   ON DELETE CASCADE,
+            PRIMARY KEY (comic_id, tag_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS reading_list (
+            comic_id INTEGER PRIMARY KEY REFERENCES comics(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS series_meta (
+            publisher       TEXT NOT NULL,
+            series          TEXT NOT NULL,
+            description     TEXT DEFAULT '',
+            custom_cover_id INTEGER REFERENCES comics(id) ON DELETE SET NULL,
+            PRIMARY KEY (publisher, series)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_comics_publisher   ON comics(publisher);
+        CREATE INDEX IF NOT EXISTS idx_comics_series      ON comics(series);
+        CREATE INDEX IF NOT EXISTS idx_run_items_run_id   ON run_items(run_id, position);
+        CREATE INDEX IF NOT EXISTS idx_reading_progress   ON reading_progress(comic_id);
+        CREATE INDEX IF NOT EXISTS idx_comic_tags_comic   ON comic_tags(comic_id);
+        CREATE INDEX IF NOT EXISTS idx_reading_list       ON reading_list(comic_id);
     """)
     conn.commit()
     conn.close()

@@ -4,7 +4,6 @@ import platform
 
 
 def get_data_dir():
-    """Where the database, covers, and uploads live — never inside the app bundle."""
     system = platform.system()
     if system == 'Darwin':
         base = os.path.expanduser('~/Library/Application Support')
@@ -18,7 +17,6 @@ def get_data_dir():
 
 
 def get_resource_dir():
-    """Where static/ and templates/ live — inside the bundle when frozen."""
     if getattr(sys, 'frozen', False):
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))

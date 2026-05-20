@@ -62,10 +62,10 @@ struct ComicDetailView: View {
                     .environmentObject(library)
             }
             .confirmationDialog(
-                "Delete this comic? The file will also be removed from your Comics folder.",
+                "Move this comic to Trash? You can restore it from the Trash tab within 30 days.",
                 isPresented: $showDeleteConfirm, titleVisibility: .visible
             ) {
-                Button("Delete Comic", role: .destructive) {
+                Button("Move to Trash", role: .destructive) {
                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                     library.delete(comic); dismiss()
                 }
@@ -305,13 +305,25 @@ struct ComicDetailView: View {
             if let char = comic.character   { metaRow("Character", char) }
             if comic.series != "General"    { metaRow("Series", comic.series) }
             if let num = comic.issueNumber  { metaRow("Issue", "#\(num)") }
-            if let writer = comic.writer, !writer.isEmpty { metaRow("Writer", writer) }
+            if let writer = comic.writer, !writer.isEmpty       { metaRow("Writer", writer) }
+            if let penciller = comic.penciller, !penciller.isEmpty { metaRow("Penciller", penciller) }
+            if let arc = comic.storyArc, !arc.isEmpty           { metaRow("Story Arc", arc) }
+            if let year = comic.year                            { metaRow("Year", String(year)) }
+            if let lang = comic.languageISO, !lang.isEmpty      { metaRow("Language", lang.uppercased()) }
             metaRow("Format", comic.fileExtension.uppercased())
             if comic.pageCount > 0 { metaRow("Pages", "\(comic.pageCount)") }
             if let summary = comic.summary, !summary.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Summary").font(.subheadline).foregroundStyle(.secondary)
                     Text(summary).font(.caption)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let notes = comic.notes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Notes").font(.subheadline).foregroundStyle(.secondary)
+                    Text(notes).font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }

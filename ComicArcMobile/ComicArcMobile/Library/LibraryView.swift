@@ -167,6 +167,9 @@ struct LibraryView: View {
                         if !library.publishers.isEmpty {
                             publisherFilterRow.padding(.horizontal, 12)
                         }
+                        if !library.recentlyAdded.isEmpty {
+                            recentlyAddedSection.padding(.horizontal, 12)
+                        }
                         if !library.inProgress.isEmpty {
                             continueReadingSection.padding(.horizontal, 12)
                         }
@@ -348,6 +351,7 @@ struct LibraryView: View {
                         seriesGrid(character: char)
                     } else {
                         smartFilterRow
+                        if !library.recentlyAdded.isEmpty { recentlyAddedSection }
                         if !library.inProgress.isEmpty { continueReadingSection }
                         continueRunSection
                         characterGrid
@@ -492,6 +496,28 @@ struct LibraryView: View {
                                     missingFileComic = comic
                                 }
                             }
+                    }
+                }
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    private var recentlyAddedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recently Added").font(.headline).padding(.top, 16)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(library.recentlyAdded) { comic in
+                        VStack(alignment: .leading, spacing: 4) {
+                            CoverImage(comic: comic)
+                                .frame(width: 80, height: 116)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            Text(comic.title)
+                                .font(.caption2).lineLimit(2)
+                                .frame(width: 80, alignment: .leading)
+                        }
+                        .onTapGesture { detailComic = comic }
                     }
                 }
             }
@@ -819,6 +845,14 @@ struct LibraryView: View {
                     }
                     .accessibilityLabel("Mark selected as read")
 
+                    Button { bulkMarkUnread() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "arrow.counterclockwise").font(.title3)
+                            Text("Unread").font(.system(size: 9))
+                        }
+                    }
+                    .accessibilityLabel("Mark selected as unread")
+
                     Button { bulkToggleFavorite() } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "heart").font(.title3)
@@ -933,6 +967,14 @@ struct LibraryView: View {
         let mutations: [LibraryMutation] = library.comics
             .filter { selectedIds.contains($0.id) && $0.pageCount > 0 }
             .map { .setProgress(id: $0.id, page: $0.pageCount - 1) }
+        exitSelection()
+        library.applyBatch(mutations)
+    }
+
+    private func bulkMarkUnread() {
+        let mutations: [LibraryMutation] = library.comics
+            .filter { selectedIds.contains($0.id) }
+            .map { .setProgress(id: $0.id, page: 0) }
         exitSelection()
         library.applyBatch(mutations)
     }

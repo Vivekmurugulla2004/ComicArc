@@ -109,7 +109,7 @@ struct SettingsView: View {
             .onAppear {
                 computeStorageSize()
                 Task.detached(priority: .utility) {
-                    let n = DatabaseManager.shared.scalarInt("SELECT COUNT(*) FROM comics")
+                    let n = DatabaseManager.shared.scalarInt("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL")
                     await MainActor.run { comicCount = n }
                 }
             }
