@@ -126,6 +126,27 @@
 </div>
 {% endif %}
 
+{% if recently_added and not char_filter and not series_filter and not search %}
+<div class="continue-section">
+  <h2 class="continue-heading">Recently Added</h2>
+  <div class="continue-row">
+    {% for comic in recently_added %}
+    <a href="/comic/{{ comic.id }}" class="continue-card">
+      <div class="continue-cover-wrap">
+        <img src="/cover/{{ comic.id }}" class="continue-cover" alt="">
+      </div>
+      <div class="continue-info">
+        <div class="continue-title">{{ comic.title }}</div>
+        {% if comic.series and comic.series != 'General' %}
+        <div class="continue-pg">{{ comic.series }}</div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% if continuing and not char_filter and not series_filter %}
 <div class="continue-section">
   <h2 class="continue-heading">Continue Reading</h2>

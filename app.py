@@ -52,15 +52,19 @@ def natural_sort_key(s):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s or '')]
 
 
-def extract_metadata_upload(filename):
-    """Minimal metadata from just a filename (for browser-uploaded files)."""
-    title = os.path.splitext(filename)[0]
-    match = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
-    return {'publisher': 'Unknown', 'series': 'General', 'title': title,
-            'issue_number': match.group(1) if match else None}
+@app.context_processor
+def _inject_globals():
+    return {'library_path': _comics_dir(), 'scan_status': get_scan_status()}
 
 
-# ── Library ──────────────────────────────────────────────────────────────────
+def _resolve_publisher(db, publisher, series):
+    if publisher and publisher != 'All':
+        return publisher
+    row = db.execute(
+        "SELECT publisher FROM comics WHERE series = ? AND deleted_at IS NULL LIMIT 1", (series,)
+    ).fetchone()
+    return row['publisher'] if row else ''
+
 
 @app.route('/')
 def index():
@@ -79,7 +83,10 @@ def index():
         "SELECT DISTINCT publisher FROM comics WHERE deleted_at IS NULL ORDER BY publisher"
     ).fetchall()]
     total = db.execute("SELECT COUNT(*) FROM comics WHERE deleted_at IS NULL").fetchone()[0]
-    reading_list_count = db.execute("SELECT COUNT(*) FROM reading_list").fetchone()[0]
+    reading_list_count = db.execute("""
+        SELECT COUNT(*) FROM reading_list rl
+        JOIN comics c ON rl.comic_id = c.id WHERE c.deleted_at IS NULL
+    """).fetchone()[0]
     continuing = db.execute("""
         SELECT c.id, c.title, c.series, c.publisher, c.page_count,
                rp.current_page as progress
@@ -90,11 +97,15 @@ def index():
           AND c.deleted_at IS NULL
         ORDER BY rp.last_read DESC LIMIT 8
     """).fetchall()
+    recently_added = db.execute("""
+        SELECT id, title, series, publisher FROM comics
+        WHERE deleted_at IS NULL
+        ORDER BY added_at DESC LIMIT 12
+    """).fetchall()
     has_cbr = (not cbr_tool_available()) and (
         db.execute("SELECT 1 FROM comics WHERE file_path LIKE '%.cbr' AND deleted_at IS NULL LIMIT 1").fetchone() is not None
     )
 
-    # ── Character / Series view ───────────────────────────────────────────────
     if view == 'series' and not search:
         pub_cond = "AND c.publisher = ?" if publisher_filter != 'All' else ""
         pub_params = [publisher_filter] if publisher_filter != 'All' else []
@@ -147,17 +158,13 @@ def index():
                                    status_filter=status_filter, tag_filter=tag_filter,
                                    all_tags=all_tags,
                                    continuing=[],
+                                   recently_added=[],
                                    series_description=sm['description'] if sm else '',
                                    series_publisher=actual_pub,
                                    all_runs=all_runs,
-                                   unrar_missing=has_cbr,
-                                   library_path=_comics_dir(),
-                                   scan_status=get_scan_status())
+                                   unrar_missing=has_cbr)
 
         if char_filter:
-            # Drill-down: show series cards for a specific character.
-            # Match on COALESCE so comics filed directly as Publisher/Robin/file.cbz
-            # (character=None, series='Robin') show up alongside character='Robin' ones.
             rows = db.execute(f"""
                 SELECT c.publisher, c.character, c.series,
                        COUNT(*) as issue_count,
@@ -194,12 +201,9 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='', tag_filter='', all_tags=[],
-                                   continuing=[], series_filter='',
-                                   unrar_missing=has_cbr,
-                                   library_path=_comics_dir(),
-                                   scan_status=get_scan_status())
+                                   continuing=[], recently_added=[], series_filter='',
+                                   unrar_missing=has_cbr)
         else:
-            # Top level: show character cards (or series if no character subfolder)
             char_order = {
                 'added':   "MAX(c.id) DESC",
                 'reading': "started DESC, group_name",
@@ -234,12 +238,10 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='', tag_filter='', all_tags=[],
-                                   continuing=continuing, series_filter='',
-                                   unrar_missing=has_cbr,
-                                   library_path=_comics_dir(),
-                                   scan_status=get_scan_status())
+                                   continuing=continuing, recently_added=recently_added,
+                                   series_filter='',
+                                   unrar_missing=has_cbr)
 
-    # ── Comics list view ──────────────────────────────────────────────────────
     query = """
         SELECT c.*, COALESCE(rp.current_page, 0) as progress,
                COALESCE(r.rating, 0) as rating,
@@ -270,8 +272,7 @@ def index():
         conditions.append("(c.title LIKE ? OR c.series LIKE ? OR c.writer LIKE ? OR c.penciller LIKE ? OR c.story_arc LIKE ?)")
         p = f'%{search}%'
         params.extend([p, p, p, p, p])
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+    query += " WHERE " + " AND ".join(conditions)
     order = {
         'title':    "c.title",
         'added':    "c.added_at DESC",
@@ -309,21 +310,12 @@ def index():
                            total=total,
                            reading_list_count=reading_list_count,
                            continuing=continuing,
-                           unrar_missing=has_cbr,
-                           library_path=_comics_dir(),
-                           scan_status=get_scan_status())
-
-
-# ── Images ───────────────────────────────────────────────────────────────────
-
-def _cover_cache_path(comic_id, mime):
-    ext = 'png' if mime == 'image/png' else 'jpg'
-    return os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
+                           recently_added=recently_added,
+                           unrar_missing=has_cbr)
 
 
 @app.route('/cover/<int:comic_id>')
 def serve_cover(comic_id):
-    # Serve from disk cache if available
     for ext, mime in (('jpg', 'image/jpeg'), ('png', 'image/png')):
         path = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
         if os.path.exists(path):
@@ -341,9 +333,9 @@ def serve_cover(comic_id):
     if not img_data:
         return Response(PLACEHOLDER_SVG, mimetype='image/svg+xml')
 
-    # Write to disk cache for next time
     try:
-        with open(_cover_cache_path(comic_id, mime), 'wb') as f:
+        ext = 'png' if mime == 'image/png' else 'jpg'
+        with open(os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}'), 'wb') as f:
             f.write(img_data)
     except Exception as e:
         print(f"Cover cache write failed for {comic_id}: {e}")
@@ -368,8 +360,6 @@ def serve_page(comic_id, page_num):
     return resp
 
 
-# ── Upload ───────────────────────────────────────────────────────────────────
-
 @app.route('/upload', methods=['POST'])
 def upload_comic():
     f = request.files.get('file')
@@ -384,13 +374,13 @@ def upload_comic():
         base, e2 = os.path.splitext(filename)
         save_path = os.path.join(UPLOAD_DIR, f'{base}_{int(time.time())}{e2}')
     f.save(save_path)
-    meta = extract_metadata_upload(f.filename)
-    # Try to read embedded ComicInfo.xml — overrides filename-derived metadata
     ci = _read_comicinfo(save_path)
-    title     = ci.get('title_override') or meta['title']
-    publisher = ci.get('publisher') or meta['publisher']
-    series    = _normalize_series(ci.get('series') or meta['series'])
-    issue_num = ci.get('issue_number') or meta['issue_number']
+    stem = os.path.splitext(f.filename)[0]
+    m = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', stem, re.IGNORECASE)
+    title     = ci.get('title_override') or stem
+    publisher = ci.get('publisher') or 'Unknown'
+    series    = _normalize_series(ci.get('series') or 'General')
+    issue_num = ci.get('issue_number') or (m.group(1) if m else None)
     page_count = get_page_count(save_path)
     db = get_db()
     try:
@@ -410,8 +400,6 @@ def upload_comic():
     db.close()
     return jsonify({'ok': True})
 
-
-# ── Comic Detail ─────────────────────────────────────────────────────────────
 
 @app.route('/comic/<int:comic_id>')
 def comic_detail(comic_id):
@@ -489,7 +477,6 @@ def edit_comic(comic_id):
 
 @app.route('/comic/<int:comic_id>/delete', methods=['POST'])
 def delete_comic(comic_id):
-    """Soft-delete: mark with deleted_at so it appears in Recently Deleted for 30 days."""
     db = get_db()
     db.execute("UPDATE comics SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (comic_id,))
     db.commit()
@@ -498,7 +485,6 @@ def delete_comic(comic_id):
 
 
 def _permanently_delete_comic(comic_id, db):
-    """Hard-delete a comic record and its cover cache. Caller must commit."""
     row = db.execute("SELECT file_path FROM comics WHERE id = ?", (comic_id,)).fetchone()
     db.execute("DELETE FROM reading_progress WHERE comic_id = ?", (comic_id,))
     db.execute("DELETE FROM ratings WHERE comic_id = ?", (comic_id,))
@@ -541,7 +527,6 @@ def purge_comic(comic_id):
 
 @app.route('/api/comic/<int:comic_id>/refresh-cover', methods=['POST'])
 def refresh_cover(comic_id):
-    """Delete the cached cover so it is regenerated on next request."""
     for ext in ('jpg', 'png'):
         path = os.path.join(COVER_CACHE_DIR, f'{comic_id}.{ext}')
         try:
@@ -554,7 +539,6 @@ def refresh_cover(comic_id):
 @app.route('/trash')
 def trash():
     db = get_db()
-    # Auto-purge anything deleted more than 30 days ago first
     stale = db.execute("""
         SELECT id FROM comics WHERE deleted_at IS NOT NULL
         AND deleted_at < DATETIME('now', '-30 days')
@@ -571,8 +555,6 @@ def trash():
     db.close()
     return render_template('trash.html', deleted=deleted)
 
-
-# ── Reader ───────────────────────────────────────────────────────────────────
 
 @app.route('/reader/<int:comic_id>')
 def reader(comic_id):
@@ -591,13 +573,10 @@ def reader(comic_id):
     ).fetchone()
     current_page = prog['current_page'] if prog else 0
 
-    # When going back from the next comic, land on the last page
     if request.args.get('start') == 'last' and comic['page_count'] > 0:
         current_page = comic['page_count'] - 1
 
-    # Back URL: explicit param → Referer → comic detail page
     back_url = request.args.get('back') or request.referrer or f'/comic/{comic_id}'
-    # Only allow relative URLs (no open redirect)
     if back_url and not back_url.startswith('/'):
         back_url = f'/comic/{comic_id}'
 
@@ -618,7 +597,6 @@ def reader(comic_id):
                 next_comic = items[i + 1] if i < len(items) - 1 else None
                 break
 
-    # Next comic in same series (for the "Continue" overlay at end of issue)
     next_series_comic = None
     if not run_context and comic['series'] and comic['series'] != 'General':
         series_comics = db.execute("""
@@ -640,10 +618,8 @@ def reader(comic_id):
         except ValueError:
             pass
 
-    # Fallback "what to read next" when there's no next series comic
     finish_suggestion = None
     if not next_series_comic and not (run_context and next_comic):
-        # 1. Run containing this comic that has an unread next issue
         run_suggestion = db.execute("""
             SELECT r.id, r.title, c2.id as next_id, c2.title as next_title
             FROM run_items ri
@@ -661,7 +637,6 @@ def reader(comic_id):
                                  'comic_id': run_suggestion['next_id'],
                                  'comic_title': run_suggestion['next_title']}
         else:
-            # 2. Unstarted series by the same publisher — pick lowest issue_number as entry point
             unread = db.execute("""
                 SELECT c.series,
                        (SELECT c2.id FROM comics c2
@@ -698,8 +673,6 @@ def reader(comic_id):
                            autoplay_interval=get_autoplay_interval())
 
 
-# ── API ──────────────────────────────────────────────────────────────────────
-
 @app.route('/api/mark-read/<int:comic_id>', methods=['POST'])
 def mark_read(comic_id):
     db = get_db()
@@ -728,7 +701,7 @@ def save_progress(comic_id):
     except (TypeError, ValueError):
         page = 0
     db = get_db()
-    row = db.execute("SELECT page_count FROM comics WHERE id = ?", (comic_id,)).fetchone()
+    row = db.execute("SELECT page_count FROM comics WHERE id = ? AND deleted_at IS NULL", (comic_id,)).fetchone()
     if row:
         page = min(page, max(row['page_count'] - 1, 0))
         db.execute(
@@ -753,24 +726,15 @@ def rate_comic(comic_id):
     if not (1 <= rating <= 5):
         return jsonify({'error': 'Invalid rating'}), 400
     db = get_db()
-    if review:
-        db.execute(
-            """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, ?)
-               ON CONFLICT(comic_id) DO UPDATE SET rating = ?, review = ?""",
-            (comic_id, rating, review, rating, review)
-        )
-    else:
-        db.execute(
-            """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, NULL)
-               ON CONFLICT(comic_id) DO UPDATE SET rating = ?""",
-            (comic_id, rating, rating)
-        )
+    db.execute(
+        """INSERT INTO ratings (comic_id, rating, review) VALUES (?, ?, ?)
+           ON CONFLICT(comic_id) DO UPDATE SET rating = ?, review = COALESCE(?, review)""",
+        (comic_id, rating, review or None, rating, review or None)
+    )
     db.commit()
     db.close()
     return jsonify({'ok': True})
 
-
-# ── Runs ─────────────────────────────────────────────────────────────────────
 
 @app.route('/stats')
 def stats():
@@ -814,7 +778,6 @@ def stats():
         WHERE rp.current_page > 0
         ORDER BY rp.last_read DESC LIMIT 6
     """).fetchall()
-    # Reading activity: daily comic count for the past 52 weeks
     activity_rows = db.execute("""
         SELECT DATE(last_read) as day, COUNT(DISTINCT comic_id) as cnt
         FROM reading_progress
@@ -890,7 +853,8 @@ def run_detail(run_id):
 
     all_comics = db.execute("""
         SELECT id, title, series, publisher FROM comics
-        WHERE id NOT IN (SELECT comic_id FROM run_items WHERE run_id = ?)
+        WHERE deleted_at IS NULL
+          AND id NOT IN (SELECT comic_id FROM run_items WHERE run_id = ?)
     """, (run_id,)).fetchall()
     all_comics = sorted(all_comics, key=lambda c: (
         natural_sort_key(c['publisher']),
@@ -898,14 +862,13 @@ def run_detail(run_id):
         natural_sort_key(c['title'])
     ))
 
-    # Resume point: first comic that isn't finished (progress < page_count - 2)
     resume_comic_id = None
     for item in items:
         if item['page_count'] == 0 or item['progress'] < item['page_count'] - 2:
             resume_comic_id = item['comic_id']
             break
     if resume_comic_id is None and items:
-        resume_comic_id = items[0]['comic_id']  # all done — start over from top
+        resume_comic_id = items[0]['comic_id']
 
     db.close()
     return render_template('run_detail.html', run=run, items=items, all_comics=all_comics,
@@ -1084,7 +1047,6 @@ def rename_tag(tag_id):
     db = get_db()
     existing = db.execute("SELECT id FROM tags WHERE name = ? AND id != ?", (new_name, tag_id)).fetchone()
     if existing:
-        # Merge: move all comic_tags to the existing tag, delete the old one
         db.execute("UPDATE OR IGNORE comic_tags SET tag_id = ? WHERE tag_id = ?", (existing['id'], tag_id))
         db.execute("DELETE FROM comic_tags WHERE tag_id = ? AND comic_id IN (SELECT comic_id FROM comic_tags WHERE tag_id = ?)", (tag_id, existing['id']))
         db.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
@@ -1115,7 +1077,6 @@ def merge_tags():
     if not source_id or not target_id or source_id == target_id:
         return jsonify({'ok': False, 'error': 'Invalid ids'}), 400
     db = get_db()
-    # Move all comic associations from source to target (ignore duplicates)
     db.execute("UPDATE OR IGNORE comic_tags SET tag_id = ? WHERE tag_id = ?", (target_id, source_id))
     db.execute("DELETE FROM comic_tags WHERE tag_id = ?", (source_id,))
     db.execute("DELETE FROM tags WHERE id = ?", (source_id,))
@@ -1171,8 +1132,6 @@ def clear_library():
     return redirect(url_for('index'))
 
 
-# ── Onboarding ───────────────────────────────────────────────────────────────
-
 @app.route('/onboarding')
 def onboarding():
     if is_onboarding_done():
@@ -1225,7 +1184,6 @@ def scan_duplicates():
 
 @app.route('/api/merge-series', methods=['POST'])
 def merge_series():
-    """Rename all comics matching source series/publisher to the target series name."""
     data = request.get_json(silent=True) or {}
     source    = (data.get('source') or '').strip()
     target    = (data.get('target') or '').strip()
@@ -1243,8 +1201,6 @@ def merge_series():
     return jsonify({'ok': True})
 
 
-# ── Settings ─────────────────────────────────────────────────────────────────
-
 _cbr_install_state = {'running': False, 'log': '', 'done': False, 'ok': False}
 
 
@@ -1258,8 +1214,7 @@ def settings():
                            autoplay_interval=int(cfg.get('autoplay_interval', 10)),
                            cbr_ok=cbr_tool_available(),
                            brew_ok=bool(shutil.which('brew') or _find_bin('brew')),
-                           platform=system,
-                           scan_status=get_scan_status())
+                           platform=system)
 
 
 @app.route('/api/settings/save', methods=['POST'])
@@ -1320,7 +1275,6 @@ def install_cbr():
         threading.Thread(target=_run_linux, daemon=True).start()
         return jsonify({'ok': True})
 
-    # macOS
     brew = shutil.which('brew') or _find_bin('brew')
     if not brew:
         return jsonify({'ok': False, 'error': 'Homebrew not found'})
@@ -1357,8 +1311,6 @@ def reset_setup():
     return jsonify({'ok': True})
 
 
-# ── Mark unread ───────────────────────────────────────────────────────────────
-
 @app.route('/api/reset-progress/<int:comic_id>', methods=['POST'])
 def reset_progress(comic_id):
     db = get_db()
@@ -1367,8 +1319,6 @@ def reset_progress(comic_id):
     db.close()
     return jsonify({'ok': True})
 
-
-# ── Reading list ──────────────────────────────────────────────────────────────
 
 @app.route('/api/reading-list/<int:comic_id>', methods=['POST'])
 def toggle_reading_list(comic_id):
@@ -1384,8 +1334,6 @@ def toggle_reading_list(comic_id):
     db.close()
     return jsonify({'ok': True, 'in_list': in_list})
 
-
-# ── Reading List page ─────────────────────────────────────────────────────────
 
 @app.route('/reading-list')
 def reading_list_page():
@@ -1405,11 +1353,8 @@ def reading_list_page():
     return render_template('reading_list.html', comics=comics)
 
 
-# ── Bulk operations ───────────────────────────────────────────────────────────
-
 @app.route('/api/bulk/delete', methods=['POST'])
 def bulk_delete():
-    """Soft-delete: move comics to Recently Deleted (30-day recovery window)."""
     ids = (request.get_json(silent=True) or {}).get('ids', [])
     if not ids:
         return jsonify({'ok': True})
@@ -1460,21 +1405,18 @@ def bulk_reading_list():
     ids    = data.get('ids', [])
     action = data.get('action', 'add')
     db = get_db()
-    for comic_id in ids:
-        if action == 'add':
-            db.execute("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", (comic_id,))
-        else:
-            db.execute("DELETE FROM reading_list WHERE comic_id = ?", (comic_id,))
+    if action == 'add':
+        db.executemany("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", [(cid,) for cid in ids])
+    else:
+        ph = ','.join('?' * len(ids))
+        db.execute(f"DELETE FROM reading_list WHERE comic_id IN ({ph})", ids)
     db.commit()
     db.close()
     return jsonify({'ok': True})
 
 
-# ── Batch edit / move ─────────────────────────────────────────────────────────
-
 @app.route('/api/bulk/edit', methods=['POST'])
 def bulk_edit():
-    """Update metadata fields for multiple comics at once. Only non-empty fields are applied."""
     data = request.get_json(silent=True) or {}
     ids  = [int(i) for i in data.get('ids', []) if str(i).isdigit()]
     if not ids:
@@ -1500,18 +1442,13 @@ def bulk_edit():
     return jsonify({'ok': True, 'updated': len(ids)})
 
 
-# ── Series Metadata ───────────────────────────────────────────────────────────
-
 @app.route('/api/series-meta', methods=['GET', 'POST'])
 def series_meta():
     if request.method == 'GET':
         publisher = request.args.get('publisher', '').strip()
         series    = request.args.get('series', '').strip()
         db = get_db()
-        # Resolve 'All' to the actual publisher for this series
-        if not publisher or publisher == 'All':
-            row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
-            publisher = row['publisher'] if row else ''
+        publisher = _resolve_publisher(db, publisher, series)
         sm = db.execute(
             "SELECT description, custom_cover_id FROM series_meta WHERE publisher = ? AND series = ?",
             (publisher, series)
@@ -1548,8 +1485,6 @@ def series_meta():
     db.close()
     return jsonify({'ok': True})
 
-
-# ── Quick-look ────────────────────────────────────────────────────────────────
 
 @app.route('/api/comic/<int:comic_id>/quicklook')
 def comic_quicklook(comic_id):
@@ -1598,8 +1533,6 @@ def comic_quicklook(comic_id):
     })
 
 
-# ── Series add-to-run ─────────────────────────────────────────────────────────
-
 @app.route('/api/series/add-to-run', methods=['POST'])
 def series_add_to_run():
     data      = request.get_json(silent=True) or {}
@@ -1610,10 +1543,7 @@ def series_add_to_run():
     if not run_id or not series:
         return jsonify({'ok': False, 'error': 'run_id and series required'}), 400
     db = get_db()
-    # Resolve 'All' to the actual publisher
-    if not publisher or publisher == 'All':
-        row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
-        publisher = row['publisher'] if row else ''
+    publisher = _resolve_publisher(db, publisher, series)
     if char:
         comics = db.execute(
             """SELECT id FROM comics WHERE series = ? AND publisher = ? AND character = ?
@@ -1641,8 +1571,6 @@ def series_add_to_run():
     return jsonify({'ok': True, 'added': len(comics)})
 
 
-# ── Series mark-read ─────────────────────────────────────────────────────────
-
 @app.route('/api/series/mark-read', methods=['POST'])
 def series_mark_read():
     data      = request.get_json(silent=True) or {}
@@ -1652,9 +1580,7 @@ def series_mark_read():
     if not series:
         return jsonify({'ok': False, 'error': 'series required'}), 400
     db = get_db()
-    if not publisher or publisher == 'All':
-        row = db.execute("SELECT publisher FROM comics WHERE series = ? LIMIT 1", (series,)).fetchone()
-        publisher = row['publisher'] if row else ''
+    publisher = _resolve_publisher(db, publisher, series)
     if char:
         comics = db.execute(
             "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ? AND character = ?",
@@ -1680,8 +1606,6 @@ def series_mark_read():
     return jsonify({'ok': True, 'marked': len(comics)})
 
 
-# ── Bulk add-to-run ───────────────────────────────────────────────────────────
-
 @app.route('/api/bulk/add-to-run', methods=['POST'])
 def bulk_add_to_run():
     data   = request.get_json(silent=True) or {}
@@ -1702,8 +1626,6 @@ def bulk_add_to_run():
     db.close()
     return jsonify({'ok': True})
 
-
-# ── Search API ────────────────────────────────────────────────────────────────
 
 @app.route('/api/search')
 def search_api():
@@ -1733,10 +1655,6 @@ def search_api():
     db.close()
     return jsonify({'results': [dict(r) for r in rows]})
 
-
-
-
-# ── Import backup ──────────────────────────────────────────────────────────────
 
 @app.route('/api/import', methods=['POST'])
 def import_backup():
@@ -1810,8 +1728,6 @@ def import_backup():
     return jsonify({'ok': True, 'progress': prog_count, 'ratings': rating_count,
                     'tags': tag_count, 'runs': run_count})
 
-
-# ── Export ────────────────────────────────────────────────────────────────────
 
 @app.route('/api/export')
 def export_library():

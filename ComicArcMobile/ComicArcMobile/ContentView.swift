@@ -26,6 +26,10 @@ struct ContentView: View {
                 .tabItem { Label("Want to Read",systemImage: "bookmark") }
             StatsView()
                 .tabItem { Label("Stats",       systemImage: "chart.bar") }
+            TagsView()
+                .tabItem { Label("Tags",        systemImage: "tag") }
+            TrashView()
+                .tabItem { Label("Trash",       systemImage: "trash") }
             SettingsView()
                 .tabItem { Label("Settings",    systemImage: "gear") }
         }
@@ -40,8 +44,7 @@ struct ContentView: View {
         NavigationSplitView {
             List(selection: $iPadSelection) {
                 ForEach(SidebarTab.allCases) { tab in
-                    Label(tab.label, systemImage: tab.icon)
-                        .tag(tab)
+                    Label(tab.label, systemImage: tab.icon).tag(tab)
                 }
             }
             .navigationTitle("ComicArc")
@@ -54,6 +57,8 @@ struct ContentView: View {
             case .favorites:    FavoritesView()
             case .readingList:  ReadingListView()
             case .stats:        StatsView()
+            case .tags:         TagsView()
+            case .trash:        TrashView()
             case .settings:     SettingsView()
             }
         }
@@ -63,7 +68,7 @@ struct ContentView: View {
 }
 
 enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
-    case library, runs, collections, favorites, readingList, stats, settings
+    case library, runs, collections, favorites, readingList, stats, tags, trash, settings
     var id: String { rawValue }
 
     var label: String {
@@ -74,6 +79,8 @@ enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
         case .favorites:   return "Favorites"
         case .readingList: return "Want to Read"
         case .stats:       return "Stats"
+        case .tags:        return "Tags"
+        case .trash:       return "Trash"
         case .settings:    return "Settings"
         }
     }
@@ -86,6 +93,8 @@ enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
         case .favorites:   return "heart"
         case .readingList: return "bookmark"
         case .stats:       return "chart.bar"
+        case .tags:        return "tag"
+        case .trash:       return "trash"
         case .settings:    return "gear"
         }
     }

@@ -13,7 +13,6 @@ _lock = threading.Lock()
 
 
 def get_duplicates():
-    """Return list of {title, issue_number, paths} groups with >1 entry."""
     with _lock:
         return list(_state['duplicates'])
 
@@ -24,9 +23,6 @@ def get_status():
 
 
 def _file_sig(path):
-    """Unique-enough fingerprint: full path + size. Full path avoids false
-    deduplication of two different files that happen to share a filename and
-    byte count — the old basename-only approach was collision-prone."""
     try:
         return f"{path}:{os.path.getsize(path)}"
     except OSError:
@@ -34,7 +30,6 @@ def _file_sig(path):
 
 
 def _read_comicinfo(file_path):
-    """Extract ComicInfo.xml metadata from a CBZ/ZIP file. Returns dict or {}."""
     ext = os.path.splitext(file_path)[1].lower()
     if ext not in ('.cbz', '.zip'):
         return {}
@@ -70,16 +65,27 @@ def _read_comicinfo(file_path):
 
 
 def _normalize_series(name):
-    """Strip trailing year suffixes and extra whitespace so variants of the same
-    series name group together.  E.g. 'Ultimate Spider-Man (2000)' → 'Ultimate Spider-Man'."""
     if not name:
         return name
     name = name.strip()
-    # Remove trailing parenthesised year: "(2000)", "(2000-2009)", "(Vol. 1)"
-    name = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
-    # Remove trailing volume marker: "Vol. 1", "Vol 2"
+    name = re.sub(r'\s*\(\s*\d{4}(?:\s*[-–]\s*(?:\d{4})?)?\s*\)\s*$', '', name).strip()
     name = re.sub(r'\s+[Vv]ol\.?\s*\d+\s*$', '', name).strip()
     return name
+
+
+def _extract_issue_number(stem):
+    m = re.search(r'(?:vol|volume|#|issue|v)\.?\s*(\d+)', stem, re.IGNORECASE)
+    if m:
+        return str(int(m.group(1)))
+    m = re.search(r'[\s\-_](0\d+)\s*(?:\([^)]*\))?\s*$', stem)
+    if m:
+        return str(int(m.group(1)))
+    m = re.search(r'(?<!\d)(\d{1,3})\s*(?:\([^)]*\))?\s*$', stem)
+    if m:
+        n = int(m.group(1))
+        if n > 0:
+            return str(n)
+    return None
 
 
 def _meta(file_path, base):
@@ -87,7 +93,7 @@ def _meta(file_path, base):
     parts = rel.split(os.sep)
     publisher = parts[0] if len(parts) > 1 else 'Unknown'
     filename = parts[-1]
-    title = os.path.splitext(filename)[0]
+    stem = os.path.splitext(filename)[0]
     mid = parts[1:-1]
     if not mid:
         character, series = None, 'General'
@@ -95,9 +101,9 @@ def _meta(file_path, base):
         character, series = None, _normalize_series(mid[0])
     else:
         character, series = mid[-2], _normalize_series(mid[-1])
-    m = re.search(r'(?:v|vol|volume|#|issue)[\s.]?(\d+)', title, re.IGNORECASE)
+    issue_num = _extract_issue_number(stem)
     return {'publisher': publisher, 'character': character, 'series': series,
-            'title': title, 'issue_number': m.group(1) if m else None,
+            'title': stem, 'issue_number': issue_num,
             'writer': None, 'penciller': None, 'year': None,
             'story_arc': None, 'language_iso': None}
 
@@ -117,7 +123,6 @@ def _run(library_path):
         _state['total'] = len(all_files)
 
     db = get_db()
-    # Load all known paths and signatures in one query — avoids N per-file lookups.
     known_paths = set()
     known_sigs = set()
     for row in db.execute("SELECT file_path FROM comics").fetchall():
@@ -133,15 +138,9 @@ def _run(library_path):
                 break
         try:
             sig = _file_sig(fp)
-            if fp in known_paths:
-                pass  # already in library — don't overwrite user-edited metadata
-            elif sig and sig in known_sigs:
-                pass  # same name+size already in library under a different path
-            else:
+            if fp not in known_paths and not (sig and sig in known_sigs):
                 m = _meta(fp, library_path)
                 ci = _read_comicinfo(fp)
-                # ComicInfo.xml overrides path-derived metadata where present.
-                # Normalize series names from both sources to avoid spurious splits.
                 title      = ci.get('title_override') or m['title']
                 publisher  = ci.get('publisher')  or m['publisher']
                 series     = _normalize_series(ci.get('series') or m['series'])
@@ -163,13 +162,11 @@ def _run(library_path):
         except Exception as e:
             print(f"[scanner] skip {fp}: {e}")
 
-        # Batch progress updates every 25 files to reduce lock contention.
         if i % 25 == 0 or i == len(all_files) - 1:
             with _lock:
                 _state['done'] = i + 1
                 _state['added'] = added
 
-    # Detect duplicates: same (title, issue_number) combination in the active library
     dup_rows = db.execute("""
         SELECT title, issue_number, COUNT(*) as cnt
         FROM comics
@@ -180,14 +177,13 @@ def _run(library_path):
     dups = []
     for row in dup_rows:
         paths = [r['file_path'] for r in db.execute(
-            "SELECT file_path FROM comics WHERE LOWER(title)=LOWER(?) AND issue_number=? AND deleted_at IS NULL",
+            "SELECT file_path FROM comics WHERE LOWER(title)=LOWER(?) AND LOWER(issue_number)=LOWER(?) AND deleted_at IS NULL",
             (row['title'], row['issue_number'])
         ).fetchall()]
         dups.append({'title': row['title'], 'issue_number': row['issue_number'], 'paths': paths})
     with _lock:
         _state['duplicates'] = dups
 
-    # Prune stale entries: comics under library_path whose file no longer exists
     stale = [
         row['id'] for row in db.execute("SELECT id, file_path FROM comics").fetchall()
         if row['file_path'].startswith(library_path) and not os.path.exists(row['file_path'])
@@ -207,7 +203,6 @@ def _run(library_path):
 
 
 def scan_library(library_path):
-    """Start a background scan. Returns False if already running or path invalid."""
     with _lock:
         if _state['running']:
             return False
@@ -218,7 +213,6 @@ def scan_library(library_path):
 
 
 def cancel_scan():
-    """Signal the running scan to stop after its current file."""
     with _lock:
         if _state['running']:
             _state['cancelled'] = True

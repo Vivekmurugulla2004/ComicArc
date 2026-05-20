@@ -1,5 +1,6 @@
 import zipfile
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -11,18 +12,20 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
+
 
 def natural_sort_key(s):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
 
 
 def get_image_files(file_list):
-    extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
-    images = [
-        f for f in file_list
-        if f.lower().endswith(extensions) and not os.path.basename(f).startswith('.')
-    ]
-    return sorted(images, key=natural_sort_key)
+    return sorted(
+        [f for f in file_list
+         if os.path.splitext(f)[1].lower() in _IMAGE_EXTS
+         and not os.path.basename(f).startswith('.')],
+        key=natural_sort_key
+    )
 
 
 def _find_bin(name):
@@ -38,14 +41,16 @@ def _find_bin(name):
 def _unar():
     return _find_bin('unar')
 
+
 def _lsar():
     return _find_bin('lsar')
+
 
 def _unrar():
     return _find_bin('unrar')
 
+
 def _7zip():
-    import platform
     if platform.system() == 'Windows':
         for path in [
             r'C:\Program Files\7-Zip\7z.exe',
@@ -59,49 +64,41 @@ def cbr_tool_available():
     return bool(_unar() or _unrar() or _7zip())
 
 
-# ── CBR via unar/lsar ────────────────────────────────────────────────────────
-
 def _unar_list(file_path):
-    """Return sorted list of image paths inside a CBR using lsar."""
     lsar = _lsar()
     if not lsar:
         return []
-    result = subprocess.run(
-        [lsar, file_path],
-        capture_output=True, text=True, timeout=15
-    )
-    images = []
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if any(line.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
-            if not os.path.basename(line).startswith('.'):
-                images.append(line)
+    result = subprocess.run([lsar, file_path], capture_output=True, text=True, timeout=15)
+    images = [
+        line.strip() for line in result.stdout.splitlines()
+        if os.path.splitext(line.strip())[1].lower() in _IMAGE_EXTS
+        and not os.path.basename(line.strip()).startswith('.')
+    ]
     return sorted(images, key=natural_sort_key)
 
 
-def _unar_page(file_path, page_num):
-    """Extract a single page from a CBR using unar."""
-    images = _unar_list(file_path)
-    if page_num >= len(images):
-        return None, None
-    target = images[page_num]
-    with tempfile.TemporaryDirectory() as tmpdir:
-        subprocess.run(
-            [_unar(), '-o', tmpdir, '-force-overwrite', file_path, target],
-            capture_output=True, timeout=30
-        )
-        for root, _, files in os.walk(tmpdir):
-            for f in sorted(files):
-                if any(f.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
-                    with open(os.path.join(root, f), 'rb') as fp:
-                        return fp.read(), _mime(f)
+def _read_extracted(tmpdir):
+    for root, _, files in os.walk(tmpdir):
+        for f in sorted(files):
+            if os.path.splitext(f)[1].lower() in _IMAGE_EXTS:
+                with open(os.path.join(root, f), 'rb') as fp:
+                    return fp.read(), _mime(f)
     return None, None
 
 
-# ── CBR via 7-Zip ────────────────────────────────────────────────────────────
+def _unar_page(file_path, page_num):
+    images = _unar_list(file_path)
+    if page_num >= len(images):
+        return None, None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subprocess.run(
+            [_unar(), '-o', tmpdir, '-force-overwrite', file_path, images[page_num]],
+            capture_output=True, timeout=30
+        )
+        return _read_extracted(tmpdir)
+
 
 def _7zip_list(file_path):
-    """Return sorted list of image paths inside a CBR using 7z."""
     z7 = _7zip()
     if not z7:
         return []
@@ -109,36 +106,26 @@ def _7zip_list(file_path):
         [z7, 'l', '-slt', '-ba', file_path],
         capture_output=True, text=True, timeout=15
     )
-    images = []
-    for line in result.stdout.splitlines():
-        if line.startswith('Path = '):
-            name = line[7:].strip()
-            if any(name.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
-                if not os.path.basename(name).startswith('.'):
-                    images.append(name)
+    images = [
+        line[7:].strip() for line in result.stdout.splitlines()
+        if line.startswith('Path = ')
+        and os.path.splitext(line[7:].strip())[1].lower() in _IMAGE_EXTS
+        and not os.path.basename(line[7:].strip()).startswith('.')
+    ]
     return sorted(images, key=natural_sort_key)
 
 
 def _7zip_page(file_path, page_num):
-    """Extract a single page from a CBR using 7z."""
     images = _7zip_list(file_path)
     if page_num >= len(images):
         return None, None
-    target = images[page_num]
     with tempfile.TemporaryDirectory() as tmpdir:
         subprocess.run(
-            [_7zip(), 'e', f'-o{tmpdir}', '-y', file_path, target],
+            [_7zip(), 'e', f'-o{tmpdir}', '-y', file_path, images[page_num]],
             capture_output=True, timeout=30
         )
-        for root, _, files in os.walk(tmpdir):
-            for f in sorted(files):
-                if any(f.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
-                    with open(os.path.join(root, f), 'rb') as fp:
-                        return fp.read(), _mime(f)
-    return None, None
+        return _read_extracted(tmpdir)
 
-
-# ── CBR via rarfile + unrar ───────────────────────────────────────────────────
 
 def _rarfile_page(file_path, page_num):
     try:
@@ -161,10 +148,6 @@ def _rarfile_count(file_path):
     except Exception:
         return 0
 
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
-_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
 
 def get_page_count(file_path):
     ext = os.path.splitext(file_path)[1].lower()
@@ -193,7 +176,6 @@ def get_page_count(file_path):
 
 
 def get_page(file_path, page_num):
-    """Returns (image_bytes, mime_type) for a given page (0-indexed)."""
     ext = os.path.splitext(file_path)[1].lower()
     try:
         if ext in _IMAGE_EXTS:

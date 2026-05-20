@@ -105,6 +105,10 @@
     }
 
     document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        navRescan();
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         const ol = document.getElementById('spotlight-overlay');
