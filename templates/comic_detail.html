@@ -173,7 +173,7 @@
       <div class="cd-runs-label">Appears in</div>
       <div class="cd-runs-list">
         {% for r in runs_featuring %}
-        <a href="/runs/{{ r.id }}" class="cd-run-chip">{{ r.title }}{% if r.position %} <span class="cd-run-pos">#{{ r.position + 1 }}</span>{% endif %}</a>
+        <a href="/runs/{{ r.id }}" class="cd-run-chip">{{ r.title }}<span class="cd-run-pos"> #{{ r.position + 1 }}</span></a>
         {% endfor %}
       </div>
     </div>

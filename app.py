@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import threading
 import time
+from collections import OrderedDict
+from urllib.parse import urlparse
 from flask import Flask, render_template, redirect, url_for, request, jsonify, Response, abort
 from werkzeug.utils import secure_filename
 from database import get_db
@@ -55,7 +57,7 @@ def natural_sort_key(s):
 @app.context_processor
 def _inject_globals():
     return {'library_path': _comics_dir(), 'scan_status': get_scan_status(), 'app_version': VERSION,
-            'dup_count': len(get_duplicates())}
+            'dup_count': len(get_duplicates()), 'platform': _platform.system()}
 
 
 def _resolve_publisher(db, publisher, series):
@@ -89,7 +91,7 @@ def index():
         JOIN comics c ON rl.comic_id = c.id
         LEFT JOIN reading_progress rp ON c.id = rp.comic_id
         WHERE c.deleted_at IS NULL
-          AND NOT (c.page_count > 1 AND COALESCE(rp.current_page, 0) >= c.page_count - 2)
+          AND NOT (c.page_count > 0 AND COALESCE(rp.current_page, 0) >= MAX(0, c.page_count - 2))
     """).fetchone()[0]
     continuing = db.execute("""
         SELECT c.id, c.title, c.series, c.publisher, c.page_count,
@@ -603,7 +605,7 @@ def trash():
 def reader(comic_id):
     db = get_db()
     comic = db.execute("""
-        SELECT c.*, COALESCE(r.rating, 0) as rating
+        SELECT c.*, COALESCE(r.rating, 0) as rating, COALESCE(r.review, '') as existing_review
         FROM comics c
         LEFT JOIN ratings r ON c.id = r.comic_id
         WHERE c.id = ?
@@ -619,7 +621,10 @@ def reader(comic_id):
     if request.args.get('start') == 'last' and comic['page_count'] > 0:
         current_page = comic['page_count'] - 1
 
-    back_url = request.args.get('back') or request.referrer or f'/comic/{comic_id}'
+    back_url = request.args.get('back') or ''
+    if not back_url and request.referrer:
+        parsed = urlparse(request.referrer)
+        back_url = parsed.path + (('?' + parsed.query) if parsed.query else '')
     if not back_url or not back_url.startswith('/') or back_url.startswith('//'):
         back_url = f'/comic/{comic_id}'
 
@@ -705,6 +710,7 @@ def reader(comic_id):
                            comic=comic,
                            current_page=current_page,
                            existing_rating=comic['rating'] or 0,
+                           existing_review=comic['existing_review'] or '',
                            run_context=run_context,
                            prev_comic=prev_comic,
                            next_comic=next_comic,
@@ -786,7 +792,7 @@ def stats():
     read_count     = db.execute("""
         SELECT COUNT(*) FROM reading_progress rp
         JOIN comics c ON rp.comic_id = c.id
-        WHERE rp.current_page >= c.page_count - 2 AND c.page_count > 1
+        WHERE c.page_count > 0 AND rp.current_page >= MAX(0, c.page_count - 2)
           AND c.deleted_at IS NULL
     """).fetchone()[0]
     pages_read     = db.execute("""
@@ -843,7 +849,7 @@ def runs():
     runs_list = db.execute("""
         SELECT r.*,
                COUNT(ri.id) as comic_count,
-               COUNT(CASE WHEN rp.current_page >= c.page_count - 2 AND c.page_count > 1 THEN 1 END) as read_count
+               COUNT(CASE WHEN c.page_count > 0 AND rp.current_page >= MAX(0, c.page_count - 2) THEN 1 END) as read_count
         FROM runs r
         LEFT JOIN run_items ri ON r.id = ri.run_id
         LEFT JOIN comics c ON ri.comic_id = c.id
@@ -979,7 +985,7 @@ def rate_run(run_id):
     if not (1 <= rating <= 5):
         return jsonify({'error': 'Invalid rating'}), 400
     db = get_db()
-    db.execute("UPDATE runs SET rating = ?, review = ? WHERE id = ?", (rating, review, run_id))
+    db.execute("UPDATE runs SET rating = ?, review = COALESCE(NULLIF(?, ''), review) WHERE id = ?", (rating, review, run_id))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1159,6 +1165,7 @@ def clear_library():
     db.execute("DELETE FROM reading_list")
     db.execute("DELETE FROM run_items")
     db.execute("DELETE FROM runs")
+    db.execute("DELETE FROM series_meta")
     db.execute("DELETE FROM comics")
     db.commit()
     db.close()
@@ -1398,7 +1405,6 @@ def reading_list_page():
         ORDER BY c.publisher, c.series, rl.added_at ASC
     """).fetchall()
     db.close()
-    from collections import OrderedDict
     series_groups = OrderedDict()
     for comic in comics:
         key = (comic['publisher'], comic['series'] or 'General')

@@ -188,6 +188,13 @@ struct ReadingHeatmap: View {
 
     private let cols = 18
     private let rows = 7
+    private static let dateFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -235,11 +242,7 @@ struct ReadingHeatmap: View {
         let totalDays = cols * rows
         let daysAgo = totalDays - 1 - (col * rows + row)
         guard let date = cal.date(byAdding: .day, value: -daysAgo, to: today) else { return "" }
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        return fmt.string(from: date)
+        return Self.dateFmt.string(from: date)
     }
 
     private func heatColor(_ count: Int) -> Color {
@@ -334,16 +337,25 @@ struct LibraryStats {
         fmt.timeZone = TimeZone(identifier: "UTC")
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
+        guard let yesterday = cal.date(byAdding: .day, value: -1, to: today) else { return 0 }
         var streak = 0
-        var expected = today
+        var expected: Date? = nil
         for str in dates {
             guard let d = fmt.date(from: str) else { continue }
             let day = cal.startOfDay(for: d)
-            if day == expected {
+            if expected == nil {
+                // Start streak from today or yesterday — allow for days where reading
+                // happened before midnight in the user's timezone
+                if day == today || day == yesterday {
+                    streak = 1
+                    expected = cal.date(byAdding: .day, value: -1, to: day)
+                } else {
+                    break
+                }
+            } else if day == expected {
                 streak += 1
-                guard let prev = cal.date(byAdding: .day, value: -1, to: expected) else { break }
-                expected = prev
-            } else if day < expected {
+                expected = cal.date(byAdding: .day, value: -1, to: day)
+            } else {
                 break
             }
         }

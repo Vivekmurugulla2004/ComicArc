@@ -190,8 +190,9 @@ function prevPage() {
     const url = prevComicUrl || document.querySelector('.run-nav-prev')?.href || null;
     if (url) {
       stopAutoplayTimer();
+      const backParam = '&back=' + encodeURIComponent(typeof readerBackUrl !== 'undefined' ? readerBackUrl : '/');
       const sep = url.includes('?') ? '&' : '?';
-      location.href = autoplayMode ? url + sep + 'autoplay=1' : url;
+      location.href = (autoplayMode ? url + sep + 'autoplay=1' : url) + backParam;
     }
   }
 }
@@ -219,6 +220,8 @@ function saveProgress() {
 
 function _flushProgress() {
   clearTimeout(progressDebounce);
+  if (_lastFlushedPage === currentPage) return;
+  _lastFlushedPage = currentPage;
   fetch(`/api/progress/${comicId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -410,6 +413,8 @@ function applyZoom() {
     display.style.transformOrigin = 'center center';
   }
 }
+
+let _lastFlushedPage = -1;
 
 let selectedRating = 0;
 

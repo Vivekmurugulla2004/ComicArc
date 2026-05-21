@@ -32,7 +32,7 @@
       <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
         <span class="spotlight-trigger-icon">⌕</span>
         <span class="spotlight-trigger-label">Search…</span>
-        <kbd class="spotlight-trigger-kbd">⌘K</kbd>
+        <kbd class="spotlight-trigger-kbd">{{ 'Ctrl K' if platform == 'Windows' else '⌘K' }}</kbd>
       </button>
     </div>
   </nav>

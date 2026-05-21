@@ -138,7 +138,7 @@
         <span class="star-pick {% if i <= existing_rating %}selected{% endif %}" data-val="{{ i }}" onclick="selectStar({{ i }})">★</span>
         {% endfor %}
       </div>
-      <textarea id="review-text" placeholder="Write a review (optional)…" rows="3"></textarea>
+      <textarea id="review-text" placeholder="Write a review (optional)…" rows="3">{{ existing_review | e }}</textarea>
       <div class="modal-actions">
         <button onclick="submitRating({{ comic.id }})">Save</button>
         <button onclick="closeRating()">Cancel</button>
@@ -210,7 +210,7 @@
       const ext    = '{{ comic.file_path.split(".")[-1].lower() if comic.file_path else "" }}';
       errEl.style.display = 'flex';
       if (ext === 'cbr') {
-        hint.textContent = 'CBR files require unar. Go to Settings to install it.';
+        hint.textContent = '{{ "CBR files require 7-Zip on Windows. Go to Settings to install it." if platform == "Windows" else "CBR files require unar. Go to Settings to install it." }}';
       } else if (ext === 'pdf') {
         hint.textContent = 'PDF support requires PyMuPDF. Try re-adding the file.';
       }

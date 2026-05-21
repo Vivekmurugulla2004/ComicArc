@@ -110,8 +110,10 @@ def _meta(file_path, base):
 
 
 def _run(library_path):
+    global _mtime_cache
     with _lock:
         _state.update({'running': True, 'total': 0, 'done': 0, 'added': 0, 'cancelled': False, 'duplicates': []})
+    _mtime_cache = {}
 
     all_files = []
     for root, dirs, files in os.walk(library_path):
@@ -190,6 +192,7 @@ def _run(library_path):
             with _lock:
                 _state['done'] = i + 1
                 _state['added'] = added
+            db.commit()
 
     dup_rows = db.execute("""
         SELECT title, issue_number, COUNT(*) as cnt

@@ -30,8 +30,8 @@ struct OnboardingView: View {
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [
-                .init(filenameExtension: "cbz")!,
-                .init(filenameExtension: "cbr")!,
+                UTType("com.comicarcapp.cbz") ?? .zip,
+                UTType("com.comicarcapp.cbr") ?? .data,
                 .pdf, .jpeg, .png
             ],
             allowsMultipleSelection: true

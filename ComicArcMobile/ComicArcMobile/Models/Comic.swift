@@ -29,7 +29,7 @@ struct Comic: Identifiable, Hashable {
         return Double(progress) / Double(pageCount)
     }
 
-    var isFinished: Bool { pageCount > 1 && progress >= pageCount - 2 }
+    var isFinished: Bool { pageCount > 0 && (pageCount == 1 || progress >= pageCount - 2) }
     var isStarted: Bool  { progress > 0 }
 
     var fileExtension: String {
