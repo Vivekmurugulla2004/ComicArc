@@ -35,7 +35,7 @@
         {{ tag.comic_count }} comic{{ 's' if tag.comic_count != 1 }}
       </a>
       <button class="tm-btn tm-rename-btn" onclick="startRename({{ tag.id }})" title="Rename">✎</button>
-      <button class="tm-btn tm-delete-btn" onclick="deleteTag({{ tag.id }}, '{{ tag.name }}')" title="Delete tag">✕</button>
+      <button class="tm-btn tm-delete-btn" onclick="deleteTag({{ tag.id }}, this.closest('.tm-row').dataset.name)" title="Delete tag">✕</button>
     </div>
   </div>
   {% endfor %}
@@ -70,7 +70,6 @@ function commitRename(id) {
   }).then(r => r.json()).then(d => {
     if (!d.ok) { inputEl.style.display = 'none'; nameEl.style.display = ''; return; }
     if (d.merged) {
-      // Tag was merged into an existing one — remove this row
       const row = document.getElementById('tm-row-' + id);
       if (row) { row.style.opacity = '0'; row.style.transition = 'opacity .25s'; setTimeout(() => row.remove(), 260); }
       // Update count on the surviving tag row if visible

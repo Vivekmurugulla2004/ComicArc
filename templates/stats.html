@@ -18,7 +18,6 @@
 </div>
 {% else %}
 
-<!-- Top stat cards -->
 <div class="stat-grid">
   <div class="stat-card">
     <div class="stat-num">{{ total_comics }}</div>
@@ -48,7 +47,6 @@
 
 <div class="stats-two-col">
 
-  <!-- By publisher -->
   <div class="stat-section">
     <h2 class="section-title">By Publisher</h2>
     {% for row in by_publisher %}
@@ -63,15 +61,15 @@
     {% endfor %}
   </div>
 
-  <!-- Top series -->
   <div class="stat-section">
     <h2 class="section-title">Top Series</h2>
     {% if top_series %}
     {% for row in top_series %}
-    <div class="series-stat-row">
+    <a href="/?publisher={{ row.publisher|urlencode }}&series={{ row.series|urlencode }}&view=series"
+       class="series-stat-row series-stat-row-link">
       <span class="series-stat-name">{{ row.series }}</span>
       <span class="series-stat-count">{{ row.count }} issue{{ 's' if row.count != 1 }}</span>
-    </div>
+    </a>
     {% endfor %}
     {% else %}
     <p class="stat-empty">No series data yet.</p>
@@ -80,7 +78,6 @@
 
 </div>
 
-<!-- Reading activity heatmap -->
 <div class="stat-section heatmap-section" style="margin-top: 40px;">
   <h2 class="section-title">Reading Activity <span class="section-subtitle">— past year</span></h2>
   <div style="display:flex;gap:6px;align-items:flex-start">
@@ -94,7 +91,7 @@
       <span style="height:13px;font-size:9px;color:var(--text-muted);line-height:13px"></span>
     </div>
     <div class="heatmap" id="reading-heatmap" style="flex:1"></div>
-  </div><!-- end heatmap flex row -->
+  </div>
   <div class="heatmap-legend">
     <span class="heatmap-legend-label">Less</span>
     <span class="heatmap-cell legend-cell" data-level="0"></span>
@@ -111,7 +108,6 @@
   const heatmap  = document.getElementById('reading-heatmap');
   const today    = new Date();
   today.setHours(0, 0, 0, 0);
-  // Start on the Sunday 51 weeks ago
   const start = new Date(today);
   start.setDate(today.getDate() - (today.getDay()) - 51 * 7);
 
@@ -135,7 +131,6 @@
 })();
 </script>
 
-<!-- Recently read -->
 {% if recent_reads %}
 <div class="stat-section" style="margin-top: 40px;">
   <h2 class="section-title">Recently Read</h2>

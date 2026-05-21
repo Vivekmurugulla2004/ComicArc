@@ -17,6 +17,21 @@ class Api:
             return result[0]
         return None
 
+    def save_file(self, filename, content):
+        result = webview.windows[0].create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename=filename,
+        )
+        if not result:
+            return {'ok': False, 'error': 'cancelled'}
+        path = result[0] if isinstance(result, (list, tuple)) else result
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return {'ok': True, 'path': path}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+
 
 def find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -53,7 +68,6 @@ if __name__ == '__main__':
         print("Server failed to start", file=sys.stderr)
         sys.exit(1)
 
-    # Auto-scan on startup if onboarding is already complete
     from onboarding import is_onboarding_done, get_library_path
     from scanner import scan_library
     if is_onboarding_done():

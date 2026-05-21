@@ -47,6 +47,10 @@
     <input id="story_arc" type="text" name="story_arc" value="{{ comic.story_arc or '' }}"
            placeholder="e.g. The Death of Spider-Man">
 
+    <label for="language_iso">Language <span class="optional">(optional)</span></label>
+    <input id="language_iso" type="text" name="language_iso" value="{{ comic.language_iso or '' }}"
+           placeholder="e.g. EN, DE, FR, JP" maxlength="10">
+
     <label for="notes">Personal Notes <span class="optional">(optional)</span></label>
     <textarea id="notes" name="notes" rows="3"
               placeholder="Your thoughts, reading order tips, spoiler warnings…">{{ comic.notes or '' }}</textarea>

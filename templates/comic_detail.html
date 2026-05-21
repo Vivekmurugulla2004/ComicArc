@@ -4,7 +4,6 @@
 {% block content %}
 <div class="comic-detail-page">
 
-  <!-- Left: cover -->
   <div class="cd-cover-col">
     <div class="cd-cover-wrap" onclick="openCoverLightbox()" title="Click to enlarge" style="cursor:zoom-in">
       <img src="/cover/{{ comic.id }}" alt="{{ comic.title }}" class="cd-cover-img">
@@ -14,13 +13,11 @@
     </div>
   </div>
 
-  <!-- Cover lightbox -->
   <div id="cover-lightbox" class="cover-lightbox arc-hidden" onclick="closeCoverLightbox()">
     <img src="/cover/{{ comic.id }}" alt="{{ comic.title }}" class="cover-lightbox-img">
     <button class="cover-lightbox-close" onclick="closeCoverLightbox()">✕</button>
   </div>
 
-  <!-- Right: info -->
   <div class="cd-info-col">
     <div class="cd-nav-row">
       <a href="/" class="back-crumb">← Library</a>
@@ -81,12 +78,10 @@
     </div>
     {% endif %}
 
-    <!-- Notes -->
     {% if comic.notes %}
     <div class="cd-notes">{{ comic.notes }}</div>
     {% endif %}
 
-    <!-- Progress -->
     {% if comic.page_count > 0 %}
     <div class="cd-progress-wrap">
       <div class="cd-progress-bar">
@@ -104,7 +99,6 @@
     </div>
     {% endif %}
 
-    <!-- Star rating -->
     <div class="cd-rating-wrap">
       <div class="cd-stars" id="cd-star-row">
         {% for i in range(1, 6) %}
@@ -117,14 +111,12 @@
       </span>
     </div>
 
-    <!-- Favorite -->
     <button class="cd-fav-btn {% if comic.is_favorite %}active{% endif %}"
             id="cd-fav-btn" onclick="toggleFav({{ comic.id }})">
       <span class="cd-fav-icon">♥</span>
       <span id="cd-fav-label">{% if comic.is_favorite %}Favorited{% else %}Add to Favorites{% endif %}</span>
     </button>
 
-    <!-- Actions -->
     <div class="cd-actions">
       <a href="/reader/{{ comic.id }}" class="btn-primary cd-read-btn">▶ Read</a>
       <button id="mark-read-btn"
@@ -138,13 +130,11 @@
       <a href="/comic/{{ comic.id }}/edit" class="btn-ghost" aria-label="Edit comic metadata">Edit</a>
     </div>
 
-    <!-- Reading list -->
     <button class="cd-rl-btn {% if comic.in_reading_list %}active{% endif %}"
             id="cd-rl-btn" onclick="toggleReadingList({{ comic.id }})">
       <span id="cd-rl-label">{% if comic.in_reading_list %}✓ In Reading List{% else %}+ Want to Read{% endif %}</span>
     </button>
 
-    <!-- Tags -->
     <div class="cd-tags-section">
       <div class="cd-runs-label">Tags</div>
       <div class="cd-tags-list" id="cd-tags-list">
@@ -165,7 +155,6 @@
       </div>
     </div>
 
-    <!-- Other issues in same story arc -->
     {% if arc_issues %}
     <div class="cd-runs-section">
       <div class="cd-runs-label">Also in "{{ comic.story_arc }}"</div>
@@ -179,7 +168,6 @@
     </div>
     {% endif %}
 
-    <!-- Appears in runs -->
     {% if runs_featuring %}
     <div class="cd-runs-section">
       <div class="cd-runs-label">Appears in</div>

@@ -34,7 +34,7 @@ os.makedirs(COVER_CACHE_DIR, exist_ok=True)
 UPLOAD_DIR = os.path.join(_data, 'user_comics')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024
 
 
 @app.errorhandler(413)
@@ -158,7 +158,6 @@ def index():
                                    status_filter=status_filter, tag_filter=tag_filter,
                                    all_tags=all_tags,
                                    continuing=[],
-                                   recently_added=[],
                                    series_description=sm['description'] if sm else '',
                                    series_publisher=actual_pub,
                                    all_runs=all_runs,
@@ -201,7 +200,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='', tag_filter='', all_tags=[],
-                                   continuing=[], recently_added=[], series_filter='',
+                                   continuing=[], series_filter='',
                                    unrar_missing=has_cbr)
         else:
             char_order = {
@@ -241,7 +240,7 @@ def index():
                                    search=search, sort=sort, total=total,
                                    reading_list_count=reading_list_count,
                                    status_filter='', tag_filter='', all_tags=[],
-                                   continuing=continuing, recently_added=[],
+                                   continuing=continuing,
                                    series_filter='',
                                    unrar_missing=has_cbr)
 
@@ -313,7 +312,6 @@ def index():
                            total=total,
                            reading_list_count=reading_list_count,
                            continuing=continuing,
-                           recently_added=[],
                            unrar_missing=has_cbr)
 
 
@@ -483,9 +481,10 @@ def edit_comic(comic_id):
         issue_num  = request.form.get('issue_number', '').strip()
         writer     = request.form.get('writer', '').strip()
         penciller  = request.form.get('penciller', '').strip()
-        story_arc  = request.form.get('story_arc', '').strip()
-        notes      = request.form.get('notes', '').strip()
-        year_raw   = request.form.get('year', '').strip()
+        story_arc    = request.form.get('story_arc', '').strip()
+        notes        = request.form.get('notes', '').strip()
+        language_iso = request.form.get('language_iso', '').strip()
+        year_raw     = request.form.get('year', '').strip()
         try:
             year = int(year_raw) if year_raw else None
         except ValueError:
@@ -495,10 +494,10 @@ def edit_comic(comic_id):
             return render_template('edit_comic.html', comic=comic, error='Title is required.')
         db.execute(
             """UPDATE comics SET title=?, character=?, series=?, publisher=?, issue_number=?,
-               writer=?, penciller=?, story_arc=?, year=?, notes=? WHERE id=?""",
+               writer=?, penciller=?, story_arc=?, year=?, notes=?, language_iso=? WHERE id=?""",
             (title, character or None, series or 'General', publisher or 'Unknown',
              issue_num or None, writer or None, penciller or None,
-             story_arc or None, year, notes or None, comic_id)
+             story_arc or None, year, notes or None, language_iso or None, comic_id)
         )
         db.commit()
         db.close()
@@ -621,7 +620,7 @@ def reader(comic_id):
         current_page = comic['page_count'] - 1
 
     back_url = request.args.get('back') or request.referrer or f'/comic/{comic_id}'
-    if back_url and not back_url.startswith('/'):
+    if not back_url or not back_url.startswith('/') or back_url.startswith('//'):
         back_url = f'/comic/{comic_id}'
 
     run_id = request.args.get('run_id', type=int)
@@ -819,7 +818,7 @@ def stats():
         SELECT c.id, c.title, c.publisher, rp.last_read, rp.current_page, c.page_count
         FROM reading_progress rp
         JOIN comics c ON rp.comic_id = c.id
-        WHERE rp.current_page > 0
+        WHERE rp.current_page > 0 AND c.deleted_at IS NULL
         ORDER BY rp.last_read DESC LIMIT 6
     """).fetchall()
     activity_rows = db.execute("""
@@ -1576,7 +1575,7 @@ def comic_quicklook(comic_id):
         LEFT JOIN ratings r           ON c.id = r.comic_id
         LEFT JOIN favorites f         ON c.id = f.comic_id
         LEFT JOIN reading_list rl     ON c.id = rl.comic_id
-        WHERE c.id = ?
+        WHERE c.id = ? AND c.deleted_at IS NULL
     """, (comic_id,)).fetchone()
     if not comic:
         return jsonify({'error': 'Not found'}), 404
@@ -1664,12 +1663,12 @@ def series_mark_read():
     publisher = _resolve_publisher(db, publisher, series)
     if char:
         comics = db.execute(
-            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ? AND character = ?",
+            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ? AND character = ? AND deleted_at IS NULL",
             (series, publisher, char)
         ).fetchall()
     else:
         comics = db.execute(
-            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ?",
+            "SELECT id, page_count FROM comics WHERE series = ? AND publisher = ? AND deleted_at IS NULL",
             (series, publisher)
         ).fetchall()
     for c in comics:
@@ -1807,6 +1806,26 @@ def import_backup():
             db.execute(
                 "INSERT OR IGNORE INTO run_items (run_id, comic_id, position) VALUES (?, ?, ?)",
                 (new_run_id, cid, ri.get('position', max_pos + 1))
+            )
+    for cid in data.get('reading_list', []):
+        if db.execute("SELECT 1 FROM comics WHERE id = ?", (cid,)).fetchone():
+            db.execute("INSERT OR IGNORE INTO reading_list (comic_id) VALUES (?)", (cid,))
+    for sm in data.get('series_meta', []):
+        pub = sm.get('publisher', '').strip()
+        ser = sm.get('series', '').strip()
+        if pub and ser:
+            db.execute(
+                """INSERT INTO series_meta (publisher, series, description, writer, penciller, year, story_arc, language_iso)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(publisher, series) DO UPDATE
+                     SET description  = COALESCE(excluded.description, description),
+                         writer       = COALESCE(excluded.writer, writer),
+                         penciller    = COALESCE(excluded.penciller, penciller),
+                         year         = COALESCE(excluded.year, year),
+                         story_arc    = COALESCE(excluded.story_arc, story_arc),
+                         language_iso = COALESCE(excluded.language_iso, language_iso)""",
+                (pub, ser, sm.get('description'), sm.get('writer'), sm.get('penciller'),
+                 sm.get('year'), sm.get('story_arc'), sm.get('language_iso'))
             )
     db.commit()
     db.close()

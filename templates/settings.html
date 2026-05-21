@@ -5,7 +5,6 @@
 <div class="settings-wrap">
   <h1>Settings</h1>
 
-  <!-- Library Folder -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>Library Folder</h2>
@@ -28,7 +27,6 @@
     </div>
   </div>
 
-  <!-- Duplicate Warning -->
   <div class="settings-card" id="dup-card" style="display:none">
     <div class="settings-card-header">
       <h2>⚠ Duplicate Issues Detected</h2>
@@ -37,7 +35,6 @@
     <div id="dup-list" class="dup-list"></div>
   </div>
 
-  <!-- Reader Mode -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>Default Reader Mode</h2>
@@ -57,7 +54,6 @@
     </div>
   </div>
 
-  <!-- Autoplay Interval -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>Autoplay Interval</h2>
@@ -71,7 +67,6 @@
     </div>
   </div>
 
-  <!-- CBR Support -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>CBR Support</h2>
@@ -137,14 +132,14 @@
     {% endif %}
   </div>
 
-  <!-- Export / Import -->
   <div class="settings-card">
     <div class="settings-card-header">
       <h2>Backup &amp; Export</h2>
       <p>Download your full library data — comics, progress, ratings, tags, runs, and reading list — as a JSON file.</p>
     </div>
     <div class="settings-actions">
-      <a href="/api/export" class="btn-primary" download>Export Library</a>
+      <button class="btn-primary" onclick="exportLibrary()">Export Library</button>
+      <span id="export-status" class="settings-hint"></span>
     </div>
   </div>
 
@@ -162,7 +157,6 @@
     </div>
   </div>
 
-  <!-- Reset Setup -->
   <div class="settings-card danger-card">
     <div class="settings-card-header">
       <h2>Reset Setup</h2>
@@ -171,7 +165,6 @@
     <button class="btn-danger" onclick="resetSetup()">Reset Setup</button>
   </div>
 
-  <!-- Danger Zone -->
   <div class="settings-card danger-card">
     <div class="settings-card-header">
       <h2>Library</h2>
@@ -187,6 +180,38 @@
 
 {% block scripts %}
 <script>
+function exportLibrary() {
+  const status = document.getElementById('export-status');
+  status.textContent = 'Preparing…';
+  fetch('/api/export')
+    .then(r => r.text())
+    .then(json => {
+      const d = new Date().toISOString().slice(0, 10);
+      const filename = `comicarc-export-${d}.json`;
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.save_file(filename, json)
+          .then(result => {
+            if (result && result.ok) {
+              status.textContent = '✓ Saved to ' + result.path;
+              setTimeout(() => { status.textContent = ''; }, 5000);
+            } else if (result && result.error !== 'cancelled') {
+              status.textContent = '✗ ' + result.error;
+            } else {
+              status.textContent = '';
+            }
+          });
+      } else {
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        status.textContent = '';
+      }
+    })
+    .catch(() => { status.textContent = '✗ Export failed.'; });
+}
+
 function updateAutoplayLabel(val) {
   document.getElementById('autoplay-label').textContent = val + 's';
   fetch('/api/settings/save', {
@@ -229,7 +254,7 @@ function saveFolder() {
 }
 
 let _scanPollCount = 0;
-const _SCAN_TIMEOUT_POLLS = 500; // ~5 min at 600 ms each
+const _SCAN_TIMEOUT_POLLS = 500;
 
 function pollScan() {
   _scanPollCount++;

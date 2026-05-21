@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from functools import lru_cache
 
 try:
     import fitz  # PyMuPDF
@@ -64,6 +65,7 @@ def cbr_tool_available():
     return bool(_unar() or _unrar() or _7zip())
 
 
+@lru_cache(maxsize=32)
 def _unar_list(file_path):
     lsar = _lsar()
     if not lsar:
@@ -98,6 +100,7 @@ def _unar_page(file_path, page_num):
         return _read_extracted(tmpdir)
 
 
+@lru_cache(maxsize=32)
 def _7zip_list(file_path):
     z7 = _7zip()
     if not z7:
@@ -204,8 +207,8 @@ def get_page(file_path, page_num):
             try:
                 if page_num >= len(doc):
                     return None, None
-                pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(2, 2))
-                return pix.tobytes('png'), 'image/png'
+                pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                return pix.tobytes('jpeg'), 'image/jpeg'
             finally:
                 doc.close()
 
