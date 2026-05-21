@@ -422,19 +422,26 @@ final class DatabaseManager {
     }
 
     func purgeExpiredTrash() {
-        queue.sync {
-            guard db != nil else { return }
+        let toDelete: [(Int64, String)] = queue.sync {
+            guard db != nil else { return [] }
             let sql = "SELECT id, file_path FROM comics WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')"
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            var toDelete: [(Int64, String)] = []
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            var rows: [(Int64, String)] = []
             while sqlite3_step(stmt) == SQLITE_ROW {
-                toDelete.append((sqlite3_column_int64(stmt, 0), colText(stmt, 1) ?? ""))
+                rows.append((sqlite3_column_int64(stmt, 0), colText(stmt, 1) ?? ""))
             }
             sqlite3_finalize(stmt)
-            for (id, _) in toDelete {
+            for (id, _) in rows {
                 prepared_unsafe("DELETE FROM comics WHERE id = ?") { sqlite3_bind_int64($0, 1, id) }
             }
+            return rows
+        }
+        let docsPath = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent("Comics").path ?? ""
+        for (_, filePath) in toDelete where !filePath.isEmpty && filePath.hasPrefix(docsPath) {
+            try? FileManager.default.removeItem(atPath: filePath)
         }
     }
 

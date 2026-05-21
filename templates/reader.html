@@ -10,7 +10,6 @@
 <body class="reader-body">
 
   <div id="reader-wrap">
-    <!-- Top bar -->
     <div id="reader-topbar">
       <div class="topbar-left">
         {% if run_context %}
@@ -35,14 +34,11 @@
       </div>
     </div>
 
-    <!-- Progress bar -->
     <div id="top-progress">
       <div id="top-progress-fill"></div>
     </div>
-    <!-- Autoplay countdown bar (visible only when autoplay is active) -->
     <div id="autoplay-bar"><div id="autoplay-fill"></div></div>
 
-    <!-- Page display -->
     <div id="page-area">
       <div id="prev-zone" onclick="prevPage()" title="Previous page"></div>
       <div id="scroll-container" style="display:none" aria-label="Vertical scroll reader"></div>
@@ -63,7 +59,6 @@
       <div id="next-zone" onclick="nextPage()" title="Next page"></div>
     </div>
 
-    <!-- Bottom bar -->
     <div id="reader-bottombar">
       {% if run_context and prev_comic %}
       <a href="/reader/{{ prev_comic.comic_id }}?run_id={{ run_id }}" class="run-nav-btn run-nav-prev">
@@ -98,7 +93,6 @@
     </div>
   </div>
 
-  <!-- Keyboard cheat sheet modal -->
   <div id="help-modal" class="modal hidden" onclick="closeHelp()">
     <div class="modal-box help-box" onclick="event.stopPropagation()">
       <h3>Keyboard Shortcuts</h3>
@@ -136,7 +130,6 @@
     </div>
   </div>
 
-  <!-- Rating modal -->
   <div id="rating-modal" class="modal hidden">
     <div class="modal-box">
       <h3>Rate: {{ comic.title }}</h3>
@@ -145,7 +138,7 @@
         <span class="star-pick {% if i <= existing_rating %}selected{% endif %}" data-val="{{ i }}" onclick="selectStar({{ i }})">★</span>
         {% endfor %}
       </div>
-      <textarea id="review-text" placeholder="Write a review (optional)…" rows="3"></textarea>
+      <textarea id="review-text" placeholder="Write a review (optional)…" rows="3">{{ existing_review | e }}</textarea>
       <div class="modal-actions">
         <button onclick="submitRating({{ comic.id }})">Save</button>
         <button onclick="closeRating()">Cancel</button>
@@ -153,7 +146,6 @@
     </div>
   </div>
 
-  <!-- Next-issue overlay -->
   {% if next_series_comic %}
   <div id="next-issue-overlay" class="next-issue-overlay" style="display:none">
     <div class="next-issue-card">
@@ -169,7 +161,6 @@
   </div>
   {% endif %}
 
-  <!-- Finish suggestion overlay (shown when no next issue exists) -->
   {% if finish_suggestion %}
   <div id="finish-overlay" class="next-issue-overlay" style="display:none">
     <div class="next-issue-card">
@@ -208,7 +199,6 @@
     selectedRating = {{ existing_rating }};
     initReader({{ comic.id }}, {{ current_page }}, {{ comic.page_count }});
     {% if reader_mode == 'scroll' %}toggleVertical();{% endif %}
-    // Resume autoplay if navigated here from another comic with autoplay active
     if (new URLSearchParams(location.search).get('autoplay') === '1') {
       toggleAutoplay();
     }
@@ -220,7 +210,7 @@
       const ext    = '{{ comic.file_path.split(".")[-1].lower() if comic.file_path else "" }}';
       errEl.style.display = 'flex';
       if (ext === 'cbr') {
-        hint.textContent = 'CBR files require unar. Go to Settings to install it.';
+        hint.textContent = '{{ "CBR files require 7-Zip on Windows. Go to Settings to install it." if platform == "Windows" else "CBR files require unar. Go to Settings to install it." }}';
       } else if (ext === 'pdf') {
         hint.textContent = 'PDF support requires PyMuPDF. Try re-adding the file.';
       }

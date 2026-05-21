@@ -94,7 +94,11 @@ struct LibraryView: View {
             }
             .fileImporter(
                 isPresented: $showImporter,
-                allowedContentTypes: [.init(filenameExtension: "cbz")!, .init(filenameExtension: "cbr")!, .pdf, .jpeg, .png],
+                allowedContentTypes: [
+                    UTType("com.comicarcapp.cbz") ?? .zip,
+                    UTType("com.comicarcapp.cbr") ?? .data,
+                    .pdf, .jpeg, .png
+                ],
                 allowsMultipleSelection: true
             ) { result in
                 if case .success(let urls) = result { library.importFiles(urls) }

@@ -64,6 +64,10 @@ def migrate_db():
         "ALTER TABLE series_meta ADD COLUMN year INTEGER",
         "ALTER TABLE series_meta ADD COLUMN story_arc TEXT",
         "ALTER TABLE series_meta ADD COLUMN language_iso TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_comics_deleted ON comics(deleted_at) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_rp_last_read ON reading_progress(last_read DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_comics_series_pub ON comics(series, publisher) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)",
     ]:
         try:
             conn.execute(sql)
@@ -162,6 +166,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_reading_progress   ON reading_progress(comic_id);
         CREATE INDEX IF NOT EXISTS idx_comic_tags_comic   ON comic_tags(comic_id);
         CREATE INDEX IF NOT EXISTS idx_reading_list       ON reading_list(comic_id);
+        CREATE INDEX IF NOT EXISTS idx_tags_name          ON tags(name);
     """)
     conn.commit()
     conn.close()

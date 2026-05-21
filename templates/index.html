@@ -72,7 +72,6 @@
   {% endfor %}
 </div>
 
-<!-- Import zone -->
 <div class="import-zone" id="import-zone" role="region" aria-label="Import comics">
   <div class="import-strip" id="drop-area">
     <span class="import-strip-icon">⊕</span>
@@ -133,7 +132,7 @@
 <div class="continue-section">
   <div class="continue-heading-row" style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
     <h2 class="continue-heading" style="margin-bottom:0">Continue Reading</h2>
-    <a href="/?status=in-progress&view=series" class="continue-see-all" style="font-size:12px;color:var(--muted);transition:color .15s">See all →</a>
+    <a href="/?view=series&sort=reading" class="continue-see-all" style="font-size:12px;color:var(--muted);transition:color .15s">See all →</a>
   </div>
   <div class="continue-row">
     {% for comic in continuing %}
@@ -420,7 +419,6 @@
 </div>
 {% endif %}
 
-<!-- Bulk action bar -->
 <div id="bulk-bar" class="bulk-bar arc-hidden">
   <span id="bulk-count" class="bulk-count">0 selected</span>
   <div class="bulk-actions">
@@ -441,7 +439,6 @@
   <button class="bulk-cancel-btn" onclick="toggleSelectMode()">Cancel</button>
 </div>
 
-<!-- Batch Edit Modal -->
 <div id="batch-edit-overlay" class="modal-overlay arc-hidden" onclick="closeBatchEdit()">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -471,7 +468,6 @@
   </div>
 </div>
 
-<!-- Quick-look panel -->
 <div id="ql-panel" class="ql-panel arc-hidden">
   <button class="ql-close" onclick="closeQL()">✕</button>
   <div class="ql-body">
@@ -508,10 +504,8 @@
 </div>
 <div id="ql-backdrop" class="ql-backdrop arc-hidden" onclick="closeQL()"></div>
 
-<!-- Toast notification -->
 <div id="arc-toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap;pointer-events:none"></div>
 
-<!-- Series edit modal -->
 <div id="series-edit-modal" class="series-edit-modal arc-hidden">
   <div class="series-edit-backdrop" onclick="closeSeriesEdit()"></div>
   <div class="series-edit-panel">
@@ -556,7 +550,6 @@
 const seriesPublisher = {{ series_publisher|tojson }};
 {% endif %}
 
-// ── Toast notifications ───────────────────────────────────────────────────────
 let _toastTimer = null;
 function showToast(msg, isError) {
   const el = document.getElementById('arc-toast');
@@ -567,14 +560,12 @@ function showToast(msg, isError) {
   _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// ── Search clear ──────────────────────────────────────────────────────────────
 function clearSearch() {
   const form = document.getElementById('search-form');
   form.querySelector('[name="q"]').value = '';
   form.submit();
 }
 
-// ── Scan ─────────────────────────────────────────────────────────────────────
 function triggerScan(btn) {
   btn.textContent = 'Scanning…';
   btn.disabled = true;
@@ -589,7 +580,6 @@ function triggerScan(btn) {
     });
 }
 
-// ── Select / bulk ─────────────────────────────────────────────────────────────
 let selectMode = false;
 let lastSelectedIdx = -1;
 const selectedIds = new Set();
@@ -680,7 +670,7 @@ function bulkAction(type) {
   } else if (type === 'add-to-run') {
     const sel = document.getElementById('bulk-run-select');
     const run_id = sel ? +sel.value : 0;
-    if (!run_id) { alert('Pick a run first.'); return; }
+    if (!run_id) { showToast('Pick a run first.', true); return; }
     fetch('/api/bulk/add-to-run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids, run_id})})
       .then(r => r.json())
       .then(() => { toggleSelectMode(); })
@@ -688,7 +678,6 @@ function bulkAction(type) {
   }
 }
 
-// ── Quick-look panel ──────────────────────────────────────────────────────────
 let qlComicId = null;
 
 document.addEventListener('keydown', e => {
@@ -702,7 +691,6 @@ document.addEventListener('keydown', e => {
 
 function openQL(id) {
   qlComicId = id;
-  // Detect prev/next in the current grid without an extra API call
   const cards = [...document.querySelectorAll('.comic-card')];
   const idx   = cards.findIndex(c => +c.dataset.id === id);
   const prevId = idx > 0 ? +cards[idx - 1].dataset.id : null;
@@ -765,7 +753,6 @@ function openQL(id) {
         const opt = document.createElement('option');
         opt.value = +r.id; opt.textContent = r.title; runSel.appendChild(opt);
       });
-      // Prev / next issue nav
       const prevBtn = document.getElementById('ql-prev-btn');
       const nextBtn = document.getElementById('ql-next-btn');
       if (prevBtn) { prevBtn.style.display = prevId ? '' : 'none'; if (prevId) prevBtn.onclick = () => openQL(prevId); }
@@ -826,7 +813,7 @@ function qlAddToRun() {
   if (!qlComicId) return;
   const sel    = document.getElementById('ql-run-select');
   const run_id = +sel.value;
-  if (!run_id) { alert('Pick a run first.'); return; }
+  if (!run_id) { showToast('Pick a run first.', true); return; }
   fetch('/api/bulk/add-to-run', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ids:[qlComicId], run_id})})
     .then(r => r.json())
@@ -834,7 +821,6 @@ function qlAddToRun() {
     .catch(() => {});
 }
 
-// ── Series edit modal ─────────────────────────────────────────────────────────
 function _openSeriesEditWrap(btn) {
   const wrap = btn.closest('.series-card-wrap');
   openSeriesEdit(wrap.dataset.pub, wrap.dataset.series, wrap.dataset.char || '');
@@ -917,7 +903,6 @@ function saveSeriesMeta() {
   }).catch(() => { showToast('Save failed: network error.', true); });
 }
 
-// ── Mark Series Read ──────────────────────────────────────────────────────────
 function markSeriesRead(btn) {
   if (!confirm('Mark all issues in this series as read?')) return;
   fetch('/api/series/mark-read', {
@@ -930,17 +915,15 @@ function markSeriesRead(btn) {
     })
   }).then(r => r.json()).then(d => {
     if (d.ok) location.reload();
-    else alert('Error: ' + (d.error || 'unknown'));
-  }).catch(() => { alert('Error: network error.'); });
+    else showToast('Error: ' + (d.error || 'unknown'), true);
+  }).catch(() => { showToast('Error: network error.', true); });
 }
 
-// ── Series → Run ──────────────────────────────────────────────────────────────
 function addSeriesToRun() {
   const sel    = document.getElementById('series-run-select');
   const run_id = sel ? +sel.value : 0;
-  if (!run_id) { alert('Pick a run first.'); return; }
+  if (!run_id) { showToast('Pick a run first.', true); return; }
   const params = new URLSearchParams(window.location.search);
-  // series_publisher is the resolved actual publisher (never 'All')
   const publisher = (typeof seriesPublisher !== 'undefined' ? seriesPublisher : null)
                     || params.get('publisher') || '';
   fetch('/api/series/add-to-run', {
@@ -973,7 +956,6 @@ dropArea.addEventListener('drop', e => handleFiles([...e.dataTransfer.files]));
 fileInput.addEventListener('change', e => handleFiles([...e.target.files]));
 document.getElementById('folder-input').addEventListener('change', e => handleFiles([...e.target.files]));
 
-// ── Drag-to-reorder (always active — auto-snaps to Manual Order) ──────────────
 const grid = document.getElementById('comics-grid');
 if (grid) {
   let dragSrc = null;
@@ -995,7 +977,6 @@ if (grid) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({order})
       });
-      // Auto-snap URL + dropdown to Manual Order
       const url = new URL(window.location.href);
       if (url.searchParams.get('sort') !== 'manual') {
         url.searchParams.set('sort', 'manual');
@@ -1056,7 +1037,6 @@ function handleFiles(files) {
   });
 }
 
-// ── Missing issue detection ────────────────────────────────────────────────────
 (function detectMissingIssues() {
   const grid = document.getElementById('comics-grid');
   if (!grid) return;
@@ -1080,7 +1060,6 @@ function handleFiles(files) {
   }
 })();
 
-// ── Library keyboard navigation ────────────────────────────────────────────
 (function() {
   let focusedIdx = -1;
 
@@ -1096,7 +1075,6 @@ function handleFiles(files) {
   }
 
   document.addEventListener('keydown', e => {
-    // Skip if focus is inside an input/textarea/select or spotlight is open
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (!document.getElementById('spotlight-overlay')?.classList.contains('arc-hidden')) return;
@@ -1104,7 +1082,6 @@ function handleFiles(files) {
     const cards = getCards();
     if (!cards.length) return;
 
-    // Detect grid column count for arrow navigation
     const gridEl = document.getElementById('comics-grid') || document.querySelector('.series-grid');
     let cols = 1;
     if (gridEl && cards.length > 1) {
@@ -1119,24 +1096,20 @@ function handleFiles(files) {
     else if ((e.key === 'Enter' || e.key === ' ') && focusedIdx >= 0) {
       e.preventDefault();
       const card = cards[focusedIdx];
-      // Series card — navigate to series
       if (card.classList.contains('series-card')) {
         const wrap = card.closest('.series-card-wrap');
         if (wrap?.dataset.href) window.location = wrap.dataset.href;
       } else {
-        // Comic card — open quicklook or detail
         const id = parseInt(card.dataset.id, 10);
         if (id) { if (typeof openQL === 'function') openQL(id); else window.location = `/comic/${id}`; }
       }
     } else if (e.key === 'f' && focusedIdx >= 0) {
-      // F = toggle favorite on focused card
       const id = parseInt(cards[focusedIdx].dataset?.id, 10);
       if (id) fetch(`/api/favorite/${id}`, {method:'POST'}).then(r=>r.json()).then(d=>{
         const badge = cards[focusedIdx].querySelector('.fav-badge');
         if (badge) badge.style.display = d.favorite ? '' : 'none';
       }).catch(()=>{});
     } else if (e.key === 'r' && focusedIdx >= 0) {
-      // R = start reading focused card
       const id = parseInt(cards[focusedIdx].dataset?.id, 10);
       if (id) window.location = `/reader/${id}`;
     } else if (e.key === 'Escape') {
@@ -1145,14 +1118,12 @@ function handleFiles(files) {
     }
   });
 
-  // Mouse click clears kb-focus
   document.addEventListener('click', () => {
     document.querySelectorAll('.kb-focus').forEach(c => c.classList.remove('kb-focus'));
     focusedIdx = -1;
   });
 })();
 
-// ── Batch Edit ──────────────────────────────────────────────────────────────
 function openBatchEdit() {
   const count = selectedIds.size;
   if (!count) return;

@@ -373,8 +373,8 @@ struct ReaderView: View {
 
     private func checkRunAdvance(page: Int) {
         guard nextComic != nil,
-              activeComic.pageCount > 0,
-              page >= activeComic.pageCount - 1 else { return }
+              activeComic.pageCount > 1,
+              page >= activeComic.pageCount - 2 else { return }
         withAnimation { showNextComicBanner = true }
     }
 
@@ -444,10 +444,6 @@ struct PagedReaderView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
-            .onTapGesture(count: 2) {
-                withAnimation(.spring()) { zoomScale = zoomScale > 1 ? 1 : 2.5 }
-            }
-
             .onTapGesture { location in
                 guard zoomScale <= 1 else { return }
                 let isLeft  = location.x < geo.size.width / 3
@@ -461,6 +457,9 @@ struct PagedReaderView: View {
                 } else {
                     onTapCenter()
                 }
+            }
+            .onTapGesture(count: 2) {
+                withAnimation(.spring()) { zoomScale = zoomScale > 1 ? 1 : 2.5 }
             }
         }
         .onChange(of: currentPage) { _, _ in

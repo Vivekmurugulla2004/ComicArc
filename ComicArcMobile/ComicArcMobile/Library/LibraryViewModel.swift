@@ -33,6 +33,7 @@ final class LibraryViewModel: ObservableObject {
 
     private let db = DatabaseManager.shared
     private var importTask: Task<Void, Never>?
+    private var progressTask: Task<Void, Never>?
 
     private var _lastPub: String?
     private var _lastSearch: String?
@@ -462,9 +463,10 @@ final class LibraryViewModel: ObservableObject {
     }
 
     func updateProgress(_ comic: Comic, page: Int) {
+        progressTask?.cancel()
         let comicId = comic.id
         let db = db
-        Task.detached(priority: .utility) {
+        progressTask = Task.detached(priority: .utility) {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             db.updateProgress(comicId: comicId, page: page)

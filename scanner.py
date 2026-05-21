@@ -10,6 +10,7 @@ SUPPORTED = {'.cbz', '.cbr', '.pdf', '.jpg', '.jpeg', '.png'}
 
 _state = {'running': False, 'total': 0, 'done': 0, 'added': 0, 'cancelled': False, 'duplicates': []}
 _lock = threading.Lock()
+_mtime_cache = {}
 
 
 def get_duplicates():
@@ -109,8 +110,10 @@ def _meta(file_path, base):
 
 
 def _run(library_path):
+    global _mtime_cache
     with _lock:
         _state.update({'running': True, 'total': 0, 'done': 0, 'added': 0, 'cancelled': False, 'duplicates': []})
+    _mtime_cache = {}
 
     all_files = []
     for root, dirs, files in os.walk(library_path):
@@ -123,13 +126,13 @@ def _run(library_path):
         _state['total'] = len(all_files)
 
     db = get_db()
-    known_paths = set()
-    known_sigs = {}
+    known_paths = {}
+    known_sigs = set()
     for row in db.execute("SELECT id, file_path FROM comics").fetchall():
-        known_paths.add(row['file_path'])
+        known_paths[row['file_path']] = None
         s = _file_sig(row['file_path'])
         if s:
-            known_sigs[s] = row['file_path']
+            known_sigs.add(s)
 
     added = 0
     for i, fp in enumerate(all_files):
@@ -156,24 +159,32 @@ def _run(library_path):
                      ci.get('story_arc'), ci.get('language_iso'))
                 )
                 added += 1
-                known_paths.add(fp)
+                known_paths[fp] = None
                 if sig:
-                    known_sigs[sig] = fp
+                    known_sigs.add(sig)
             elif fp in known_paths:
-                ci = _read_comicinfo(fp)
-                if ci:
-                    fields, vals = [], []
-                    for col, key in [('writer', 'writer'), ('penciller', 'penciller'),
-                                     ('year', 'year'), ('story_arc', 'story_arc'),
-                                     ('language_iso', 'language_iso'), ('issue_number', 'issue_number')]:
-                        if key in ci and ci[key] is not None:
-                            fields.append(f"{col} = ?")
-                            vals.append(ci[key])
-                    if fields:
-                        db.execute(
-                            f"UPDATE comics SET {', '.join(fields)} WHERE file_path = ?",
-                            vals + [fp]
-                        )
+                try:
+                    cur_mtime = os.path.getmtime(fp)
+                except OSError:
+                    cur_mtime = None
+                if cur_mtime and _mtime_cache.get(fp) == cur_mtime:
+                    pass
+                else:
+                    _mtime_cache[fp] = cur_mtime
+                    ci = _read_comicinfo(fp)
+                    if ci:
+                        fields, vals = [], []
+                        for col, key in [('writer', 'writer'), ('penciller', 'penciller'),
+                                         ('year', 'year'), ('story_arc', 'story_arc'),
+                                         ('language_iso', 'language_iso'), ('issue_number', 'issue_number')]:
+                            if key in ci and ci[key] is not None:
+                                fields.append(f"{col} = ?")
+                                vals.append(ci[key])
+                        if fields:
+                            db.execute(
+                                f"UPDATE comics SET {', '.join(fields)} WHERE file_path = ?",
+                                vals + [fp]
+                            )
         except Exception as e:
             print(f"[scanner] skip {fp}: {e}")
 
@@ -181,6 +192,7 @@ def _run(library_path):
             with _lock:
                 _state['done'] = i + 1
                 _state['added'] = added
+            db.commit()
 
     dup_rows = db.execute("""
         SELECT title, issue_number, COUNT(*) as cnt
@@ -200,7 +212,9 @@ def _run(library_path):
         _state['duplicates'] = dups
 
     stale = [
-        row['id'] for row in db.execute("SELECT id, file_path FROM comics").fetchall()
+        row['id'] for row in db.execute(
+            "SELECT id, file_path FROM comics WHERE deleted_at IS NULL"
+        ).fetchall()
         if row['file_path'].startswith(library_path) and not os.path.exists(row['file_path'])
     ]
     if stale:

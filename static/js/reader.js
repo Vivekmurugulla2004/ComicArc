@@ -2,7 +2,7 @@ let comicId, currentPage, totalPages;
 let spreadMode   = false;
 let verticalMode = false;
 let mangaMode    = false;
-let fitMode      = 'contain'; // 'contain' | 'width' | 'height'
+let fitMode      = 'contain';
 let zoomLevel    = 1;
 let panX = 0, panY = 0;
 let isPanning = false, panStartX, panStartY;
@@ -11,7 +11,6 @@ let autoplayTimer    = null;
 let progressDebounce = null;
 let scrollObserver   = null;
 
-// ── Auto-hide chrome ─────────────────────────────────────────────────────────
 let chromeHideTimer  = null;
 let chromeVisible    = true;
 let mouseThrottle    = null;
@@ -59,7 +58,6 @@ function initReader(id, page, total) {
     showChrome();
   });
 
-  // Keyboard navigation
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
     showChrome();
@@ -85,7 +83,6 @@ function initReader(id, page, total) {
     }
   });
 
-  // Touch swipe
   let touchStartX = 0, touchStartY = 0;
   const pageArea = document.getElementById('page-area');
   pageArea.addEventListener('touchstart', e => {
@@ -102,7 +99,6 @@ function initReader(id, page, total) {
     }
   }, { passive: true });
 
-  // Zoom — mouse pan
   const display = document.getElementById('page-display');
   display.addEventListener('mousedown', e => {
     if (zoomLevel <= 1) return;
@@ -122,15 +118,12 @@ function initReader(id, page, total) {
     if (isPanning) { isPanning = false; display.style.cursor = 'grab'; }
   });
 
-  // Zoom — scroll wheel (paged mode only)
   pageArea.addEventListener('wheel', e => {
     if (verticalMode) return;
     e.preventDefault();
     setZoom(zoomLevel + (e.deltaY < 0 ? 0.25 : -0.25));
   }, { passive: false });
 }
-
-// ── Paged navigation ─────────────────────────────────────────────────────────
 
 function updateUI() {
   const img = document.getElementById('page-img');
@@ -159,13 +152,12 @@ function nextPage() {
   const step = spreadMode ? 2 : 1;
   if (currentPage < totalPages - 1) {
     currentPage = Math.min(currentPage + step, totalPages - 1);
-    if (zoomLevel > 1) setZoom(1); // reset zoom when turning page
+    if (zoomLevel > 1) setZoom(1);
     updateUI();
     preloadPage(currentPage + step);
     preloadPage(currentPage + step + 1);
     resetAutoplayTimer();
   } else {
-    // Fall back to reading the DOM link href in case the JS variable is stale
     const url = nextComicUrl || document.querySelector('.run-nav-next')?.href || null;
     if (url) {
       stopAutoplayTimer();
@@ -179,7 +171,6 @@ function nextPage() {
       const overlay = document.getElementById('finish-overlay');
       if (overlay) overlay.style.display = 'flex';
     } else if (autoplayMode) {
-      // End of last comic in run — stop autoplay
       autoplayMode = false;
       stopAutoplayTimer();
       const btn = document.getElementById('autoplay-btn');
@@ -199,8 +190,9 @@ function prevPage() {
     const url = prevComicUrl || document.querySelector('.run-nav-prev')?.href || null;
     if (url) {
       stopAutoplayTimer();
+      const backParam = '&back=' + encodeURIComponent(typeof readerBackUrl !== 'undefined' ? readerBackUrl : '/');
       const sep = url.includes('?') ? '&' : '?';
-      location.href = autoplayMode ? url + sep + 'autoplay=1' : url;
+      location.href = (autoplayMode ? url + sep + 'autoplay=1' : url) + backParam;
     }
   }
 }
@@ -228,6 +220,8 @@ function saveProgress() {
 
 function _flushProgress() {
   clearTimeout(progressDebounce);
+  if (_lastFlushedPage === currentPage) return;
+  _lastFlushedPage = currentPage;
   fetch(`/api/progress/${comicId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -236,8 +230,9 @@ function _flushProgress() {
 }
 
 window.addEventListener('beforeunload', _flushProgress);
-
-// ── Autoplay ──────────────────────────────────────────────────────────────────
+window.addEventListener('pagehide', _flushProgress);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _flushProgress(); });
+setInterval(_flushProgress, 30000);
 
 function toggleAutoplay() {
   autoplayMode = !autoplayMode;
@@ -255,7 +250,7 @@ function startAutoplayTimer() {
   const fill = document.getElementById('autoplay-fill');
   if (fill) {
     fill.classList.remove('ticking');
-    void fill.offsetWidth; // force reflow so animation restarts
+    void fill.offsetWidth;
     fill.classList.add('ticking');
   }
   const ms = (typeof autoplaySeconds !== 'undefined' ? autoplaySeconds : 10) * 1000;
@@ -275,8 +270,6 @@ function resetAutoplayTimer() {
   if (autoplayMode) startAutoplayTimer();
 }
 
-// ── Spread mode ───────────────────────────────────────────────────────────────
-
 function toggleSpread() {
   if (verticalMode) return;
   spreadMode = !spreadMode;
@@ -285,15 +278,11 @@ function toggleSpread() {
   updateUI();
 }
 
-// ── Manga (RTL) mode ─────────────────────────────────────────────────────────
-
 function toggleManga() {
   mangaMode = !mangaMode;
   document.getElementById('manga-btn').classList.toggle('active', mangaMode);
   document.getElementById('page-area').classList.toggle('manga-rtl', mangaMode);
 }
-
-// ── Fit mode ─────────────────────────────────────────────────────────────────
 
 const FIT_MODES = ['contain', 'width', 'height'];
 const FIT_ICONS = { contain: '↔', width: '⇔', height: '⇕' };
@@ -322,8 +311,6 @@ function applyFit() {
   }
 }
 
-// ── Vertical scroll mode ──────────────────────────────────────────────────────
-
 function toggleVertical() {
   verticalMode = !verticalMode;
   const btn       = document.getElementById('vertical-btn');
@@ -341,7 +328,7 @@ function toggleVertical() {
     nextZone.style.display  = 'none';
     scrollEl.style.display  = 'block';
     bottomBar.style.display = 'none';
-    stopAutoplayTimer(); // autoplay not supported in vertical mode
+    stopAutoplayTimer();
     setZoom(1);
     buildScrollView();
   } else {
@@ -352,7 +339,7 @@ function toggleVertical() {
     nextZone.style.display  = '';
     bottomBar.style.display = '';
     updateUI();
-    resetAutoplayTimer(); // restart countdown if autoplay was on before vertical mode
+    resetAutoplayTimer();
   }
 }
 
@@ -403,8 +390,6 @@ function buildScrollView() {
   container.querySelectorAll('.scroll-page').forEach(p => scrollObserver.observe(p));
 }
 
-// ── Zoom / pan ────────────────────────────────────────────────────────────────
-
 function setZoom(level) {
   zoomLevel = Math.max(1, Math.min(5, level));
   applyZoom();
@@ -429,7 +414,7 @@ function applyZoom() {
   }
 }
 
-// ── Rating modal ──────────────────────────────────────────────────────────────
+let _lastFlushedPage = -1;
 
 let selectedRating = 0;
 

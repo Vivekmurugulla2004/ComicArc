@@ -123,7 +123,6 @@
       width: 100%;
     }
 
-    /* Scan step */
     .scan-anim {
       font-size: 48px;
       color: var(--gold);
@@ -146,7 +145,6 @@
       width: 0%;
     }
 
-    /* Mode cards */
     .mode-cards {
       display: flex;
       gap: 14px;
@@ -179,13 +177,11 @@
     }
     .mode-desc { font-size: 12px; color: var(--muted); }
 
-    /* Done step */
     .done-icon {
       font-size: 56px;
       color: #4ade80;
     }
 
-    /* Feature grid */
     .feature-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -217,7 +213,6 @@
       <span class="dot" id="dot-5"></span>
     </div>
 
-    <!-- Step 1: Welcome -->
     <div class="step active" id="step-1">
       <div class="wizard-logo">◈</div>
       <div class="wizard-title">ComicArc</div>
@@ -225,7 +220,6 @@
       <button class="btn-primary" onclick="goTo(2)">Get Started</button>
     </div>
 
-    <!-- Step 2: Choose folder -->
     <div class="step" id="step-2">
       <h2>Where are your comics?</h2>
       <p>Select the folder that contains your CBZ, CBR, PDF, or image files. Subfolders are scanned automatically.</p>
@@ -240,7 +234,6 @@
       </div>
     </div>
 
-    <!-- Step 3: Scanning -->
     <div class="step" id="step-3">
       <div class="scan-anim">◈</div>
       <h2>Scanning your library…</h2>
@@ -251,7 +244,6 @@
       <p class="hint ok" id="scan-count"></p>
     </div>
 
-    <!-- Step 4: Feature highlights -->
     <div class="step" id="step-4">
       <h2>Everything you need</h2>
       <p>ComicArc comes with powerful tools built right in.</p>
@@ -283,7 +275,6 @@
       </div>
     </div>
 
-    <!-- Step 5: Reader mode -->
     <div class="step" id="step-5">
       <h2>How do you like to read?</h2>
       <p>Choose your default reading style. You can change this any time.</p>

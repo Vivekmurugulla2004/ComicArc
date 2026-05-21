@@ -32,12 +32,11 @@
       <button class="spotlight-trigger" onclick="openSpotlight()" title="Search (⌘K)">
         <span class="spotlight-trigger-icon">⌕</span>
         <span class="spotlight-trigger-label">Search…</span>
-        <kbd class="spotlight-trigger-kbd">⌘K</kbd>
+        <kbd class="spotlight-trigger-kbd">{{ 'Ctrl K' if platform == 'Windows' else '⌘K' }}</kbd>
       </button>
     </div>
   </nav>
 
-  <!-- Spotlight search overlay -->
   <div id="spotlight-overlay" class="spotlight-overlay arc-hidden" onclick="closeSpotlight()">
     <div class="spotlight-box" onclick="event.stopPropagation()">
       <div class="spotlight-input-row">
@@ -59,7 +58,6 @@
     <a href="https://github.com/Vivekmurugulla2004/ComicArc/blob/main/LEGAL.md" target="_blank" rel="noopener">Legal &amp; Content Policy</a>
   </footer>
 
-  <!-- Mobile bottom navigation -->
   <nav class="bottom-nav" aria-label="Main navigation">
     <a href="/" class="bnav-item {% if request.endpoint == 'index' %}active{% endif %}">
       <span class="bnav-icon">◫</span>
@@ -81,7 +79,6 @@
 
   {% block scripts %}{% endblock %}
   <script>
-    // Fade-in all images once loaded
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('img').forEach(img => {
         if (img.complete) img.classList.add('loaded');
@@ -89,7 +86,6 @@
       });
     });
 
-    // ── Spotlight search ─────────────────────────────────────────────────────
     let _spotDebounce = null;
 
     function openSpotlight() {
@@ -124,7 +120,6 @@
       }
     });
 
-    // ── Nav rescan ───────────────────────────────────────────────────────────
     let _scanPoll = null;
 
     function navRescan() {
@@ -147,7 +142,6 @@
                 clearInterval(_scanPoll);
                 btn.classList.remove('scanning');
                 lbl.textContent = 'Scan';
-                // Reload page to reflect new comics
                 location.reload();
               }
             });
@@ -155,7 +149,6 @@
         });
     }
 
-    // Resume poll if a scan is already running when the page loads
     (function checkScanOnLoad() {
       fetch('/api/scan/status').then(r => r.json()).then(s => {
         if (s.running) {
